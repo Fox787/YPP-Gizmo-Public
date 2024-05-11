@@ -114,12 +114,18 @@ public class DRGizmo {
 			return 0;
 		
 		int result = 0;
-		if (station.matches("Foraging|Treasure Haul")) {
-			for(int i = 0; i < array.length; i++)
-				result += array[i] * (i+1);
+		if (station.matches("Foraging")) {
+			for(int i = 0; i < array.length; i++) {
+				result += array[i] * (i + 1);
+			}
+		} else if (station.matches("Carpentry") && array.length == 3) {
+			result += array[0] * -1;
+			result += array[1];
+			result += array[2] * 2;
 		} else {
-			for(int i = 0; i < array.length; i++)
+			for(int i = 0; i < array.length; i++) {
 				result += array[i];
+			}
 		}
 		return result;
 	}

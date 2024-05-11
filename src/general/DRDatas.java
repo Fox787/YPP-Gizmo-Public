@@ -89,12 +89,20 @@ class DRIndividualData implements Serializable {
 		}
 		
 		int result = 0;
-		if (station.matches("Foraging|Treasure Haul")) {
+		if (station.matches("Foraging")) {
 			result += tokens[0] * smallChest;
 			result += tokens[1] * mediumChest;
 			result += tokens[2] * largeChest;
-		} else if (station.matches("Gunning")){
+		} else if (station.matches("Treasure Haul")) {
+			result = result + tokens[0];
+			result += tokens[1];
+			result += tokens[2];
+		} else if (station.matches("Gunning")) {
 			result += tokens[0] * cannonball;
+		} else if (station.matches("Carpentry") && tokens.length == 3) {
+			result += tokens[0] * -1;
+			result += tokens[1];
+			result += tokens[2] * 2;
 		} else {
 			result += tokens[0] * diamond;
 			result += tokens[1] * circle;
