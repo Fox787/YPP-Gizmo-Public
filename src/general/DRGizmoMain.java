@@ -16,7 +16,7 @@ import com.sun.java.accessibility.util.GUIInitializedListener;
 import com.sun.java.accessibility.util.TopLevelWindowListener;
 
 public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListener {
-	public static final double VERSION = 0.06;
+	public static final double VERSION = 0.07;
 	
 	//god i'm lazy
 	//  set this to true if you're working on this
