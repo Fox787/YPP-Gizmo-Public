@@ -216,7 +216,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			Component hGlue_1 = Box.createHorizontalGlue();
 			panelOutputButtonPanel.add(hGlue_1);
 
-			buttonOutputAvg = new JButton("Output Avg");
+			buttonOutputAvg = new JButton("Averages");
 			buttonOutputAvg.addActionListener(this);
 			buttonOutputAvg.setPreferredSize(new Dimension(80, 23));
 			panelOutputButtonPanel.add(buttonOutputAvg);
@@ -1322,7 +1322,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					clipboard.setContents(selection, selection);
 				}
 			} else {
-				printStatus("Average Failed", false);
+				printStatus("Averages Failed", false);
 			}
 			printStatus("", false);
 			return;
@@ -1352,7 +1352,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					clipboard.setContents(selection, selection);
 				}
 			} else {
-				printStatus("Average Failed", false);
+				printStatus("CCs Failed", false);
 			}
 			printStatus("", false);
 			return;
