@@ -609,7 +609,7 @@ class DRPersistantData implements Serializable {
 		DRGroupData masterGroupData = new DRGroupData();
 		for (DRGroupData groupData : data) {
 			for (String station : groupData.data.keySet()) {
-				if (station.contains("Foraging")){
+				if (station.contains("Foraging") || station.contains("Treasure Haul")){
 					for (String pirate : groupData.data.get(station).keySet()) {
 						if (pirate.contains(" ")) {
 							continue;
@@ -623,7 +623,7 @@ class DRPersistantData implements Serializable {
 		StringBuilder sb = new StringBuilder();
 		String seperator = " ";
 
-		// masterList only contains Forage Entries at this point
+		// masterList only contains Forage and Haul Entries at this point
 		List<Pair> pirateList = new ArrayList<Pair>();
 		for (String station : masterGroupData.data.keySet()) {
 			for (String pirate : masterGroupData.data.get(station).keySet()) {
@@ -646,9 +646,7 @@ class DRPersistantData implements Serializable {
 
 		StringBuilder sbTemp = new StringBuilder();
 		//Safe enough to assume size is the same for all.
-		sbTemp.append(pirateList.get(0).scoreList.size()).append(" Frays won.");
-		sbTemp.append(System.getProperty("line.separator"));
-		sbTemp.append("Averages: ");
+		sbTemp.append("Averages ("+ pirateList.get(0).scoreList.size()+" Frays Won):");
 		sbTemp.append(System.getProperty("line.separator"));
 
 		for (Pair pirate: pirateList) {
@@ -664,7 +662,7 @@ class DRPersistantData implements Serializable {
 		DRGroupData masterGroupData = new DRGroupData();
 		for (DRGroupData groupData : data) {
 			for (String station : groupData.data.keySet()) {
-				if (station.contains("Foraging")){
+				if (station.contains("Foraging") || station.contains("Treasure Haul")){
 					for (String pirate : groupData.data.get(station).keySet()) {
 						if (pirate.contains(" ")) {
 							continue;
@@ -678,7 +676,7 @@ class DRPersistantData implements Serializable {
 		StringBuilder sb = new StringBuilder();
 		String seperator = " ";
 
-		// masterList only contains Forage Entries at this point
+		// masterList only contains Forage and Haul Entries at this point
 		List<Pair> pirateList = new ArrayList<Pair>();
 		for (String station : masterGroupData.data.keySet()) {
 			for (String pirate : masterGroupData.data.get(station).keySet()) {
@@ -701,7 +699,7 @@ class DRPersistantData implements Serializable {
 
 		Collections.sort(pirateList);
 		StringBuilder sbTemp = new StringBuilder();
-		sbTemp.append("CC totals : ");
+		sbTemp.append("CC Totals ("+pirateList.get(0).scoreList.size()+" Forages):");
 		sbTemp.append(System.getProperty("line.separator"));
 		for (Pair pirate: pirateList) {
 			sbTemp.append(pirate.getPirate()+ seperator + pirate.getScoreTotal());
