@@ -227,6 +227,91 @@ class DRGroupData implements Serializable {
 		}
 		return result.trim();
 	}
+	public String getBrokenRecords(double individual, double man1, double man2, double man3, double man4, double man5, double man6, double man7) {
+		//String result = "", forage = "Foraging", newLine =  System.getProperty("line.separator"); //doesn't work in 1.6
+		String result = "", forage = "Foraging", newLine =  "\n";
+		DRGroupData tempData = new DRGroupData();
+		if (data.containsKey(forage)) {
+
+			//copy this to a new DRGroupData so we can calculate the score for CCs only
+			for (String pirate : data.get(forage).keySet()) {
+				tempData.put(new DRIndividualData(data.get(forage).get(pirate)));
+				tempData.calculateCustomTokenScore(0, 0, 0, 0, 0, 0, 1, 2, 3);
+			}
+			//check individuals for all
+			for (String pirate : tempData.data.get(forage).keySet()) {
+				if (tempData.get(forage, pirate).getTokenScore() >= individual) {
+					//if its bigger than the current record
+					if (tempData.get(forage, pirate).getTokenScore() > individual)
+						result += (pirate + " got " + tempData.get(forage, pirate).getTokenScore() + ""
+								+ " Score in one forage which beats the old record of " + individual + "." + newLine);
+					else //tied
+						result += (pirate + " got " + tempData.get(forage, pirate).getTokenScore() + ""
+								+ " Score in one forage which ties the current record." + newLine);
+				}
+			}
+
+
+			if (size() <= 7) {
+				//get the number of CCs
+				double ccCount = 0;
+				for (String pirate : tempData.data.get(forage).keySet()) {
+					ccCount += tempData.get(forage, pirate).getTokenScore();
+				}
+				// we need to Divide score by number of people on boat and round to 2 decimal places
+				ccCount = ccCount / size();
+				ccCount = Math.floor(ccCount * 100) /100;
+
+				//see if we beat any records
+				switch (size()) {
+					case 7 : if (ccCount >= man7) {
+						if (ccCount > man7)
+							result += "We got " + ccCount + " Score in one forage which beats the old record of " + man7 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one forage which ties the current record. " + newLine;
+					} break;
+					case 6 : if (ccCount >= man6) {
+						if (ccCount > man6)
+							result += "We got " + ccCount + " Score in one forage which beats the old record of " + man6 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one forage which ties the current record. " + newLine;
+					} break;
+					case 5 : if (ccCount >= man5) {
+						if (ccCount > man5)
+							result += "We got " + ccCount + " Score in one forage which beats the old record of " + man5 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one forage which ties the current record. " + newLine;
+					} break;
+					case 4 : if (ccCount >= man4) {
+						if (ccCount > man4)
+							result += "We got " + ccCount + " Score in one forage which beats the old record of " + man4 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one forage which ties the current record. " + newLine;
+					} break;
+					case 3 : if (ccCount >= man3) {
+						if (ccCount > man3)
+							result += "We got " + ccCount + " Score in one forage which beats the old record of " + man3 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one forage which ties the current record. " + newLine;
+					} break;
+					case 2 : if (ccCount >= man2) {
+						if (ccCount > man2)
+							result += "We got " + ccCount + " Score in one forage which beats the old record of " + man2 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one forage which ties the current record. " + newLine;
+					} break;
+					case 1 : if (ccCount >= man1) {
+						if (ccCount > man1)
+							result += "You got " + ccCount + " Score in one forage which beats the old record of " + man1 + "." + newLine;
+						else
+							result += "You got " + ccCount + " Score in one forage which ties the current record. " + newLine;
+					} break;
+					default : break; //shouldn't get here
+				}
+			}
+		}
+		return result.trim();
+	}
 
 	public void put(DRIndividualData individualData) {
 		if (!data.containsKey(individualData.getStation()))
@@ -516,7 +601,121 @@ class DRPersistantData implements Serializable {
 		}
 		return result.trim();
 	}
+	public String getBrokenRecords(double individual, double man1, double man2, double man3, double man4, double man5, double man6, double man7) {
+		String result = "", forage = "Foraging", newLine = System.getProperty("line.separator");
+		DRPersistantData tempData = new DRPersistantData();
+		//copy and take only forage so we can safely calculate for CCs only
+		for (DRGroupData group : data) {
+			tempData.add(group.get(forage).copy());
+		}
+		tempData.calculateCustomTokenScore(0, 0, 0, 0, 0, 0, 1, 2, 3);
 
+		//create a master list
+
+		//go through and get a master list (DRGroupData) of all participants and their stations
+		DRGroupData masterGroupData = new DRGroupData();
+		for (DRGroupData groupData : tempData.data) {
+			for (String station : groupData.data.keySet()) {
+				for (String pirate : groupData.data.get(station).keySet()) {
+					masterGroupData.put(groupData.get(station, pirate));
+				}
+			}
+		}
+
+		//check for entry individual record
+		for (String pirate : masterGroupData.data.get(forage).keySet()) {
+			int ccCountInividual = 0;
+			for (DRGroupData groupData : tempData.data) {
+				if (groupData.contains(forage, pirate))
+					ccCountInividual += groupData.get(forage, pirate).getTokenScore();
+			}
+			if (ccCountInividual >= individual) {
+				if (ccCountInividual > individual) //beat
+					result += (pirate + " got " + ccCountInividual + ""
+							+ " Score in one entry which beats the old record of " + individual + "." + newLine);
+				else //tied
+					result += (pirate + " got " + ccCountInividual + ""
+							+ " Score in one entry which ties the current record." + newLine);
+
+			}
+
+		}
+
+		if (masterGroupData.size() <= 7) {
+			//get the number of CCs
+			double ccCount = 0;
+			for (DRGroupData groupData : tempData.data)
+				for (String pirate : groupData.data.get(forage).keySet())
+					ccCount += groupData.get(forage, pirate).getTokenScore();
+
+			// devide by ship size, and round to 2 decimal places
+			ccCount = ccCount / masterGroupData.size();
+			ccCount = Math.floor(ccCount * 100) /100;
+
+			//see if we beat any records
+			switch (masterGroupData.size()) {
+				case 7:
+					if (ccCount >= man7) {
+						if (ccCount > man7)
+							result += "We got " + ccCount + " Score in one entry which beats the old record of " + man7 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one entry which ties the current record. " + newLine;
+					}
+					break;
+				case 6:
+					if (ccCount >= man6) {
+						if (ccCount > man6)
+							result += "We got " + ccCount + " Score in one entry which beats the old record of " + man6 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one entry which ties the current record. " + newLine;
+					}
+					break;
+				case 5:
+					if (ccCount >= man5) {
+						if (ccCount > man5)
+							result += "We got " + ccCount + " Score in one entry which beats the old record of " + man5 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one entry which ties the current record. " + newLine;
+					}
+					break;
+				case 4:
+					if (ccCount >= man4) {
+						if (ccCount > man4)
+							result += "We got " + ccCount + " Score in one entry which beats the old record of " + man4 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one entry which ties the current record. " + newLine;
+					}
+					break;
+				case 3:
+					if (ccCount >= man3) {
+						if (ccCount > man3)
+							result += "We got " + ccCount + " Score in one entry which beats the old record of " + man3 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one entry which ties the current record. " + newLine;
+					}
+					break;
+				case 2:
+					if (ccCount >= man2) {
+						if (ccCount > man2)
+							result += "We got " + ccCount + " Score in one entry which beats the old record of " + man2 + "." + newLine;
+						else
+							result += "We got " + ccCount + " Score in one entry which ties the current record. " + newLine;
+					}
+					break;
+				case 1:
+					if (ccCount >= man1) {
+						if (ccCount > man1)
+							result += "You got " + ccCount + " Score in one entry which beats the old record of " + man1 + "." + newLine;
+						else
+							result += "You got " + ccCount + " Score in one entry which ties the current record. " + newLine;
+					}
+					break;
+				default:
+					break; //shouldn't get here
+			}
+		}
+		return result.trim();
+	}
 
 	public void calculateCustomTokenScore(int circle, int diamond, int plus, int cross, int thrall,
 										  int cannonball, int smallChest, int mediumChest, int largeChest) {
@@ -636,7 +835,7 @@ class DRPersistantData implements Serializable {
 							pirateList.get(getIndexOf(pirateList,d.getName())).scoreList.add(d.getTokenScore());
 						}else {
 							// Pirate doesn't exist in pirate list so add fresh
-							pirateList.add(new Pair(d.getTokenScore(),d.getName()));
+							pirateList.add(new Pair(d.getTokenScore(),d.getName(),0));
 						}
 					}
 				}
@@ -685,12 +884,25 @@ class DRPersistantData implements Serializable {
 					if (groupData.contains(station, pirate)) {
 						DRIndividualData d = groupData.data.get(station).get(pirate);
 						// If Pirate already exists in Pirate list, then get the index of the pirate by name, and then add the token score to the score list
-						int val = d.getTokens()[2];
-						if (getIndexOf(pirateList,d.getName()) != -1){
-							pirateList.get(getIndexOf(pirateList,d.getName())).scoreList.add(val);
+						// If people score 0 the token array is null, guard against it so method can work
+						if (d.getTokens() != null) {
+							int val = d.getTokens()[2];
+							if (getIndexOf(pirateList, d.getName()) != -1) {
+								pirateList.get(getIndexOf(pirateList, d.getName())).ccList.add(val);
+								pirateList.get(getIndexOf(pirateList, d.getName())).scoreList.add(val);
+							} else {
+								// Pirate doesn't exist in pirate list so add fresh
+								pirateList.add(new Pair(val, d.getName(),val));
+							}
 						}else {
-							// Pirate doesn't exist in pirate list so add fresh
-							pirateList.add(new Pair(val,d.getName()));
+							// if token array is null eg 0 is scored continue to add
+							if (getIndexOf(pirateList, d.getName()) != -1) {
+								pirateList.get(getIndexOf(pirateList, d.getName())).ccList.add(0);
+								pirateList.get(getIndexOf(pirateList, d.getName())).scoreList.add(0);
+							} else {
+								// Pirate doesn't exist in pirate list so add fresh
+								pirateList.add(new Pair(0, d.getName(),0));
+							}
 						}
 					}
 				}
@@ -699,10 +911,76 @@ class DRPersistantData implements Serializable {
 
 		Collections.sort(pirateList);
 		StringBuilder sbTemp = new StringBuilder();
-		sbTemp.append("CC Totals ("+pirateList.get(0).scoreList.size()+" Forages):");
+		sbTemp.append("CC Totals ("+pirateList.get(0).ccList.size()+" Forages):");
 		sbTemp.append(System.getProperty("line.separator"));
 		for (Pair pirate: pirateList) {
-			sbTemp.append(pirate.getPirate()+ seperator + pirate.getScoreTotal());
+			sbTemp.append(pirate.getPirate()+ seperator + pirate.getCCTotal());
+			sbTemp.append(System.getProperty("line.separator"));
+		}
+		sb.append(sbTemp.toString().trim());
+		return sb.toString();
+	}
+
+	public String toCombined() {
+		//go through and get a master list (DRGroupData) of all participants and their stations
+		DRGroupData masterGroupData = new DRGroupData();
+		for (DRGroupData groupData : data) {
+			for (String station : groupData.data.keySet()) {
+				if (station.contains("Foraging") || station.contains("Treasure Haul")){
+					for (String pirate : groupData.data.get(station).keySet()) {
+						if (pirate.contains(" ")) {
+							continue;
+						}
+						masterGroupData.put(groupData.get(station, pirate));
+					}
+				}
+			}
+		}
+
+		StringBuilder sb = new StringBuilder();
+		String seperator = " ";
+
+		// masterList only contains Forage and Haul Entries at this point
+		List<Pair> pirateList = new ArrayList<Pair>();
+		for (String station : masterGroupData.data.keySet()) {
+			for (String pirate : masterGroupData.data.get(station).keySet()) {
+				// adds pirates then attempts to sum all the scores the user has then returns the average
+				for (DRGroupData groupData : data) {
+					if (groupData.contains(station, pirate)) {
+						DRIndividualData d = groupData.data.get(station).get(pirate);
+						// If Pirate already exists in Pirate list, then get the index of the pirate by name, and then add the token score to the score list
+						if (d.getTokens() != null) {
+							int val = d.getTokens()[2];
+							if (getIndexOf(pirateList, d.getName()) != -1) {
+								pirateList.get(getIndexOf(pirateList, d.getName())).scoreList.add(d.getTokenScore());
+								pirateList.get(getIndexOf(pirateList, d.getName())).ccList.add(val);
+							} else {
+								// Pirate doesn't exist in pirate list so add fresh
+								pirateList.add(new Pair(d.getTokenScore(), d.getName(), val));
+							}
+						} else {
+							// Even if the token array is null continue to add the pirate
+							if (getIndexOf(pirateList, d.getName()) != -1) {
+								pirateList.get(getIndexOf(pirateList, d.getName())).scoreList.add(d.getTokenScore());
+								pirateList.get(getIndexOf(pirateList, d.getName())).ccList.add(0);
+							} else {
+								// Pirate doesn't exist in pirate list so add fresh
+								pirateList.add(new Pair(d.getTokenScore(), d.getName(), 0));
+							}
+						}
+					}
+				}
+			}
+		}
+		Collections.sort(pirateList);
+
+		StringBuilder sbTemp = new StringBuilder();
+		//Safe enough to assume size is the same for all.
+		sbTemp.append("Averages (CC) "+ pirateList.get(0).scoreList.size()+" Forages:");
+		sbTemp.append(System.getProperty("line.separator"));
+
+		for (Pair pirate: pirateList) {
+			sbTemp.append(pirate.getPirate()+ seperator + String.format("%.2f",pirate.getAverage()) + " (" + pirate.getCCTotal() + ")");
 			sbTemp.append(System.getProperty("line.separator"));
 		}
 		sb.append(sbTemp.toString().trim());
@@ -721,8 +999,12 @@ class DRPersistantData implements Serializable {
 		private final ArrayList<Integer> scoreList;
 		private String pirate;
 
+		private final ArrayList<Integer> ccList;
 
-		public Pair(int newScore, String pirate) {
+
+		public Pair(int newScore, String pirate, int newCCs) {
+			this.ccList = new ArrayList<Integer>();
+			ccList.add(newCCs);
 			this.scoreList = new ArrayList<Integer>();
 			scoreList.add(newScore);
 			this.pirate = pirate;
@@ -736,6 +1018,14 @@ class DRPersistantData implements Serializable {
 		public int getScoreTotal() {
 			int result = 0;
 			for (Integer integer : this.scoreList) {
+				result += integer;
+			}
+			return result;
+		}
+
+		public int getCCTotal() {
+			int result = 0;
+			for (Integer integer : this.ccList) {
 				result += integer;
 			}
 			return result;
@@ -758,6 +1048,7 @@ class DRPersistantData implements Serializable {
 			return 0;
 		}
 	}
+
 	// Returns index of given Pirate by Name
 	public static int getIndexOf(List<Pair> list, String name) {
 		int pos = 0;
