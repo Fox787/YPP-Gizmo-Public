@@ -15,6 +15,8 @@ import java.awt.event.MouseMotionAdapter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Arrays;
 import java.util.Random;
@@ -82,11 +84,18 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			CCFORAGE7 = "ccforage7", CCFORAGE6 = "ccforage6", CCFORAGE5 = "ccforage5", CCFORAGE4 = "ccforage4",
 			CCFORAGE3 = "ccforage3", CCFORAGE2 = "ccforage2", CCFORAGE1 = "ccforage1",
 
+			FULLENTRYINDIVIDUAL = "fullentryindividual",
+			FULLENTRY7 = "fullentry7", FULLENTRY6 = "fullentry6", FULLENTRY5 = "fullentry5", FULLENTRY4 = "fullentry4",
+			FULLENTRY3 = "fullentry3", FULLENTRY2 = "fullentry2", FULLENTRY1 = "fullentry1",
+
+			SINGLEDRINDIVIDUAL = "singledrindividual",
+			SINGLEDR7 = "singledr7", SINGLEDR6 = "singledr6", SINGLEDR5 = "singledr5", SINGLEDR4 = "singledr4",
+			SINGLEDR3 = "singledr3", SINGLEDR2 = "singledr2", SINGLEDR1 = "singledr1",
 			TREEDATA = "treedata";
 
 
 	private static JTextArea textAreaOutput, textAreaTests;
-	private JButton buttonOutputClear, buttonDRTreeRemove, buttonDRTreeClear, buttonSavePrefs, buttonScan, buttonScore, buttonTestsWho, buttonTestsBootyDiv, buttonTestsClear, buttonOutputAvg, buttonOutputCC;
+	private JButton buttonOutputClear, buttonDRTreeRemove, buttonDRTreeClear, buttonSavePrefs, buttonScan, buttonScore, buttonTestsWho, buttonTestsBootyDiv, buttonTestsClear, buttonOutputAvg, buttonOutputCC, buttonOutputCombined;
 	private JCheckBox checkBoxAutoCopy, checkBoxAutoRead, checkBoxBrokenRecordAlert;
 	private JCheckBox checkBoxDebug, checkBoxIgnoreAI;
 	private JLabel labelDRCount;
@@ -109,6 +118,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JFormattedTextField formattedTextFieldForageIndividual, formattedTextFieldForage7, formattedTextFieldForage6,
 	formattedTextFieldForage5, formattedTextFieldForage4, formattedTextFieldForage3, formattedTextFieldForage2, formattedTextFieldForage1;
 
+	private JFormattedTextField formattedTextFieldSingleDRIndividual, formattedTextFieldSingleDR7, formattedTextFieldSingleDR6,
+			formattedTextFieldSingleDR5, formattedTextFieldSingleDR4, formattedTextFieldSingleDR3, formattedTextFieldSingleDR2, formattedTextFieldSingleDR1;
+	private JFormattedTextField formattedTextFieldFullEntryIndividual, formattedTextFieldFullEntry7, formattedTextFieldFullEntry6,
+			formattedTextFieldFullEntry5, formattedTextFieldFullEntry4, formattedTextFieldFullEntry3, formattedTextFieldFullEntry2, formattedTextFieldFullEntry1;
 	public void printStatus(String text, boolean isDebug) {
 		if (textAreaOutput != null && checkBoxDebug != null) {
 			if (!(isDebug) ||  ((isDebug) && (checkBoxDebug.isSelected()))) {
@@ -148,6 +161,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	    integerFormatter.setMaximum(Integer.MAX_VALUE);
 	    integerFormatter.setAllowsInvalid(true);
 
+		NumberFormat formatDouble = DecimalFormat.getInstance();
+		formatDouble.setMinimumFractionDigits(2);
+		formatDouble.setMaximumFractionDigits(2);
+		formatDouble.setRoundingMode(RoundingMode.HALF_UP);
+
+		NumberFormatter doubleFormatter = new NumberFormatter(formatDouble);
+		doubleFormatter.setValueClass(Double.class);
+		doubleFormatter.setMinimum(0.00);
+		doubleFormatter.setMaximum(Double.MAX_VALUE);
+		doubleFormatter.setAllowsInvalid(true);
 
 		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 		getContentPane().add(tabbedPane, BorderLayout.CENTER);
@@ -608,13 +631,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelOptions_2.add(panelCCRecords);
 			panelCCRecords.setLayout(new BoxLayout(panelCCRecords, BoxLayout.X_AXIS));
 
-			JPanel panelSingleEntry = new JPanel();
-			panelSingleEntry.setBorder(new TitledBorder(null, "Single Entry", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelCCRecords.add(panelSingleEntry);
-			panelSingleEntry.setLayout(new BoxLayout(panelSingleEntry, BoxLayout.Y_AXIS));
+				JPanel panelForageEntry = new JPanel();
+				panelForageEntry.setBorder(new TitledBorder(null, "Single Entry", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+				panelCCRecords.add(panelForageEntry);
+				panelForageEntry.setLayout(new BoxLayout(panelForageEntry, BoxLayout.Y_AXIS));
 
 				Box horizontalBoxEntryIndividual = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntryIndividual);
+				panelForageEntry.add(horizontalBoxEntryIndividual);
 
 				JLabel lblNewLabelEntryIndividual = new JLabel("Individual");
 				lblNewLabelEntryIndividual.setPreferredSize(new Dimension(60, 20));
@@ -630,7 +653,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntryIndividual.add(formattedTextFieldEntryIndividual);
 
 				Box horizontalBoxEntry7 = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntry7);
+				panelForageEntry.add(horizontalBoxEntry7);
 
 				JLabel labelEntry7 = new JLabel("7 Man");
 				labelEntry7.setPreferredSize(new Dimension(60, 20));
@@ -646,7 +669,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntry7.add(formattedTextFieldEntry7);
 
 				Box horizontalBoxEntry6 = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntry6);
+				panelForageEntry.add(horizontalBoxEntry6);
 
 				JLabel labelEntry6 = new JLabel("6 Man");
 				labelEntry6.setPreferredSize(new Dimension(60, 20));
@@ -662,7 +685,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntry6.add(formattedTextFieldEntry6);
 
 				Box horizontalBoxEntry5 = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntry5);
+				panelForageEntry.add(horizontalBoxEntry5);
 
 				JLabel labelEntry5 = new JLabel("5 Man");
 				labelEntry5.setPreferredSize(new Dimension(60, 20));
@@ -678,7 +701,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntry5.add(formattedTextFieldEntry5);
 
 				Box horizontalBoxEntry4 = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntry4);
+				panelForageEntry.add(horizontalBoxEntry4);
 
 				JLabel labelEntry4 = new JLabel("4 Man");
 				labelEntry4.setPreferredSize(new Dimension(60, 20));
@@ -694,7 +717,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntry4.add(formattedTextFieldEntry4);
 
 				Box horizontalBoxEntry3 = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntry3);
+				panelForageEntry.add(horizontalBoxEntry3);
 
 				JLabel labelEntry3 = new JLabel("3 Man");
 				labelEntry3.setPreferredSize(new Dimension(60, 20));
@@ -710,7 +733,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntry3.add(formattedTextFieldEntry3);
 
 				Box horizontalBoxEntry2 = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntry2);
+				panelForageEntry.add(horizontalBoxEntry2);
 
 				JLabel labelEntry2 = new JLabel("2 Man");
 				labelEntry2.setPreferredSize(new Dimension(60, 20));
@@ -726,7 +749,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntry2.add(formattedTextFieldEntry2);
 
 				Box horizontalBoxEntry1 = Box.createHorizontalBox();
-				panelSingleEntry.add(horizontalBoxEntry1);
+				panelForageEntry.add(horizontalBoxEntry1);
 
 				JLabel labelEntry1 = new JLabel("1 Man");
 				labelEntry1.setPreferredSize(new Dimension(60, 20));
@@ -874,7 +897,277 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				formattedTextFieldForage1.setMaximumSize(new Dimension(30, 20));
 				horizontalBoxForage1.add(formattedTextFieldForage1);
 
+			JPanel panelScoreRecords = new JPanel();
+			panelScoreRecords.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelScoreRecords.setBorder(new TitledBorder(null, "Score Records", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelOptions_2.add(panelScoreRecords);
+			panelScoreRecords.setLayout(new BoxLayout(panelScoreRecords, BoxLayout.X_AXIS));
 
+			JPanel panelSingleDR = new JPanel();
+			panelSingleDR.setBorder(new TitledBorder(null, "Single DR", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelScoreRecords.add(panelSingleDR);
+			panelSingleDR.setLayout(new BoxLayout(panelSingleDR, BoxLayout.Y_AXIS));
+
+				Box horizontalBoxEntrySingle = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxEntrySingle);
+
+				JLabel lblNewLabelSingleDRIndividual = new JLabel("Individ");
+				lblNewLabelSingleDRIndividual.setPreferredSize(new Dimension(40, 20));
+				lblNewLabelSingleDRIndividual.setMinimumSize(new Dimension(40, 20));
+				lblNewLabelSingleDRIndividual.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxEntrySingle.add(lblNewLabelSingleDRIndividual);
+
+				formattedTextFieldSingleDRIndividual = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDRIndividual.setValue(DRGizmoMain.prefs.getDouble(SINGLEDRINDIVIDUAL, 0));
+				formattedTextFieldSingleDRIndividual.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDRIndividual.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDRIndividual.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxEntrySingle.add(formattedTextFieldSingleDRIndividual);
+
+				Box horizontalBoxDR7 = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxDR7);
+
+				JLabel labelDR7 = new JLabel("7 Man");
+				labelDR7.setPreferredSize(new Dimension(40, 20));
+				labelDR7.setMinimumSize(new Dimension(40, 20));
+				labelDR7.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxDR7.add(labelDR7);
+
+				formattedTextFieldSingleDR7 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDR7.setValue(DRGizmoMain.prefs.getDouble(SINGLEDR7, 0));
+				formattedTextFieldSingleDR7.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR7.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR7.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxDR7.add(formattedTextFieldSingleDR7);
+
+				Box horizontalBoxDR6 = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxDR6);
+
+				JLabel labelDR6 = new JLabel("6 Man");
+				labelDR6.setPreferredSize(new Dimension(40, 20));
+				labelDR6.setMinimumSize(new Dimension(40, 20));
+				labelDR6.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxDR6.add(labelDR6);
+
+				formattedTextFieldSingleDR6 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDR6.setValue(DRGizmoMain.prefs.getDouble(SINGLEDR6, 0));
+				formattedTextFieldSingleDR6.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR6.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR6.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxDR6.add(formattedTextFieldSingleDR6);
+
+				Box horizontalBoxDR5 = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxDR5);
+
+				JLabel labelDR5 = new JLabel("5 Man");
+				labelDR5.setPreferredSize(new Dimension(40, 20));
+				labelDR5.setMinimumSize(new Dimension(40, 20));
+				labelDR5.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxDR5.add(labelDR5);
+
+				formattedTextFieldSingleDR5 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDR5.setValue(DRGizmoMain.prefs.getDouble(SINGLEDR5, 0));
+				formattedTextFieldSingleDR5.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR5.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR5.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxDR5.add(formattedTextFieldSingleDR5);
+
+				Box horizontalBoxDR4 = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxDR4);
+
+				JLabel labelDR4 = new JLabel("4 Man");
+				labelDR4.setPreferredSize(new Dimension(40, 20));
+				labelDR4.setMinimumSize(new Dimension(40, 20));
+				labelDR4.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxDR4.add(labelDR4);
+
+				formattedTextFieldSingleDR4 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDR4.setValue(DRGizmoMain.prefs.getDouble(SINGLEDR4, 0));
+				formattedTextFieldSingleDR4.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR4.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR4.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxDR4.add(formattedTextFieldSingleDR4);
+
+				Box horizontalBoxDR3 = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxDR3);
+
+				JLabel labelDR3 = new JLabel("3 Man");
+				labelDR3.setPreferredSize(new Dimension(40, 20));
+				labelDR3.setMinimumSize(new Dimension(40, 20));
+				labelDR3.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxDR3.add(labelDR3);
+
+				formattedTextFieldSingleDR3 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDR3.setValue(DRGizmoMain.prefs.getDouble(SINGLEDR3, 0));
+				formattedTextFieldSingleDR3.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR3.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR3.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxDR3.add(formattedTextFieldSingleDR3);
+
+				Box horizontalBoxDR2 = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxDR2);
+
+				JLabel labelDR2 = new JLabel("2 Man");
+				labelDR2.setPreferredSize(new Dimension(40, 20));
+				labelDR2.setMinimumSize(new Dimension(40, 20));
+				labelDR2.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxDR2.add(labelDR2);
+
+				formattedTextFieldSingleDR2 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDR2.setValue(DRGizmoMain.prefs.getDouble(SINGLEDR2, 0));
+				formattedTextFieldSingleDR2.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR2.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR2.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxDR2.add(formattedTextFieldSingleDR2);
+
+				Box horizontalBoxDR1 = Box.createHorizontalBox();
+				panelSingleDR.add(horizontalBoxDR1);
+
+				JLabel labelDR1 = new JLabel("1 Man");
+				labelDR1.setPreferredSize(new Dimension(40, 20));
+				labelDR1.setMinimumSize(new Dimension(40, 20));
+				labelDR1.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxDR1.add(labelDR1);
+
+				formattedTextFieldSingleDR1 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldSingleDR1.setValue(DRGizmoMain.prefs.getDouble(SINGLEDR1, 0));
+				formattedTextFieldSingleDR1.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR1.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldSingleDR1.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxDR1.add(formattedTextFieldSingleDR1);
+
+			JPanel panelFullEntry = new JPanel();
+			panelFullEntry.setBorder(new TitledBorder(null, "Full Entry", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelScoreRecords.add(panelFullEntry);
+			panelFullEntry.setLayout(new BoxLayout(panelFullEntry, BoxLayout.Y_AXIS));
+
+				Box horizontalBoxFullEntryIndividual = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntryIndividual);
+
+				JLabel lblNewLabelFullEntryIndividual = new JLabel("Individ");
+				lblNewLabelFullEntryIndividual.setPreferredSize(new Dimension(40, 20));
+				lblNewLabelFullEntryIndividual.setMinimumSize(new Dimension(40, 20));
+				lblNewLabelFullEntryIndividual.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntryIndividual.add(lblNewLabelFullEntryIndividual);
+
+				formattedTextFieldFullEntryIndividual = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntryIndividual.setValue(DRGizmoMain.prefs.getDouble(FULLENTRYINDIVIDUAL, 0));
+				formattedTextFieldFullEntryIndividual.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntryIndividual.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntryIndividual.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntryIndividual.add(formattedTextFieldFullEntryIndividual);
+
+				Box horizontalBoxFullEntry7 = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntry7);
+
+				JLabel labelFullEntry7 = new JLabel("7 Man");
+				labelFullEntry7.setPreferredSize(new Dimension(40, 20));
+				labelFullEntry7.setMinimumSize(new Dimension(40, 20));
+				labelFullEntry7.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntry7.add(labelFullEntry7);
+
+				formattedTextFieldFullEntry7 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntry7.setValue(DRGizmoMain.prefs.getDouble(FULLENTRY7, 0));
+				formattedTextFieldFullEntry7.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry7.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry7.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntry7.add(formattedTextFieldFullEntry7);
+
+				Box horizontalBoxFullEntry6 = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntry6);
+
+				JLabel labelFullEntry6 = new JLabel("6 Man");
+				labelFullEntry6.setPreferredSize(new Dimension(40, 20));
+				labelFullEntry6.setMinimumSize(new Dimension(40, 20));
+				labelFullEntry6.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntry6.add(labelFullEntry6);
+
+				formattedTextFieldFullEntry6 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntry6.setValue(DRGizmoMain.prefs.getDouble(FULLENTRY6, 0));
+				formattedTextFieldFullEntry6.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry6.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry6.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntry6.add(formattedTextFieldFullEntry6);
+
+				Box horizontalBoxFullEntry5 = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntry5);
+
+				JLabel labelFullEntry5 = new JLabel("5 Man");
+				labelFullEntry5.setPreferredSize(new Dimension(40, 20));
+				labelFullEntry5.setMinimumSize(new Dimension(40, 20));
+				labelFullEntry5.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntry5.add(labelFullEntry5);
+
+				formattedTextFieldFullEntry5 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntry5.setValue(DRGizmoMain.prefs.getDouble(FULLENTRY5, 0));
+				formattedTextFieldFullEntry5.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry5.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry5.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntry5.add(formattedTextFieldFullEntry5);
+
+				Box horizontalBoxFullEntry4 = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntry4);
+
+				JLabel labelFullEntry4 = new JLabel("4 Man");
+				labelFullEntry4.setPreferredSize(new Dimension(40, 20));
+				labelFullEntry4.setMinimumSize(new Dimension(40, 20));
+				labelFullEntry4.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntry4.add(labelFullEntry4);
+
+				formattedTextFieldFullEntry4 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntry4.setValue(DRGizmoMain.prefs.getDouble(FULLENTRY4, 0));
+				formattedTextFieldFullEntry4.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry4.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry4.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntry4.add(formattedTextFieldFullEntry4);
+
+				Box horizontalBoxFullEntry3 = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntry3);
+
+				JLabel labelFullEntry3 = new JLabel("3 Man");
+				labelFullEntry3.setPreferredSize(new Dimension(40, 20));
+				labelFullEntry3.setMinimumSize(new Dimension(40, 20));
+				labelFullEntry3.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntry3.add(labelFullEntry3);
+
+				formattedTextFieldFullEntry3 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntry3.setValue(DRGizmoMain.prefs.getDouble(FULLENTRY3, 0));
+				formattedTextFieldFullEntry3.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry3.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry3.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntry3.add(formattedTextFieldFullEntry3);
+
+				Box horizontalBoxFullEntry2 = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntry2);
+
+				JLabel labelFullEntry2 = new JLabel("2 Man");
+				labelFullEntry2.setPreferredSize(new Dimension(40, 20));
+				labelFullEntry2.setMinimumSize(new Dimension(40, 20));
+				labelFullEntry2.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntry2.add(labelFullEntry2);
+
+				formattedTextFieldFullEntry2 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntry2.setValue(DRGizmoMain.prefs.getDouble(FULLENTRY2, 0));
+				formattedTextFieldFullEntry2.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry2.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry2.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntry2.add(formattedTextFieldFullEntry2);
+
+				Box horizontalBoxFullEntry1 = Box.createHorizontalBox();
+				panelFullEntry.add(horizontalBoxFullEntry1);
+
+				JLabel labelFullEntry1 = new JLabel("1 Man");
+				labelFullEntry1.setPreferredSize(new Dimension(40, 20));
+				labelFullEntry1.setMinimumSize(new Dimension(40, 20));
+				labelFullEntry1.setMaximumSize(new Dimension(40, 20));
+				horizontalBoxFullEntry1.add(labelFullEntry1);
+
+				formattedTextFieldFullEntry1 = new JFormattedTextField(doubleFormatter);
+				formattedTextFieldFullEntry1.setValue(DRGizmoMain.prefs.getDouble(FULLENTRY1, 0));
+				formattedTextFieldFullEntry1.setPreferredSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry1.setMinimumSize(new Dimension(50, 20));
+				formattedTextFieldFullEntry1.setMaximumSize(new Dimension(50, 20));
+				horizontalBoxFullEntry1.add(formattedTextFieldFullEntry1);
 
 
 
@@ -1022,6 +1315,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			buttonScore.setPreferredSize(new Dimension(80, 23));
 			panelScore.add(buttonScore);
 
+			buttonOutputCombined = new JButton("Avg/CC's");
+			buttonOutputCombined.addActionListener(this);
+			buttonOutputCombined.setPreferredSize(new Dimension(80, 23));
+			panelScore.add(buttonOutputCombined);
+
 			Component hGlue_3 = Box.createHorizontalGlue();
 			panelScore.add(hGlue_3);
 
@@ -1152,6 +1450,24 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			DRGizmoMain.prefs.putInt(CCFORAGE2, Integer.parseInt(formattedTextFieldForage2.getText().replaceAll(",", "")));
 			DRGizmoMain.prefs.putInt(CCFORAGE1, Integer.parseInt(formattedTextFieldForage1.getText().replaceAll(",", "")));
 
+			DRGizmoMain.prefs.putDouble(SINGLEDRINDIVIDUAL, Double.parseDouble(formattedTextFieldSingleDRIndividual.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(SINGLEDR7, Double.parseDouble(formattedTextFieldSingleDR7.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(SINGLEDR6, Double.parseDouble(formattedTextFieldSingleDR6.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(SINGLEDR5, Double.parseDouble(formattedTextFieldSingleDR5.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(SINGLEDR4, Double.parseDouble(formattedTextFieldSingleDR4.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(SINGLEDR3, Double.parseDouble(formattedTextFieldSingleDR3.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(SINGLEDR2, Double.parseDouble(formattedTextFieldSingleDR2.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(SINGLEDR1, Double.parseDouble(formattedTextFieldSingleDR1.getText().replaceAll(",", "")));
+
+			DRGizmoMain.prefs.putDouble(FULLENTRYINDIVIDUAL, Double.parseDouble(formattedTextFieldFullEntryIndividual.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(FULLENTRY7, Double.parseDouble(formattedTextFieldFullEntry7.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(FULLENTRY6, Double.parseDouble(formattedTextFieldFullEntry6.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(FULLENTRY5, Double.parseDouble(formattedTextFieldFullEntry5.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(FULLENTRY4, Double.parseDouble(formattedTextFieldFullEntry4.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(FULLENTRY3, Double.parseDouble(formattedTextFieldFullEntry3.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(FULLENTRY2, Double.parseDouble(formattedTextFieldFullEntry2.getText().replaceAll(",", "")));
+			DRGizmoMain.prefs.putDouble(FULLENTRY1, Double.parseDouble(formattedTextFieldFullEntry1.getText().replaceAll(",", "")));
+
 			DRGizmoMain.prefs.putInt("width", getWidth());
 			DRGizmoMain.prefs.putInt("height", getHeight());
 
@@ -1231,8 +1547,19 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						Integer.parseInt(formattedTextFieldForage5.getText().replaceAll(",", "")),
 						Integer.parseInt(formattedTextFieldForage6.getText().replaceAll(",", "")),
 						Integer.parseInt(formattedTextFieldForage7.getText().replaceAll(",", "")));
+					String brokenRecordsDR = data.getBrokenRecords(Double.parseDouble(formattedTextFieldSingleDRIndividual.getText().replaceAll(",", "")),
+						Double.parseDouble(formattedTextFieldSingleDR1.getText().replaceAll(",", "")),
+						Double.parseDouble(formattedTextFieldSingleDR2.getText().replaceAll(",", "")),
+						Double.parseDouble(formattedTextFieldSingleDR3.getText().replaceAll(",", "")),
+						Double.parseDouble(formattedTextFieldSingleDR4.getText().replaceAll(",", "")),
+						Double.parseDouble(formattedTextFieldSingleDR5.getText().replaceAll(",", "")),
+						Double.parseDouble(formattedTextFieldSingleDR6.getText().replaceAll(",", "")),
+						Double.parseDouble(formattedTextFieldSingleDR7.getText().replaceAll(",", "")));
 					if (!brokenRecords.isEmpty()) {
 						printStatus(brokenRecords, false);
+					}
+					if (!brokenRecordsDR.isEmpty()){
+						printStatus(brokenRecordsDR, false);
 					}
 				}
 
@@ -1280,8 +1607,20 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						Integer.parseInt(formattedTextFieldEntry5.getText().replaceAll(",", "")),
 						Integer.parseInt(formattedTextFieldEntry6.getText().replaceAll(",", "")),
 						Integer.parseInt(formattedTextFieldEntry7.getText().replaceAll(",", "")));
+
+					String brokenRecordsFull = data.getBrokenRecords(Double.parseDouble(formattedTextFieldFullEntryIndividual.getText().replaceAll(",", "")),
+							Double.parseDouble(formattedTextFieldFullEntry1.getText().replaceAll(",", "")),
+							Double.parseDouble(formattedTextFieldFullEntry2.getText().replaceAll(",", "")),
+							Double.parseDouble(formattedTextFieldFullEntry3.getText().replaceAll(",", "")),
+							Double.parseDouble(formattedTextFieldFullEntry4.getText().replaceAll(",", "")),
+							Double.parseDouble(formattedTextFieldFullEntry5.getText().replaceAll(",", "")),
+							Double.parseDouble(formattedTextFieldFullEntry6.getText().replaceAll(",", "")),
+							Double.parseDouble(formattedTextFieldFullEntry7.getText().replaceAll(",", "")));
 					if (!brokenRecords.isEmpty()) {
 						printStatus(brokenRecords, false);
+					}
+					if (!brokenRecordsFull.isEmpty()){
+						printStatus(brokenRecordsFull, false);
 					}
 				}
 
@@ -1353,6 +1692,36 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				}
 			} else {
 				printStatus("CCs Failed", false);
+			}
+			printStatus("", false);
+			return;
+		}
+
+		if (e.getSource().equals(buttonOutputCombined)){
+			DRPersistantData data = drTreeToPersistantData();
+			if (data != null && !data.isEmpty()) {
+				//change tokenScore based on the settings
+				data.calculateCustomTokenScore(Integer.parseInt(formattedTextFieldTokenCircle.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenDiamond.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenPlus.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenCross.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenThrall.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldCannonball.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldSmallChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
+				//print dr to output with print settings
+				String dataString = data.toCombined();
+				printStatus(dataString, false);
+
+				//copy
+				if (checkBoxAutoCopy.isSelected()) {
+					StringSelection selection = new StringSelection(dataString);
+					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+					clipboard.setContents(selection, selection);
+				}
+			} else {
+				printStatus("Combined Failed", false);
 			}
 			printStatus("", false);
 			return;
@@ -1442,6 +1811,5 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 		return result;
 	}
-
 
 }
