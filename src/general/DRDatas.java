@@ -227,6 +227,7 @@ class DRGroupData implements Serializable {
 		}
 		return result.trim();
 	}
+
 	public String getBrokenRecords(double individual, double man1, double man2, double man3, double man4, double man5, double man6, double man7) {
 		//String result = "", forage = "Foraging", newLine =  System.getProperty("line.separator"); //doesn't work in 1.6
 		String result = "", forage = "Foraging", newLine =  "\n";
@@ -601,6 +602,7 @@ class DRPersistantData implements Serializable {
 		}
 		return result.trim();
 	}
+
 	public String getBrokenRecords(double individual, double man1, double man2, double man3, double man4, double man5, double man6, double man7) {
 		String result = "", forage = "Foraging", newLine = System.getProperty("line.separator");
 		DRPersistantData tempData = new DRPersistantData();
@@ -841,7 +843,18 @@ class DRPersistantData implements Serializable {
 				}
 			}
 		}
-		Collections.sort(pirateList);
+
+		Comparator<Pair> rankPairs =  new Comparator<Pair>() {
+			public int compare(Pair p1, Pair p2) {
+				if (p1.getAverage() > p2.getAverage())
+					return -1;
+				else if (p1.getAverage() < p2.getAverage())
+					return 1;
+				return 0;
+			}
+		};
+
+		Collections.sort(pirateList, rankPairs);
 
 		StringBuilder sbTemp = new StringBuilder();
 		//Safe enough to assume size is the same for all.
@@ -909,7 +922,17 @@ class DRPersistantData implements Serializable {
 			}
 		}
 
-		Collections.sort(pirateList);
+		Comparator<Pair> rankPairs =  new Comparator<Pair>() {
+			public int compare(Pair p1, Pair p2) {
+				if (p1.getScoreTotal() > p2.getScoreTotal())
+					return -1;
+				else if (p1.getScoreTotal() < p2.getScoreTotal())
+					return 1;
+				return 0;
+			}
+		};
+
+		Collections.sort(pirateList, rankPairs);
 		StringBuilder sbTemp = new StringBuilder();
 		sbTemp.append("CC Totals ("+pirateList.get(0).ccList.size()+" Forages):");
 		sbTemp.append(System.getProperty("line.separator"));
@@ -972,7 +995,17 @@ class DRPersistantData implements Serializable {
 				}
 			}
 		}
-		Collections.sort(pirateList);
+		Comparator<Pair> rankPairs =  new Comparator<Pair>() {
+			public int compare(Pair p1, Pair p2) {
+				if (p1.getAverage() > p2.getAverage())
+					return -1;
+				else if (p1.getAverage() < p2.getAverage())
+					return 1;
+				return 0;
+			}
+		};
+
+		Collections.sort(pirateList, rankPairs);
 
 		StringBuilder sbTemp = new StringBuilder();
 		//Safe enough to assume size is the same for all.
