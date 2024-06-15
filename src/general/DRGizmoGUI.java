@@ -10,39 +10,16 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.Arrays;
-import java.util.Random;
 import java.util.prefs.BackingStoreException;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JFormattedTextField;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTabbedPane;
-import javax.swing.JTextArea;
-import javax.swing.JTree;
-import javax.swing.LookAndFeel;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
-import javax.swing.plaf.basic.BasicTextAreaUI;
 import javax.swing.text.NumberFormatter;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
@@ -95,7 +72,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 	private static JTextArea textAreaOutput, textAreaTests;
-	private JButton buttonOutputClear, buttonDRTreeRemove, buttonDRTreeClear, buttonSavePrefs, buttonScan, buttonScore, buttonTestsWho, buttonTestsBootyDiv, buttonTestsClear, buttonOutputAvg, buttonOutputCC, buttonOutputCombined;
+	private JButton buttonOutputClear, buttonDRTreeRemove, buttonDRTreeClear, buttonSavePrefs, buttonScan, buttonScore, buttonTestsWho, buttonTestsBootyDiv,buttonOutputNew,buttonOutputAvg, buttonTestsClear, buttonOutputBox, buttonOutputJar, buttonOutputChest, buttonOutputCombined;
 	private JCheckBox checkBoxAutoCopy, checkBoxAutoRead, checkBoxBrokenRecordAlert;
 	private JCheckBox checkBoxDebug, checkBoxIgnoreAI;
 	private JLabel labelDRCount;
@@ -106,9 +83,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JCheckBox checkBoxScoreWriteDate, checkBoxScoreUseTabs, checkBoxScoreStationHeaders, checkBoxScore2Station, checkBoxScore2Pirate, checkBoxScore2Rating, checkBoxScore2TokenScore, checkBoxScore2TokenArray;
 	private JComboBox comboBoxScoreOcean;
 
-	private JTree drTree;
-	private DefaultMutableTreeNode drTreeRootNode;
-	private DefaultTreeModel drTreeModel;
+	protected JTree drTree;
+	protected DefaultMutableTreeNode drTreeRootNode;
+	protected DefaultTreeModel drTreeModel;
 
 	private JFormattedTextField formattedTextFieldTokenCircle, formattedTextFieldTokenDiamond, formattedTextFieldTokenPlus, formattedTextFieldTokenCross, formattedTextFieldTokenThrall;
 	private JFormattedTextField formattedTextFieldCannonball;
@@ -232,27 +209,71 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				UIManager.setLookAndFeel(yoLookAndFeel);
 			} catch (UnsupportedLookAndFeelException e) {}
 
-			JPanel panelOutputButtonPanel = new JPanel();
-			panelOutput.add(panelOutputButtonPanel, BorderLayout.SOUTH);
-			panelOutputButtonPanel.setLayout(new BoxLayout(panelOutputButtonPanel, BoxLayout.X_AXIS));
+			JPanel paneButtons = new JPanel();
+			paneButtons.setLayout(new BorderLayout(0, 0));
+			panelOutput.add(paneButtons, BorderLayout.SOUTH);
 
-			Component hGlue_1 = Box.createHorizontalGlue();
-			panelOutputButtonPanel.add(hGlue_1);
+			JPanel panelOutputButtonPanel = new JPanel();
+			paneButtons.add(panelOutputButtonPanel);
+			panelOutputButtonPanel.setLayout(new BoxLayout(panelOutputButtonPanel, BoxLayout.Y_AXIS));
+
+			JPanel panelOutputButtonGeneral = new JPanel();
+			panelOutputButtonGeneral.setAlignmentX(Component.RIGHT_ALIGNMENT);
+			panelOutputButtonPanel.add(panelOutputButtonGeneral);
+			panelOutputButtonGeneral.setLayout(new BoxLayout(panelOutputButtonGeneral, BoxLayout.Y_AXIS));
+
+			Box horizontalOutput1 = Box.createHorizontalBox();
+			horizontalOutput1.setAlignmentX(Component.RIGHT_ALIGNMENT);
+			panelOutputButtonGeneral.add(horizontalOutput1);
+
+			buttonOutputBox = new JButton("Box");
+			buttonOutputBox.addActionListener(this);
+			buttonOutputBox.setPreferredSize(new Dimension(80, 17));
+			buttonOutputBox.setMinimumSize(new Dimension(80, 17));
+			buttonOutputBox.setMaximumSize(new Dimension(80, 17));
+			horizontalOutput1.add(buttonOutputBox);
+
+			buttonOutputJar = new JButton("Jar");
+			buttonOutputJar.addActionListener(this);
+			buttonOutputJar.setPreferredSize(new Dimension(80, 17));
+			buttonOutputJar.setMinimumSize(new Dimension(80, 17));
+			buttonOutputJar.setMaximumSize(new Dimension(80, 17));
+			horizontalOutput1.add(buttonOutputJar);
+
+			buttonOutputChest = new JButton("Chest");
+			buttonOutputChest.addActionListener(this);
+			buttonOutputChest.setPreferredSize(new Dimension(80, 17));
+			buttonOutputChest.setMinimumSize(new Dimension(80, 17));
+			buttonOutputChest.setMaximumSize(new Dimension(80, 17));
+			horizontalOutput1.add(buttonOutputChest);
+
+
+			Box horizontalOutput2 = Box.createHorizontalBox();
+			horizontalOutput2.setAlignmentX(Component.RIGHT_ALIGNMENT);
+			panelOutputButtonGeneral.add(horizontalOutput2);
 
 			buttonOutputAvg = new JButton("Averages");
 			buttonOutputAvg.addActionListener(this);
-			buttonOutputAvg.setPreferredSize(new Dimension(80, 23));
-			panelOutputButtonPanel.add(buttonOutputAvg);
+			buttonOutputAvg.setPreferredSize(new Dimension(80, 17));
+			buttonOutputAvg.setMinimumSize(new Dimension(80, 17));
+			buttonOutputAvg.setMaximumSize(new Dimension(80, 17));
+			horizontalOutput2.add(buttonOutputAvg);
 
-			buttonOutputCC = new JButton("CC Totals");
-			buttonOutputCC.addActionListener(this);
-			buttonOutputCC.setPreferredSize(new Dimension(80, 23));
-			panelOutputButtonPanel.add(buttonOutputCC);
+
+			buttonOutputCombined = new JButton("Avg/CC's");
+			buttonOutputCombined.addActionListener(this);
+			buttonOutputCombined.setPreferredSize(new Dimension(80, 17));
+			buttonOutputCombined.setMinimumSize(new Dimension(80, 17));
+			buttonOutputCombined.setMaximumSize(new Dimension(80, 17));
+			horizontalOutput2.add(buttonOutputCombined);
+
 
 			buttonOutputClear = new JButton("Clear");
 			buttonOutputClear.addActionListener(this);
-			buttonOutputClear.setPreferredSize(new Dimension(80, 23));
-			panelOutputButtonPanel.add(buttonOutputClear);
+			buttonOutputClear.setPreferredSize(new Dimension(80, 17));
+			buttonOutputClear.setMinimumSize(new Dimension(80, 17));
+			buttonOutputClear.setMaximumSize(new Dimension(80, 17));
+			horizontalOutput2.add(buttonOutputClear);
 
 
 
@@ -1315,10 +1336,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			buttonScore.setPreferredSize(new Dimension(80, 23));
 			panelScore.add(buttonScore);
 
-			buttonOutputCombined = new JButton("Avg/CC's");
-			buttonOutputCombined.addActionListener(this);
-			buttonOutputCombined.setPreferredSize(new Dimension(80, 23));
-			panelScore.add(buttonOutputCombined);
+			buttonOutputNew = new JButton("???");
+			buttonOutputNew.addActionListener(this);
+			buttonOutputNew.setPreferredSize(new Dimension(80, 23));
+			//panelScore.add(buttonOutputNew);
 
 			Component hGlue_3 = Box.createHorizontalGlue();
 			panelScore.add(hGlue_3);
@@ -1651,7 +1672,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")),
 						Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
 				//print dr to output with print settings
-				String dataString = data.toAvg();
+				String dataString = data.toAvg(drTreeRootNode.getChildCount());
 				printStatus(dataString, false);
 
 				//copy
@@ -1667,7 +1688,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			return;
 		}
 
-		if (e.getSource().equals(buttonOutputCC)){
+		if (e.getSource().equals(buttonOutputBox)){
 			DRPersistantData data = drTreeToPersistantData();
 			if (data != null && !data.isEmpty()) {
 				//change tokenScore based on the settings
@@ -1681,7 +1702,65 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")),
 						Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
 				//print dr to output with print settings
-				String dataString = data.toCC();
+				String dataString = data.toAny(0,drTreeRootNode.getChildCount());
+				printStatus(dataString, false);
+
+				//copy
+				if (checkBoxAutoCopy.isSelected()) {
+					StringSelection selection = new StringSelection(dataString);
+					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+					clipboard.setContents(selection, selection);
+				}
+			} else {
+				printStatus("BBs Failed", false);
+			}
+			printStatus("", false);
+			return;
+		}
+		if (e.getSource().equals(buttonOutputJar)){
+			DRPersistantData data = drTreeToPersistantData();
+			if (data != null && !data.isEmpty()) {
+				//change tokenScore based on the settings
+				data.calculateCustomTokenScore(Integer.parseInt(formattedTextFieldTokenCircle.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenDiamond.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenPlus.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenCross.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenThrall.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldCannonball.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldSmallChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
+				//print dr to output with print settings
+				String dataString = data.toAny(1, drTreeRootNode.getChildCount());
+				printStatus(dataString, false);
+
+				//copy
+				if (checkBoxAutoCopy.isSelected()) {
+					StringSelection selection = new StringSelection(dataString);
+					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+					clipboard.setContents(selection, selection);
+				}
+			} else {
+				printStatus("FJs Failed", false);
+			}
+			printStatus("", false);
+			return;
+		}
+		if (e.getSource().equals(buttonOutputChest)){
+			DRPersistantData data = drTreeToPersistantData();
+			if (data != null && !data.isEmpty()) {
+				//change tokenScore based on the settings
+				data.calculateCustomTokenScore(Integer.parseInt(formattedTextFieldTokenCircle.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenDiamond.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenPlus.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenCross.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenThrall.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldCannonball.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldSmallChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
+				//print dr to output with print settings
+				String dataString = data.toAny(2, drTreeRootNode.getChildCount());
 				printStatus(dataString, false);
 
 				//copy
@@ -1711,7 +1790,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")),
 						Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
 				//print dr to output with print settings
-				String dataString = data.toCombined();
+				String dataString = data.toCombined(drTreeRootNode.getChildCount());
 				printStatus(dataString, false);
 
 				//copy
@@ -1724,6 +1803,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				printStatus("Combined Failed", false);
 			}
 			printStatus("", false);
+			return;
+		}
+
+		if (e.getSource().equals(buttonOutputNew)){
 			return;
 		}
 

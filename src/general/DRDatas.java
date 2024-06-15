@@ -805,7 +805,7 @@ class DRPersistantData implements Serializable {
 		return sb.toString();
 	}
 
-	public String toAvg() {
+	public String toAvg(int childCount) {
 		//go through and get a master list (DRGroupData) of all participants and their stations
 		DRGroupData masterGroupData = new DRGroupData();
 		for (DRGroupData groupData : data) {
@@ -858,7 +858,7 @@ class DRPersistantData implements Serializable {
 
 		StringBuilder sbTemp = new StringBuilder();
 		//Safe enough to assume size is the same for all.
-		sbTemp.append("Averages ("+ pirateList.get(0).scoreList.size()+" Frays Won):");
+		sbTemp.append("Averages ("+ childCount +" Frays Won):");
 		sbTemp.append(System.getProperty("line.separator"));
 
 		for (Pair pirate: pirateList) {
@@ -869,12 +869,17 @@ class DRPersistantData implements Serializable {
 		return sb.toString();
 	}
 
-	public String toCC() {
+	public String toAny(int arrayPositionOfChest, int childCount) {
+		// local variable to determine if Ci or Lair
+		boolean ci = true;
+
+
 		//go through and get a master list (DRGroupData) of all participants and their stations
 		DRGroupData masterGroupData = new DRGroupData();
 		for (DRGroupData groupData : data) {
 			for (String station : groupData.data.keySet()) {
 				if (station.contains("Foraging") || station.contains("Treasure Haul")){
+					ci = station.contains("Foraging");
 					for (String pirate : groupData.data.get(station).keySet()) {
 						if (pirate.contains(" ")) {
 							continue;
@@ -899,7 +904,7 @@ class DRPersistantData implements Serializable {
 						// If Pirate already exists in Pirate list, then get the index of the pirate by name, and then add the token score to the score list
 						// If people score 0 the token array is null, guard against it so method can work
 						if (d.getTokens() != null) {
-							int val = d.getTokens()[2];
+							int val = d.getTokens()[arrayPositionOfChest];
 							if (getIndexOf(pirateList, d.getName()) != -1) {
 								pirateList.get(getIndexOf(pirateList, d.getName())).ccList.add(val);
 								pirateList.get(getIndexOf(pirateList, d.getName())).scoreList.add(val);
@@ -934,7 +939,15 @@ class DRPersistantData implements Serializable {
 
 		Collections.sort(pirateList, rankPairs);
 		StringBuilder sbTemp = new StringBuilder();
-		sbTemp.append("CC Totals ("+pirateList.get(0).ccList.size()+" Forages):");
+
+		String chestType = arrayPositionOfChest == 0 ? "Box" : arrayPositionOfChest == 1 ? "Jar" : "Chest";
+
+
+		if (ci){
+			sbTemp.append(chestType + " Totals ("+ childCount +" Forages):");
+		}else {
+			sbTemp.append(chestType + " Totals ("+ childCount +" Hauls):");
+		}
 		sbTemp.append(System.getProperty("line.separator"));
 		for (Pair pirate: pirateList) {
 			sbTemp.append(pirate.getPirate()+ seperator + pirate.getCCTotal());
@@ -944,12 +957,16 @@ class DRPersistantData implements Serializable {
 		return sb.toString();
 	}
 
-	public String toCombined() {
+	public String toCombined(int childCount) {
+		// local variable to determine if Ci or Lair
+		boolean ci = true;
+
 		//go through and get a master list (DRGroupData) of all participants and their stations
 		DRGroupData masterGroupData = new DRGroupData();
 		for (DRGroupData groupData : data) {
 			for (String station : groupData.data.keySet()) {
 				if (station.contains("Foraging") || station.contains("Treasure Haul")){
+					ci = station.contains("Foraging");
 					for (String pirate : groupData.data.get(station).keySet()) {
 						if (pirate.contains(" ")) {
 							continue;
@@ -1008,8 +1025,12 @@ class DRPersistantData implements Serializable {
 		Collections.sort(pirateList, rankPairs);
 
 		StringBuilder sbTemp = new StringBuilder();
-		//Safe enough to assume size is the same for all.
-		sbTemp.append("Averages (CC) "+ pirateList.get(0).scoreList.size()+" Forages:");
+
+		if (ci){
+			sbTemp.append("Averages (CC) ("+ childCount +" Forages):");
+		}else {
+			sbTemp.append("Averages (IC)("+ childCount +" Hauls):");
+		}
 		sbTemp.append(System.getProperty("line.separator"));
 
 		for (Pair pirate: pirateList) {
