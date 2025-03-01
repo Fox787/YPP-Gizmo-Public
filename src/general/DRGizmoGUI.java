@@ -72,7 +72,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 	private static JTextArea textAreaOutput, textAreaTests;
-	private JButton buttonOutputClear, buttonDRTreeRemove, buttonDRTreeClear, buttonSavePrefs, buttonScan, buttonScore, buttonTestsWho, buttonTestsBootyDiv,buttonOutputNew,buttonOutputAvg, buttonTestsClear, buttonOutputBox, buttonOutputJar, buttonOutputChest, buttonOutputCombined;
+	private JButton buttonOutputClear, buttonDRTreeRemove, buttonDRTreeClear, buttonSavePrefs, buttonScan, buttonScore, buttonTestsWho, buttonTestsBootyDiv,buttonOutputNew,buttonOutputAvg, buttonTestsClear, buttonOutputBox, buttonOutputJar, buttonOutputChest, buttonOutputCombined, buttonOutputCarpAvg;
 	private JCheckBox checkBoxAutoCopy, checkBoxAutoRead, checkBoxBrokenRecordAlert;
 	private JCheckBox checkBoxDebug, checkBoxIgnoreAI;
 	private JLabel labelDRCount;
@@ -268,13 +268,12 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			horizontalOutput2.add(buttonOutputCombined);
 
 
-			buttonOutputClear = new JButton("Clear");
-			buttonOutputClear.addActionListener(this);
-			buttonOutputClear.setPreferredSize(new Dimension(80, 17));
-			buttonOutputClear.setMinimumSize(new Dimension(80, 17));
-			buttonOutputClear.setMaximumSize(new Dimension(80, 17));
-			horizontalOutput2.add(buttonOutputClear);
-
+			buttonOutputCarpAvg = new JButton( "Carp Avg");
+			buttonOutputCarpAvg.addActionListener(this);
+			buttonOutputCarpAvg.setPreferredSize(new Dimension(80, 17));
+			buttonOutputCarpAvg.setMinimumSize(new Dimension(80, 17));
+			buttonOutputCarpAvg.setMaximumSize(new Dimension(80, 17));
+			horizontalOutput2.add(buttonOutputCarpAvg);
 
 
 
@@ -1336,6 +1335,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			buttonScore.setPreferredSize(new Dimension(80, 23));
 			panelScore.add(buttonScore);
 
+			buttonOutputClear = new JButton("Clear");
+			buttonOutputClear.addActionListener(this);
+			buttonOutputClear.setPreferredSize(new Dimension(80, 17));
+			panelScore.add(buttonOutputClear);
+
 			buttonOutputNew = new JButton("???");
 			buttonOutputNew.addActionListener(this);
 			buttonOutputNew.setPreferredSize(new Dimension(80, 23));
@@ -1801,6 +1805,36 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				}
 			} else {
 				printStatus("Combined Failed", false);
+			}
+			printStatus("", false);
+			return;
+		}
+
+		if (e.getSource().equals(buttonOutputCarpAvg)){
+			DRPersistantData data = drTreeToPersistantData();
+			if (data != null && !data.isEmpty()) {
+				//change tokenScore based on the settings
+				data.calculateCustomTokenScore(Integer.parseInt(formattedTextFieldTokenCircle.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenDiamond.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenPlus.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenCross.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldTokenThrall.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldCannonball.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldSmallChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")),
+						Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
+				//print dr to output with print settings
+				String dataString = data.toCarpAvg(drTreeRootNode.getChildCount());
+				printStatus(dataString, false);
+
+				//copy
+				if (checkBoxAutoCopy.isSelected()) {
+					StringSelection selection = new StringSelection(dataString);
+					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+					clipboard.setContents(selection, selection);
+				}
+			} else {
+				printStatus("Carp Avg Failed", false);
 			}
 			printStatus("", false);
 			return;

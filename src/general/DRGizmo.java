@@ -140,6 +140,7 @@ public class DRGizmo {
 	
 	public DRGroupData scanDutyReport() {
 		try {
+			// findDutyReport for Steam Client, findDutyReport2 for Standalone client.
 			if (findDutyReport2()) 
 				return data;
 			return null;

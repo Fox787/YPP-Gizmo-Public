@@ -1041,6 +1041,71 @@ class DRPersistantData implements Serializable {
 		return sb.toString();
 	}
 
+	public String toCarpAvg(int childCount) {
+
+		//go through and get a master list (DRGroupData) of all participants and their stations
+		DRGroupData masterGroupData = new DRGroupData();
+		for (DRGroupData groupData : data) {
+			for (String station : groupData.data.keySet()) {
+				if (station.contains("Carpentry")){
+					for (String pirate : groupData.data.get(station).keySet()) {
+						if (pirate.contains(" ")) {
+							continue;
+						}
+						masterGroupData.put(groupData.get(station, pirate));
+					}
+				}
+			}
+		}
+
+		StringBuilder sb = new StringBuilder();
+		String seperator = " ";
+
+		// masterList only contains LAIR Carp Entries at this point
+		List<Pair> pirateList = new ArrayList<Pair>();
+		for (String station : masterGroupData.data.keySet()) {
+			for (String pirate : masterGroupData.data.get(station).keySet()) {
+				// adds pirates then attempts to sum all the scores the user has then returns the average
+				for (DRGroupData groupData : data) {
+					if (groupData.contains(station, pirate)) {
+						DRIndividualData d = groupData.data.get(station).get(pirate);
+						// If Pirate already exists in Pirate list, then get the index of the pirate by name, and then add the token score to the score list
+						if (getIndexOf(pirateList,d.getName()) != -1){
+							pirateList.get(getIndexOf(pirateList,d.getName())).scoreList.add(d.getTokenScore());
+						}else {
+							// Pirate doesn't exist in pirate list so add fresh
+							pirateList.add(new Pair(d.getTokenScore(),d.getName(),0));
+						}
+					}
+				}
+			}
+		}
+
+		Comparator<Pair> rankPairs =  new Comparator<Pair>() {
+			public int compare(Pair p1, Pair p2) {
+				if (p1.getAverage() > p2.getAverage())
+					return -1;
+				else if (p1.getAverage() < p2.getAverage())
+					return 1;
+				return 0;
+			}
+		};
+
+		Collections.sort(pirateList, rankPairs);
+
+		StringBuilder sbTemp = new StringBuilder();
+		//Safe enough to assume size is the same for all.
+		sbTemp.append("Carp Avg: ("+ childCount +" Frays Won):");
+		sbTemp.append(System.getProperty("line.separator"));
+
+		for (Pair pirate: pirateList) {
+			sbTemp.append(pirate.getPirate()+ seperator + String.format("%.2f",pirate.getAverage()));
+			sbTemp.append(System.getProperty("line.separator"));
+		}
+		sb.append(sbTemp.toString().trim());
+		return sb.toString();
+	}
+
 	private void readObject (ObjectInputStream aInputStream) throws ClassNotFoundException, IOException {
 		aInputStream.defaultReadObject();
 	}
