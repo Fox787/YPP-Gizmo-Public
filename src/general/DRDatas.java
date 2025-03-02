@@ -941,12 +941,16 @@ class DRPersistantData implements Serializable {
 		StringBuilder sbTemp = new StringBuilder();
 
 		String chestType = arrayPositionOfChest == 0 ? "Box" : arrayPositionOfChest == 1 ? "Jar" : "Chest";
-
+		// Display total of things obtained
+		int total = 0;
+		for (Pair pirate: pirateList) {
+			total += pirate.getCCTotal();
+		}
 
 		if (ci){
-			sbTemp.append(chestType + " Totals ("+ childCount +" Forages):");
+			sbTemp.append(chestType + " Totals ("+ childCount +" Forages): "+ total);
 		}else {
-			sbTemp.append(chestType + " Totals ("+ childCount +" Hauls):");
+			sbTemp.append(chestType + " Totals ("+ childCount +" Hauls): " + total);
 		}
 		sbTemp.append(System.getProperty("line.separator"));
 		for (Pair pirate: pirateList) {
@@ -1025,11 +1029,16 @@ class DRPersistantData implements Serializable {
 		Collections.sort(pirateList, rankPairs);
 
 		StringBuilder sbTemp = new StringBuilder();
+		// Display total of things obtained
+		int total = 0;
+		for (Pair pirate: pirateList) {
+			total += pirate.getCCTotal();
+		}
 
 		if (ci){
-			sbTemp.append("Averages (CC) ("+ childCount +" Forages):");
+			sbTemp.append("Averages ("+ total +" CC) ("+ childCount +" Forages):");
 		}else {
-			sbTemp.append("Averages (IC)("+ childCount +" Hauls):");
+			sbTemp.append("Averages ("+ total +" IC)("+ childCount +" Hauls):");
 		}
 		sbTemp.append(System.getProperty("line.separator"));
 
