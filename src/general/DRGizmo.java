@@ -173,6 +173,21 @@ public class DRGizmo {
 		
 		//this gets us 90% of the way there.
 		//int[] path = scanRecursiveSearcher("class com.threerings.piracy.swing.TwoColumnPanel");
+
+		int[] steam = findClassRecursive(node, "class com.threerings.yohoho.steam.client.SteamOverlayCanvas", 1, new ArrayList<Integer>());
+
+		if (steam != null) {
+			// If we detect steam, do some shifting Before calling Class Recursive.
+			printStatus("found steam", true);
+
+			if (null == (node = descendNodes(node, new int[] {0, 1, 1}))) {
+				printStatus("findDutyReport failed 1.1", true);
+			}
+			if (null == (node = descendNodes(node, new int[] {0}))) {
+				printStatus("findDutyReport failed 1.2", true);
+			}
+		}
+
 		int[] path = findClassRecursive(node, "class com.threerings.piracy.swing.TwoColumnPanel", 1, new ArrayList<Integer>());
 		printStatus(Arrays.toString(path), true);
 		if (path == null) {
