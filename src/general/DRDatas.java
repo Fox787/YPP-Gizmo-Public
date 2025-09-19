@@ -1038,7 +1038,7 @@ class DRPersistantData implements Serializable {
 		if (ci){
 			sbTemp.append("Averages ("+ total +" CC) ("+ childCount +" Forages):");
 		}else {
-			sbTemp.append("Averages ("+ total +" IC)("+ childCount +" Hauls):");
+			sbTemp.append("Averages ("+ total +" IC) ("+ childCount +" Hauls):");
 		}
 		sbTemp.append(System.getProperty("line.separator"));
 
