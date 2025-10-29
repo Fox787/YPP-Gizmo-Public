@@ -145,7 +145,7 @@ public class DRPersistantData implements Serializable {
         DRPersistantData tempData = new DRPersistantData();
         //copy and take only forage so we can safely calculate for CCs only
         for (DRGroupData group : data) {
-            if ( group.get(forage) != null) {
+            if (group.get(forage) != null) {
                 tempData.add(group.get(forage).copy());
             }
         }
