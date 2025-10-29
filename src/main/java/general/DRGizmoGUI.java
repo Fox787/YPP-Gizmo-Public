@@ -1404,7 +1404,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					PrefObj.putObject(DRGizmoMain.prefs, TREEDATA, drTreeToPersistantData());
 					printStatus("Tree Saved", true);
 				} catch (IOException | BackingStoreException | ClassNotFoundException ex) {
-					printStatus("Saving Tree Failed", true);
+					printStatus("Saving Tree Failed: " + ex.getMessage(), true);
 				}
 				return;
 			}
