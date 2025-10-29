@@ -96,7 +96,7 @@ public class DRGizmo {
 
 	public DRGroupData scanDutyReport() {
 		try {
-			// Steam fixes included in findDutyReport2 always use it.
+			// findDutyReport2 includes Steam client compatibility fixes and should always be used.
 			if (findDutyReport2()) 
 				return data;
 			return null;
