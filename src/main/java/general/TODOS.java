@@ -1,4 +1,4 @@
-package general;
+package main.java.general;
 
 public class TODOS {
 	
