@@ -133,7 +133,7 @@ public class DRDatasTest {
         // Set preference values
         int individualRecord = 7;
         int man1Record = 7;
-        int man2Record = 0, man3Record = 0 ,man4Record = 0, man5Record = 0, man6Record = 0, man7Record = 0;
+        int man2Record = 0, man3Record = 0, man4Record = 0, man5Record = 0, man6Record = 0, man7Record = 0;
 
         String result = groupData.getBrokenRecords(individualRecord, man1Record, man2Record, man3Record, man4Record, man5Record, man6Record, man7Record);
 
