@@ -56,29 +56,17 @@ public class RadioButtonProfileSelector extends JPanel {
         btnDelete = new JButton("Delete");
 
 
+        //JPanel crudPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         JPanel crudPanel = new JPanel();
         crudPanel.setLayout(new BoxLayout(crudPanel, BoxLayout.Y_AXIS));
+
         crudPanel.add(btnNew);
-        crudPanel.add(btnRename);
-        crudPanel.add(btnDelete);
-
-        // Combine radioPanel and crudPanel side by side
-        JPanel mainPanel = new JPanel(new BorderLayout());
-        mainPanel.add(radioPanel, BorderLayout.WEST);
-        mainPanel.add(crudPanel, BorderLayout.CENTER);
-
-        add(mainPanel, BorderLayout.CENTER);
-
-
-        /*
-        JPanel crudPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        crudPanel.add(btnNew);
+        
         crudPanel.add(btnRename);
         crudPanel.add(btnDelete);
 
         add(radioPanel, BorderLayout.CENTER);
-        add(crudPanel, BorderLayout.SOUTH);
-         */
+        add(crudPanel, BorderLayout.EAST);
 
         btnNew.addActionListener(e -> createProfile());
         btnRename.addActionListener(e -> renameProfile());
@@ -86,8 +74,9 @@ public class RadioButtonProfileSelector extends JPanel {
 
         // Load the last selected profile or create default
         selectedProfile = globalPrefs.get(CURRENT_PROFILE_KEY, null);
+
         if (selectedProfile == null) {
-            createDefaultProfile();
+           createDefaultProfile();
         }
 
         loadProfiles();
@@ -201,13 +190,72 @@ public class RadioButtonProfileSelector extends JPanel {
     private void createDefaultProfile() {
         try {
             Preferences profileRoot = globalPrefs.node(PROFILE_ROOT);
-            if (!profileRoot.nodeExists(DEFAULT_PROFILE)) {
-                profileRoot.node(DEFAULT_PROFILE);
-                profileRoot.flush();
+            // Template 1: "Emerald Ocean"
+            if (!profileRoot.nodeExists("CI")) {
+                Preferences ciProfile = profileRoot.node("CI");
+                // Set CI-specific defaults
+
+                ciProfile.putBoolean("autocopy", true);
+
+                ciProfile.putInt("scanocean", 4);
+                ciProfile.putBoolean("scanusetabs", false);
+                ciProfile.putBoolean("scanpirate", true);
+                ciProfile.putBoolean("scantokenscore", true);
+                ciProfile.putBoolean("scantokenarray", true);
+
+                ciProfile.putBoolean("scorewritedate", true);
+                ciProfile.putBoolean("scoreusetabs", true);
+                ciProfile.putInt("scoreocean", 1);
+                ciProfile.putBoolean("scorepirate", true);
+                ciProfile.putBoolean("scoresheetcombo", true);
+
+                ciProfile.putInt("tokencircle", 1);
+                ciProfile.putInt("tokendiamond", 1);
+                ciProfile.putInt("tokenplus", 1);
+                ciProfile.putInt("tokencross", 1);
+                ciProfile.putInt("tokenthrall", 1);
+                ciProfile.putInt("tokencannonball", 1);
+                ciProfile.putInt("chestsmall", 1);
+                ciProfile.putInt("chestmedium", 2);
+                ciProfile.putInt("chestlarge", 3);
+
+                ciProfile.flush();
             }
-            selectedProfile = DEFAULT_PROFILE;
-            globalPrefs.put(CURRENT_PROFILE_KEY, DEFAULT_PROFILE);
-            globalPrefs.flush();
+
+            // Template 2: "Lair"
+            if (!profileRoot.nodeExists("Lair")) {
+                Preferences lairProfile = profileRoot.node("Lair");
+
+                lairProfile.putBoolean("autocopy", true);
+
+                lairProfile.putInt("scanocean", 4);
+                lairProfile.putBoolean("scanusetabs", false);
+                lairProfile.putBoolean("scanpirate", true);
+                lairProfile.putBoolean("scantokenscore", true);
+                lairProfile.putBoolean("scantokenarray", true);
+
+                lairProfile.putBoolean("scorewritedate", true);
+                lairProfile.putBoolean("scoreusetabs", true);
+                lairProfile.putInt("scoreocean", 1);
+                lairProfile.putBoolean("scorepirate", true);
+                lairProfile.putBoolean("scorestation", true);
+                lairProfile.putBoolean("scoretokenarray", true);
+
+
+                lairProfile.putInt("tokencircle", 1);
+                lairProfile.putInt("tokendiamond", 1);
+                lairProfile.putInt("tokenplus", 1);
+                lairProfile.putInt("tokencross", 1);
+                lairProfile.putInt("tokenthrall", 1);
+                lairProfile.putInt("tokencannonball", 1);
+                lairProfile.putInt("chestsmall", 1);
+                lairProfile.putInt("chestmedium", 2);
+                lairProfile.putInt("chestlarge", 3);
+
+                lairProfile.flush();
+            }
+
+            profileRoot.flush();
         } catch (BackingStoreException e) {
             e.printStackTrace();
         }

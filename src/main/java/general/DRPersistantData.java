@@ -276,11 +276,11 @@ public class DRPersistantData implements Serializable {
 
     @Override
     public String toString() {
-        return this.toString(true, true, true, "Emerald", false, false, true, false, true, false);
+        return this.toString(true, true, true, "Emerald", false, false, true, false, true, false, false);
     }
 
     public String toString(boolean ignoreAI, boolean writeDate, boolean useTabs, String ocean, boolean writeStationHeaders,
-                           boolean writeStation, boolean writePirate, boolean writeRating, boolean writeTokenScore, boolean writeTokenArray) {
+                           boolean writeStation, boolean writePirate, boolean writeRating, boolean writeTokenScore, boolean writeTokenArray, boolean writeSheetCombo) {
         //date, 		 pirate, ocean,
         //		station,				[rating, tokenScore, tokenArray]
 
@@ -327,6 +327,13 @@ public class DRPersistantData implements Serializable {
                             sbTemp.append(d.getTokenScore() + seperator);
                         if (writeTokenArray)
                             sbTemp.append(Arrays.toString(d.getTokens()) + seperator);
+                        if (writeSheetCombo){
+                            String fill = "   ";
+                            if (d.getTokenScore() < 10){
+                                fill = "     ";
+                            }
+                            sbTemp.append(d.getTokenScore() + fill + Arrays.toString(d.getTokens()) + seperator);
+                        }
                     } else {
                         //NA but NA for all options selected to keep tabs in order
                         if (writeRating)
@@ -335,6 +342,9 @@ public class DRPersistantData implements Serializable {
                             sbTemp.append("NA" + seperator);
                         if (writeTokenArray)
                             sbTemp.append("NA" + seperator);
+                        if (writeSheetCombo){
+                            sbTemp.append("NA" + seperator);
+                        }
                     }
                 }
                 sb.append(sbTemp.toString().trim());

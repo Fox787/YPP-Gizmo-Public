@@ -3,6 +3,9 @@ package main.java.general;
 import java.awt.Window;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.lang.instrument.Instrumentation;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.prefs.Preferences;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,9 +13,13 @@ import java.util.regex.Pattern;
 import com.sun.java.accessibility.util.EventQueueMonitor;
 import com.sun.java.accessibility.util.GUIInitializedListener;
 import com.sun.java.accessibility.util.TopLevelWindowListener;
+import com.sun.tools.attach.VirtualMachine;
+import com.sun.tools.attach.VirtualMachineDescriptor;
+
+import javax.swing.*;
 
 public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListener {
-	public static final double VERSION = 0.07;
+	public static final double VERSION = 1.0;
 
 	public static final boolean DEVELOPERS = false;
 	
@@ -77,4 +84,52 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 
 	public void topLevelWindowDestroyed(Window w) {}
 
+	public static void agentmain(String args, Instrumentation inst) {
+		/* The VM is already up, GUI may already exist, so start immediately */
+		javax.swing.SwingUtilities.invokeLater(DRGizmoMain::new);
+	}
+
+	public static void premain(String args, Instrumentation inst) {
+		agentmain(args, inst);          // same code for both paths
+	}
+
+	public class GizmoLauncher {
+		public static void main(String[] args) throws Exception {
+			List<VirtualMachineDescriptor> list =
+					VirtualMachine.list().stream()
+							.filter(d -> d.displayName().contains("Puzzle Pirates"))
+							.toList();
+
+			if (list.isEmpty()) {
+				JOptionPane.showMessageDialog(null,
+						"No Puzzle Pirates client found.\nStart the game first.",
+						"Gizmo", JOptionPane.ERROR_MESSAGE);
+				return;
+			}
+
+			String pid;
+			if (list.size() == 1) {
+				pid = list.get(0).id();
+			} else {                       // several clients – let user choose
+				String[] names = list.stream()
+						.map(d -> d.displayName() + "  (pid "+d.id()+")")
+						.toArray(String[]::new);
+				int ix = JOptionPane.showOptionDialog(
+						null, "Which client?", "Gizmo",
+						JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+						null, names, names[0]);
+				if (ix < 0) return;        // cancelled
+				pid = list.get(ix).id();
+			}
+
+			// copy the agent jar out of our own executable (or use the path we shipped)
+			Path agent = Path.of("GizmoAgent.jar");   // shipped next to exe
+			VirtualMachine vm = VirtualMachine.attach(pid);
+			vm.loadAgent(agent.toAbsolutePath().toString());
+			vm.detach();
+
+			JOptionPane.showMessageDialog(null,
+					"Gizmo attached to "+pid, "Done", JOptionPane.INFORMATION_MESSAGE);
+		}
+	}
 }
