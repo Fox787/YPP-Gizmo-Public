@@ -3,5 +3,3 @@ Agent-Class: main.java.general.DRGizmoMain
 Premain-Class: main.java.general.DRGizmoMain
 Can-Redefine-Classes: false
 Can-Retransform-Classes: false
-Main-Class: main.java.general.DRGizmoMain
-

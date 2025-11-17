@@ -22,13 +22,61 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 	public static final double VERSION = 1.0;
 
 	public static final boolean DEVELOPERS = false;
-	
+
+	private static volatile boolean agentLoaded = false;
+
 	public static Preferences prefs;
-	
+
 	protected DRGizmoGUI frame = null;
 	Window window = null;
-	
+	private boolean attachedMidGame = false;
+
 	public DRGizmoMain() {
+		this(false);
+	}
+
+	public DRGizmoMain(boolean midGameAttach) {
+		this.attachedMidGame = midGameAttach;
+
+		// If attaching mid-game, check for existing windows first
+		if (midGameAttach) {
+			// Try multiple times with delays to handle race conditions
+			for (int attempt = 0; attempt < 5; attempt++) {
+				if (EventQueueMonitor.isGUIInitialized()) {
+					Window[] windows = Window.getWindows();
+					for (Window w : windows) {
+						if (w.isDisplayable() && w.getAccessibleContext() != null) {
+							String name = w.getAccessibleContext().getAccessibleName();
+							if (name != null && name.startsWith("Puzzle Pirates")) {
+								window = w;
+								break;
+							}
+						}
+					}
+
+					// If we found the window, check if logged in
+					if (window != null) {
+						String title = window.getAccessibleContext().getAccessibleName();
+						if (title != null && title.contains(" on the ")) {
+							// Already logged in - show GUI now
+							showGizmoGUI();
+							return;
+						}
+						// Found window but not logged in yet - break and use event listener
+						break;
+					}
+				}
+
+				// Wait a bit before retry
+				try {
+					Thread.sleep(200);
+				} catch (InterruptedException e) {
+					break;
+				}
+			}
+		}
+
+		// Otherwise, use the normal event-based approach
 		EventQueueMonitor.addTopLevelWindowListener(this);
 		if (EventQueueMonitor.isGUIInitialized()) {
 			initialize();
@@ -36,34 +84,36 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 			EventQueueMonitor.addGUIInitializedListener(this);
 		}
 	}
-	
-	public void initialize() {
 
+	private void showGizmoGUI() {
+		if (frame != null) return; // Already showing
+
+		prefs = Preferences.userNodeForPackage(DRGizmoMain.class);
+
+		frame = new DRGizmoGUI(window);
+		frame.pack();
+		frame.setSize(prefs.getInt("width", frame.getMinimumSize().width+50),
+				prefs.getInt("height", frame.getHeight()));
+		frame.setVisible(true);
+		frame.addWindowListener(new java.awt.event.WindowAdapter() {
+			@Override
+			public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+				frame = null;
+			}
+		});
+	}
+
+	public void initialize() {
 		if (window != null) {
 			if (window.getAccessibleContext().getAccessibleName().equals("Puzzle Pirates")) {
-				
+
 				window.addPropertyChangeListener(new PropertyChangeListener() {
 					Pattern title = Pattern.compile("^Puzzle Pirates - (\\w+) on the (\\w+) ocean$");
 					@Override
 					public void propertyChange(PropertyChangeEvent evt) {
 						Matcher matcher = title.matcher(evt.getNewValue().toString());
 						if (matcher.find() && frame == null) {
-							//the frame has to be made after we log in because for some reason on java 7 and 8
-							//the look and feel of JCheckBox is not initialized until after we log in.
-							//probably because it is never used until then.
-							prefs = Preferences.userNodeForPackage(DRGizmoMain.class);
-							
-							frame = new DRGizmoGUI(window);
-							frame.pack();
-							frame.setSize(prefs.getInt("width", frame.getMinimumSize().width+50), 
-									prefs.getInt("height",frame.getHeight()));
-							frame.setVisible(true);
-							frame.addWindowListener(new java.awt.event.WindowAdapter() {
-							    @Override
-							    public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-							    	frame = null;
-							    }
-							});
+							showGizmoGUI();
 						}
 					}
 				});
@@ -72,8 +122,10 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 		}
 	}
 
-	public static void main(String[] args) {new DRGizmoMain();}
-	
+	public static void main(String[] args) {
+		new DRGizmoMain();
+	}
+
 	public void guiInitialized() {}
 
 	public void topLevelWindowCreated(Window w) {
@@ -86,14 +138,15 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 
 	public static void agentmain(String args, Instrumentation inst) {
 		/* The VM is already up, GUI may already exist, so start immediately */
-		javax.swing.SwingUtilities.invokeLater(DRGizmoMain::new);
+		javax.swing.SwingUtilities.invokeLater(() -> new DRGizmoMain(true));
 	}
 
 	public static void premain(String args, Instrumentation inst) {
-		agentmain(args, inst);          // same code for both paths
+		// When loaded at startup, use normal flow (not mid-game)
+		javax.swing.SwingUtilities.invokeLater(DRGizmoMain::new);
 	}
 
-	public class GizmoLauncher {
+	public static class GizmoLauncher {
 		public static void main(String[] args) throws Exception {
 			List<VirtualMachineDescriptor> list =
 					VirtualMachine.list().stream()
@@ -110,7 +163,7 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 			String pid;
 			if (list.size() == 1) {
 				pid = list.get(0).id();
-			} else {                       // several clients – let user choose
+			} else {
 				String[] names = list.stream()
 						.map(d -> d.displayName() + "  (pid "+d.id()+")")
 						.toArray(String[]::new);
@@ -118,12 +171,11 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 						null, "Which client?", "Gizmo",
 						JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
 						null, names, names[0]);
-				if (ix < 0) return;        // cancelled
+				if (ix < 0) return;
 				pid = list.get(ix).id();
 			}
 
-			// copy the agent jar out of our own executable (or use the path we shipped)
-			Path agent = Path.of("GizmoAgent.jar");   // shipped next to exe
+			Path agent = Path.of("GizmoAgent.jar");
 			VirtualMachine vm = VirtualMachine.attach(pid);
 			vm.loadAgent(agent.toAbsolutePath().toString());
 			vm.detach();
