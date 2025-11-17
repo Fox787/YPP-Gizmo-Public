@@ -311,12 +311,12 @@ public class DRGroupData implements Serializable {
 
     @Override
     public String toString() {
-        return this.toString(false, false, false, "No Ocean", true, false, true, true, true, true);
+        return this.toString(false, false, false, "No Ocean", true, false, true, true, true, true, true);
     }
 
 
     public String toString(boolean ignoreAI, boolean writeDate, boolean useTabs, String ocean, boolean writeStationHeaders,
-                           boolean writeStation, boolean writePirate, boolean writeRating, boolean writeTokenScore, boolean writeTokenArray) {
+                           boolean writeStation, boolean writePirate, boolean writeRating, boolean writeTokenScore, boolean writeTokenArray, boolean writeSheetCombo) {
         StringBuilder s = new StringBuilder();
 
         String seperator = " ";
@@ -352,6 +352,13 @@ public class DRGroupData implements Serializable {
                     sTemp.append(d.getTokenScore() + seperator);
                 if (writeTokenArray)
                     sTemp.append(Arrays.toString(d.getTokens()) + seperator);
+                if (writeSheetCombo){
+                    String fill = "   ";
+                    if (d.getTokenScore() < 10){
+                        fill = "     ";
+                    }
+                    sTemp.append(d.getTokenScore() + fill + Arrays.toString(d.getTokens()) + seperator);
+                }
 
                 s.append(sTemp.toString().trim());
                 s.append(System.getProperty("line.separator"));

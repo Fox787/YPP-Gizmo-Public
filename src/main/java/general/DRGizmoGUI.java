@@ -1,5 +1,14 @@
 package main.java.general;
 
+import main.java.prefobj.PrefObj;
+import main.java.prefobj.RadioButtonProfileSelector;
+
+import javax.swing.*;
+import javax.swing.border.TitledBorder;
+import javax.swing.event.CaretEvent;
+import javax.swing.event.CaretListener;
+import javax.swing.text.NumberFormatter;
+import javax.swing.tree.*;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -12,22 +21,6 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
-
-import javax.swing.*;
-import javax.swing.border.TitledBorder;
-import javax.swing.event.CaretEvent;
-import javax.swing.event.CaretListener;
-import javax.swing.text.NumberFormatter;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeCellRenderer;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.MutableTreeNode;
-import javax.swing.tree.TreeNode;
-import javax.swing.tree.TreePath;
-import javax.swing.tree.TreeSelectionModel;
-
-import main.java.prefobj.PrefObj;
-import main.java.prefobj.RadioButtonProfileSelector;
 
 import static main.java.general.DRGizmoMain.prefs;
 
@@ -42,11 +35,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 			SCANWRITEDATE = "scanwritedate", SCANUSETABS = "scanusetabs", SCANOCEAN = "scanocean",
 			SCANSTATIONHEADERS = "scanstationheaders", SCANSTATION = "scanstation", SCANPIRATE = "scanpirate",
-			SCANRATING = "scanrating", SCANTOKENSCORE = "scantokenscore", SCANTOKENARRAY = "scantokenarray",
+			SCANRATING = "scanrating", SCANTOKENSCORE = "scantokenscore", SCANTOKENARRAY = "scantokenarray", SCANSHEETCOMBO = "scansheetcombo",
 
 			SCOREWRITEDATE = "scorewritedate", SCOREUSETABS = "scoreusetabs", SCOREOCEAN = "scoreocean",
 			SCORESTATIONHEADERS = "scorestationheaders", SCORESTATION = "scorestation", SCOREPIRATE = "scorepirate",
-			SCORERATING = "scorerating", SCORETOKENSCORE = "scoretokenscore", SCORETOKENARRAY = "scoretokenarray",
+			SCORERATING = "scorerating", SCORETOKENSCORE = "scoretokenscore", SCORETOKENARRAY = "scoretokenarray", SCORESHEETCOMBO = "scoresheetcombo",
 
 			TOKENCIRCLE = "tokencircle", TOKENDIAMOND = "tokendiamond", TOKENPLUS = "tokenplus",
 			TOKENCROSS = "tokencross", TOKENTHRALL = "tokenthrall",
@@ -108,10 +101,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JCheckBox checkBoxDebug, checkBoxIgnoreAI;
 	private JLabel labelDRCount;
 
-	private JCheckBox checkBoxScanWriteDate, checkBoxScanUseTabs, checkBoxScanStationHeaders, checkBoxScan2Station, checkBoxScan2Pirate, checkBoxScan2Rating, checkBoxScan2TokenScore, checkBoxScan2TokenArray;
+	private JCheckBox checkBoxScanWriteDate, checkBoxScanUseTabs, checkBoxScanStationHeaders, checkBoxScan2Station, checkBoxScan2Pirate, checkBoxScan2Rating, checkBoxScan2TokenScore, checkBoxScan2TokenArray, checkBoxScan2SheetCombo;
 	private JComboBox comboBoxScanOcean;
 
-	private JCheckBox checkBoxScoreWriteDate, checkBoxScoreUseTabs, checkBoxScoreStationHeaders, checkBoxScore2Station, checkBoxScore2Pirate, checkBoxScore2Rating, checkBoxScore2TokenScore, checkBoxScore2TokenArray;
+	private JCheckBox checkBoxScoreWriteDate, checkBoxScoreUseTabs, checkBoxScoreStationHeaders, checkBoxScore2Station, checkBoxScore2Pirate, checkBoxScore2Rating, checkBoxScore2TokenScore, checkBoxScore2TokenArray, checkBoxScore2SheetCombo;
 	private JComboBox comboBoxScoreOcean;
 
 	public JTree drTree;
@@ -393,50 +386,58 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 
-		JPanel panelOptions = new JPanel();
-		tabbedPane.addTab("Options", null, panelOptions, null);
-		panelOptions.setLayout(new BorderLayout(0, 0));
+			JPanel panelOptions = new JPanel();
+			tabbedPane.addTab("Options", null, panelOptions, null);
+			panelOptions.setLayout(new BorderLayout(0, 0));
 
-			JScrollPane scrollPaneOptions = new JScrollPane();
-			panelOptions.add(scrollPaneOptions, BorderLayout.CENTER);
+				JScrollPane scrollPaneOptions = new JScrollPane();
+				panelOptions.add(scrollPaneOptions, BorderLayout.CENTER);
 
-			JPanel panelOptions_2 = new JPanel();
-			scrollPaneOptions.setViewportView(panelOptions_2);
-			panelOptions_2.setLayout(new BoxLayout(panelOptions_2, BoxLayout.Y_AXIS));
+				JPanel panelOptions_2 = new JPanel();
+				scrollPaneOptions.setViewportView(panelOptions_2);
+				panelOptions_2.setLayout(new BoxLayout(panelOptions_2, BoxLayout.Y_AXIS));
 
 			JPanel panelOptionsGeneral = new JPanel();
 			panelOptionsGeneral.setAlignmentX(Component.LEFT_ALIGNMENT);
 			panelOptions_2.add(panelOptionsGeneral);
-			panelOptionsGeneral.setLayout(new BoxLayout(panelOptionsGeneral, BoxLayout.Y_AXIS));
+			panelOptionsGeneral.setLayout(new BorderLayout());
 
-				buttonSavePrefs = new JButton("Save Prefs");
-				buttonSavePrefs.setToolTipText("Also saves window height and width");
-				buttonSavePrefs.addActionListener(this);
+			// LEFT SIDE - Save button and checkboxes
+			JPanel leftPanel = new JPanel();
+			leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
 
-				panelOptionsGeneral.add(buttonSavePrefs);
+			buttonSavePrefs = new JButton("Save Prefs");
+			buttonSavePrefs.setToolTipText("Also saves window height and width");
+			buttonSavePrefs.addActionListener(this);
+			buttonSavePrefs.setAlignmentX(Component.LEFT_ALIGNMENT); // Align left
+			leftPanel.add(buttonSavePrefs);
 
-				checkBoxDebug = new JCheckBox("Debug");
-				panelOptionsGeneral.add(checkBoxDebug);
+			checkBoxDebug = new JCheckBox("Debug");
+			checkBoxDebug.setAlignmentX(Component.LEFT_ALIGNMENT); // Align left
+			leftPanel.add(checkBoxDebug);
 
-				checkBoxIgnoreAI = new JCheckBox("Ignore AI");
-				panelOptionsGeneral.add(checkBoxIgnoreAI);
+			checkBoxIgnoreAI = new JCheckBox("Ignore AI");
+			checkBoxIgnoreAI.setAlignmentX(Component.LEFT_ALIGNMENT); // Align left
+			leftPanel.add(checkBoxIgnoreAI);
 
-				profileSelector = new RadioButtonProfileSelector(DRGizmoMain.prefs);
-				profileSelector.setProfileChangeListener(new RadioButtonProfileSelector.ProfileChangeListener() {
-					@Override
-					public void onProfileChanged(String profileName) {
-						// Switch to new profile
-						switchToProfile(profileName);
-					}
+			profileSelector = new RadioButtonProfileSelector(DRGizmoMain.prefs);
+			profileSelector.setProfileChangeListener(new RadioButtonProfileSelector.ProfileChangeListener() {
+				@Override
+				public void onProfileChanged(String profileName) {
+					switchToProfile(profileName);
+				}
 
-					@Override
-					public void onProfileDeleted(String profileName) {
-						printStatus("Profile '" + profileName + "' deleted", false);
-					}
-				});
+				@Override
+				public void onProfileDeleted(String profileName) {
+					printStatus("Profile '" + profileName + "' deleted", false);
+				}
+			});
+			profileSelector.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-				panelOptionsGeneral.add(profileSelector);
-				currentPrefs = profileSelector.getCurrentProfilePrefs();
+			panelOptionsGeneral.add(leftPanel, BorderLayout.WEST);
+			panelOptionsGeneral.add(profileSelector, BorderLayout.CENTER);
+
+			currentPrefs = profileSelector.getCurrentProfilePrefs();
 
 			JPanel panelOptionsPrintOptions = new JPanel();
 			panelOptionsPrintOptions.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -483,6 +484,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					checkBoxScan2TokenArray = new JCheckBox("Token Array");
 					panelPrintOptionsScan_2.add(checkBoxScan2TokenArray);
 
+					checkBoxScan2SheetCombo = new JCheckBox("Sheet Combo");
+					checkBoxScan2SheetCombo.setToolTipText(" Creates a Score + Array Combo in Single Cell.");
+					panelPrintOptionsScan_2.add(checkBoxScan2SheetCombo);
+
 				JPanel panelPrintOptionsScore = new JPanel();
 				panelPrintOptionsScore.setBorder(new TitledBorder(null, "Scoring", TitledBorder.LEADING, TitledBorder.TOP, null, null));
 				panelOptionsPrintOptions.add(panelPrintOptionsScore);
@@ -522,6 +527,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 					checkBoxScore2TokenArray = new JCheckBox("Token Array");
 					panePrintOptionsScore_2.add(checkBoxScore2TokenArray);
+
+					checkBoxScore2SheetCombo = new JCheckBox("Sheet Combo");
+					checkBoxScore2SheetCombo.setToolTipText(" Creates a Score + Array Combo in Single Cell.");
+					panePrintOptionsScore_2.add(checkBoxScore2SheetCombo);
 
 
 
@@ -1474,7 +1483,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
 						checkBoxScanStationHeaders.isSelected(), checkBoxScan2Station.isSelected(), checkBoxScan2Pirate.isSelected(),
 						checkBoxScan2Rating.isSelected(), checkBoxScan2TokenScore.isSelected(),
-						checkBoxScan2TokenArray.isSelected());
+						checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected());
 				printStatus(dataString, false);
 				//check for broken records
 				if (checkBoxBrokenRecordAlert.isSelected()) {
@@ -1533,7 +1542,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						checkBoxScoreUseTabs.isSelected(), comboBoxScoreOcean.getSelectedItem().toString(),
 						checkBoxScoreStationHeaders.isSelected(), checkBoxScore2Station.isSelected(), checkBoxScore2Pirate.isSelected(),
 						checkBoxScore2Rating.isSelected(), checkBoxScore2TokenScore.isSelected(),
-						checkBoxScore2TokenArray.isSelected());
+						checkBoxScore2TokenArray.isSelected(), checkBoxScore2SheetCombo.isSelected());
 				printStatus(dataString, false);
 
 				//check for broken records
@@ -1867,7 +1876,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxAutoCopy.setSelected(currentPrefs.getBoolean(AUTOCOPY, false));
 		checkBoxBrokenRecordAlert.setSelected(currentPrefs.getBoolean(BROKENRECORDALERT, false));
 
-		// Scanning options (THESE WERE MISSING!)
+		// Scan options
 		checkBoxScanWriteDate.setSelected(currentPrefs.getBoolean(SCANWRITEDATE, false));
 		checkBoxScanUseTabs.setSelected(currentPrefs.getBoolean(SCANUSETABS, false));
 		comboBoxScanOcean.setSelectedIndex(currentPrefs.getInt(SCANOCEAN, 3));
@@ -1877,8 +1886,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxScan2Rating.setSelected(currentPrefs.getBoolean(SCANRATING, false));
 		checkBoxScan2TokenScore.setSelected(currentPrefs.getBoolean(SCANTOKENSCORE, false));
 		checkBoxScan2TokenArray.setSelected(currentPrefs.getBoolean(SCANTOKENARRAY, false));
+		checkBoxScan2SheetCombo.setSelected(currentPrefs.getBoolean(SCANSHEETCOMBO, false));
 
-		// Scoring options (THESE WERE MISSING!)
+		// Scoring options
 		checkBoxScoreWriteDate.setSelected(currentPrefs.getBoolean(SCOREWRITEDATE, false));
 		checkBoxScoreUseTabs.setSelected(currentPrefs.getBoolean(SCOREUSETABS, false));
 		comboBoxScoreOcean.setSelectedIndex(currentPrefs.getInt(SCOREOCEAN, 3));
@@ -1888,6 +1898,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxScore2Rating.setSelected(currentPrefs.getBoolean(SCORERATING, false));
 		checkBoxScore2TokenScore.setSelected(currentPrefs.getBoolean(SCORETOKENSCORE, false));
 		checkBoxScore2TokenArray.setSelected(currentPrefs.getBoolean(SCORETOKENARRAY, false));
+		checkBoxScore2SheetCombo.setSelected(currentPrefs.getBoolean(SCORESHEETCOMBO,false));
 
 		// Token values (profile-specific)
 		formattedTextFieldTokenCircle.setValue(currentPrefs.getInt(TOKENCIRCLE, 1));
@@ -1969,6 +1980,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			currentPrefs.putBoolean(SCANRATING, checkBoxScan2Rating.isSelected());
 			currentPrefs.putBoolean(SCANTOKENSCORE, checkBoxScan2TokenScore.isSelected());
 			currentPrefs.putBoolean(SCANTOKENARRAY, checkBoxScan2TokenArray.isSelected());
+			currentPrefs.putBoolean(SCANSHEETCOMBO, checkBoxScan2SheetCombo.isSelected());
 
 			currentPrefs.putBoolean(SCOREWRITEDATE, checkBoxScoreWriteDate.isSelected());
 			currentPrefs.putBoolean(SCOREUSETABS, checkBoxScoreUseTabs.isSelected());
@@ -1979,6 +1991,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			currentPrefs.putBoolean(SCORERATING, checkBoxScore2Rating.isSelected());
 			currentPrefs.putBoolean(SCORETOKENSCORE, checkBoxScore2TokenScore.isSelected());
 			currentPrefs.putBoolean(SCORETOKENARRAY, checkBoxScore2TokenArray.isSelected());
+			currentPrefs.putBoolean(SCORESHEETCOMBO, checkBoxScore2SheetCombo.isSelected());
 
 			currentPrefs.putInt(TOKENCIRCLE, Integer.parseInt(formattedTextFieldTokenCircle.getText().replaceAll(",", "")));
 			currentPrefs.putInt(TOKENDIAMOND, Integer.parseInt(formattedTextFieldTokenDiamond.getText().replaceAll(",", "")));
