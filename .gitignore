@@ -1,0 +1,63 @@
+# Compiled Java files
+*.class
+*.jar
+*.war
+*.ear
+
+# IDE specific files and directories
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build directories
+target/
+build/
+bin/
+dist/
+
+# Gradle (if used)
+.gradle/
+gradle-wrapper.jar
+
+# Maven (if used)
+*.classpath
+.project
+.settings/
+
+# IntelliJ IDEA
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+
+# Java
+*.log
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+
+# User preferences (if storing locally)
+*.prefs
