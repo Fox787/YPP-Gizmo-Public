@@ -1,21 +1,3 @@
-//Originally made by Tanonev.
-/*Small(ish) edit by Sylcium.
- * 
- * Known bugs
- * -visual glitch when highlighting text in the main scrollpane when there is more than ~100 lines. functionally it works fine.
- * -supposedly saving forage only DR causes a crash. haven't tested this myself.
- * -saying "/e has left the vessel." will get picked up by getStayers. additionally someone saying:
- * 		"Somedick says, "blah blah blah blah
- * 		[12:34:56] Someoneelse has come aboard.
- * 		[98:76:54] Otherdude has left the vessel.
- * 		blah blah blah""
- * 		the only way do deal with this would be to make your own chatlog that logs more data (which chat, player message/game message, etc.) to make it possible to remove false positives.
- * 
- * 
- * 
- */
-
-
 package main.java.general;
 
 import javax.swing.*;
@@ -179,51 +161,36 @@ public class DRGizmo {
 		}
 
 	}
-	
-	
-	
-	
+
 	private boolean findWhoResult() {
-		
+
 		Component node = window;
-		//had to change this to get it to work with steam
-		/*
-		printStatus("node 1: " + node.getClass().toString(), true);
-		if (null == (node = descendNodes(node, new int[] {0, 1, 0, 0}))) {
-			printStatus("findDutyReport failed 1", true);
-			return false; 
-		}
-		*/
-		
-		
-		//this gets us 90% of the way there.
+		// this gets us 90% of the way there.
 		int[] path = scanRecursiveSearcher("class com.threerings.piracy.info.client.WhoInfoView");
-		
+
 		if (path == null) {
 			printStatus("findWhoResult failed 0", true);
 			return false;
 		}
-		
 
-		
-		
+
 		if (null == (node = descendNodes(node, path))) {
 			printStatus("findWhoResult failed 1", true);
-			return false; 
+			return false;
 		}
-		
-		
+
+
 		printStatus("node 2: " + node.getClass().toString(), true);
 		List<Component> handyTextPanes = findAllComponents(node, "class com.threerings.piracy.swing.HandyTextPane", new ArrayList<Component> ());
-		
-		
+
+
 		printStatus("" + handyTextPanes.size(), true);
 		for (Component c : handyTextPanes) {
 			JEditorPane temp = (JEditorPane) c;
 			printStatus(temp.getText(), false);
 		}
-		
-		
+
+
 		return false;
 	}
 	
@@ -231,7 +198,7 @@ public class DRGizmo {
 	
 	
 	/**
-	 * hopefully scans everything in the fucking game until it finds something with the string you are looking for
+	 * Recursively searches every element in the game until it matches the string provided
 	 * @param searchFor
 	 * @return some good info
 	 */
@@ -247,10 +214,7 @@ public class DRGizmo {
 		}
 
 	}
-	
-	
-	
-	
+
 	
 	/**
 	 * searches every component looking for the specified one. Stops at the first instance of that component found.
@@ -479,7 +443,7 @@ public class DRGizmo {
 
 	
 	/**
-	 * Pass this a poeContainer and it'll poop out the amount
+	 * Pass this a poeContainer and it'll pop out the amount
 	 * @return
 	 */
 	private int readPoeContainer(Object poeContainer) {
