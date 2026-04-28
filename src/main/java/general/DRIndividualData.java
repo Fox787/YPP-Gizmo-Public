@@ -81,6 +81,26 @@ public class DRIndividualData implements Serializable {
         this.tokenScore = tokenScore;
     }
 
+    /**
+     *
+     * We currently use a single use method to calculate token scores as tokens exists in many forms, but we receive them from the same data packets,
+     * it's easier to just handle all the logic in a singular place as for now we can differentiate activities based on what's included in the Duty Report
+     *
+     * EG, If a Carpentry Array is returned of Size 3, we know it's a Lair and can apply the custom scoring logic to it
+     * This may break in future, depending on what puzzles are involved in the wolves den.
+     *
+     *
+     *
+     * @param circle
+     * @param diamond
+     * @param plus
+     * @param cross
+     * @param thrall
+     * @param cannonball
+     * @param smallChest
+     * @param mediumChest
+     * @param largeChest
+     */
     public void calculateCustomTokenScore(int circle, int diamond, int plus, int cross, int thrall,
                                           int cannonball, int smallChest, int mediumChest, int largeChest) {
         if (tokens == null) {

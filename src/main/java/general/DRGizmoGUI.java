@@ -193,11 +193,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			JScrollPane scrollPaneOutput = new JScrollPane();
 			panelOutput.add(scrollPaneOutput, BorderLayout.CENTER);
 
-
-
-
-
-
 			LookAndFeel yoLookAndFeel = UIManager.getLookAndFeel();
 			try {
 				UIManager.setLookAndFeel("javax.swing.plaf.metal.MetalLookAndFeel");
@@ -206,7 +201,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			} catch (IllegalAccessException e) {
 			} catch (UnsupportedLookAndFeelException e) {}
 
-			//CHEEZUS VUCKING CHRISTMAS I CAN"T SET THIS FUCIKING BACKNGOURD TO ANYTHING BUT WHITE UNLESS I CHANGETH E LOOK AND FEEL TO SOMETHING ELSE
 			textAreaOutput = new JTextArea();
 			textAreaOutput.setBackground(new Color(169, 185, 193)); //highlighted dr color
 			//textAreaOutput.setBackground(new Color(140, 162, 172)); //non-highlighted dr color
@@ -216,27 +210,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				}
 			});
 			scrollPaneOutput.setViewportView(textAreaOutput);
-
-
-
-
-			/*
-			JScrollPane scrollPaneTests = new JScrollPane();
-
-			//CHEEZUS VUCKING CHRISTMAS I CAN"T SET THIS FUCIKING BACKNGOURD TO ANYTHING BUT WHITE UNLESS I CHANGETH E LOOK AND FEEL TO SOMETHING ELSE
-			textAreaTests = new JTextArea();
-			textAreaTests.setBackground(new Color(50, 50, 50)); //highlighted dr color
-			//textAreaOutput.setBackground(new Color(140, 162, 172)); //non-highlighted dr color
-			textAreaTests.addCaretListener(new CaretListener() {
-				public void caretUpdate(CaretEvent arg0) {
-					repaint();
-				}
-			});
-			scrollPaneTests.setViewportView(textAreaTests);
-			 */
-
-
-
 
 			try {
 				UIManager.setLookAndFeel(yoLookAndFeel);
@@ -1196,12 +1169,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxFullEntry1.add(formattedTextFieldFullEntry1);
 
 
-
-
-
-
-
-
 				JPanel panelTests = new JPanel();
 				if (DRGizmoMain.DEVELOPERS) {
 					tabbedPane.addTab("Tests", null, panelTests, null);
@@ -1221,52 +1188,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					}
 				});
 				scrollPaneTests.setViewportView(textAreaTests);
-
-
-
-
-
-
-				//copied this from the output tab taht i made 5 years ago, *shrugs*
-				//starts
-				/*
-				yoLookAndFeel = UIManager.getLookAndFeel();
-				try {
-					UIManager.setLookAndFeel("javax.swing.plaf.metal.MetalLookAndFeel");
-				} catch (ClassNotFoundException e) {
-				} catch (InstantiationException e) {
-				} catch (IllegalAccessException e) {
-				} catch (UnsupportedLookAndFeelException e) {}
-
-				//CHEEZUS VUCKING CHRISTMAS I CAN"T SET THIS FUCIKING BACKNGOURD TO ANYTHING BUT WHITE UNLESS I CHANGETH E LOOK AND FEEL TO SOMETHING ELSE
-				textAreaTests = new JTextArea();
-				textAreaTests.setBackground(new Color(169, 185, 193)); //highlighted dr color
-				//textAreaOutput.setBackground(new Color(140, 162, 172)); //non-highlighted dr color
-				textAreaTests.addCaretListener(new CaretListener() {
-					public void caretUpdate(CaretEvent arg0) {
-						repaint();
-					}
-				});
-				scrollPaneTests.setViewportView(textAreaTests);
-
-				try {
-					UIManager.setLookAndFeel(yoLookAndFeel);
-				} catch (UnsupportedLookAndFeelException e) {}
-				//end
-				*/
-
-
-
-
-
-
-
-
-
-
-				//textAreaTests = new JTextArea();
-				//scrollPaneTests.setViewportView(textAreaTests);
-				//textAreaTests.setBackground(new Color(169, 185, 193));
 
 				JPanel panelTestsButtonsPanel = new JPanel();
 				panelTests.add(panelTestsButtonsPanel, BorderLayout.SOUTH);
@@ -1289,15 +1210,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				buttonTestsClear.addActionListener(this);
 				buttonTestsClear.setPreferredSize(new Dimension(80, 23));
 				panelTestsButtonsPanel.add(buttonTestsClear);
-
-
-
-
-
-
-
-
-
 
 
 		JPanel panelGeneral = new JPanel();
@@ -1401,7 +1313,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			labelDRCount.setText("DR Count : " + (drTreeRootNode.getChildCount()));
 
 			try {
-				//TODO make sure this works
 				PrefObj.putObject(prefs, TREEDATA, drTreeToPersistantData());
 				printStatus("Tree Saved", true);
 			} catch (IOException e1) {
@@ -1428,36 +1339,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			DRGroupData data = new DRGizmo(window, textAreaOutput, checkBoxDebug.isSelected()).scanDutyReport();
 			if (data != null && !data.isEmpty()) {
 
-		/*
-				Random r = new Random();
-				int n = r.nextInt(7);
-				for (int i = 0; i < 2; i++) {
-
-					int[] tempChests = {0, 0, 0};
-					for (int j = 0; j < 15; j++) {
-						if (r.nextInt(2) == 0) {
-							tempChests[0]++;
-							continue;
-						}
-						if (r.nextInt(2) == 0) {
-							tempChests[1]++;
-							continue;
-						}
-						if (r.nextInt(2) == 0) {
-							tempChests[2]++;
-							continue;
-						}
-					}
-				DRIndividualData temp = new DRIndividualData("Foraging", "Bob" + i + "", "Frenetic", tempChests, 15);
-				data.put(temp);
-				}
-*/
-
 				//add to drTree with the default tokenScore
 				addDRToTree(data);
 				//save new true to prefs
 				try {
-    				//TODO make sure this works
     				PrefObj.putObject(prefs, TREEDATA, drTreeToPersistantData());
     				printStatus("Tree Saved", true);
     			} catch (IOException e1) {

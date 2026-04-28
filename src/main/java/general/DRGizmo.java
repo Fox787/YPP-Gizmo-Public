@@ -18,9 +18,8 @@
 
 package main.java.general;
 
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Window;
+import javax.swing.*;
+import java.awt.*;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Field;
@@ -29,13 +28,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
-import javax.swing.JButton;
-import javax.swing.JEditorPane;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextArea;
-import javax.swing.JTextPane;
 
 
 
@@ -339,13 +331,8 @@ public class DRGizmo {
 		
 	}
 	
-	
-	
-	
-	
 	/**
 	 * this processes a duty report given the right container
-	 * wtf is the right container? idk
 	 * todo make this method eat a twocolumnpanel instead of a difficult to track jpanel near the twocolumnpanel
 	 * @param branch
 	 */
@@ -403,11 +390,6 @@ public class DRGizmo {
 		}
 	}
 	
-	
-	
-	
-	
-	
 	private void printAllNodes(Component parent, int depth, StringBuilder path) {
 		
 		Component[] children = ((Container) parent).getComponents();
@@ -454,7 +436,6 @@ public class DRGizmo {
 		}
 		
 	}
-	
 
 	private Component descendNodes(Component parent, int[] path) {
 		for(int i=0;i<path.length;i++) {
@@ -495,11 +476,7 @@ public class DRGizmo {
 		} catch (Exception ignored) {}
 		return null;
 	}
-	
-	
-	
-	
-	
+
 	
 	/**
 	 * Pass this a poeContainer and it'll poop out the amount
@@ -547,10 +524,6 @@ public class DRGizmo {
 			// TODO Auto-generated catch block
 			printStatusStackTrace(e);
 		}
-		
-		
-		
-
 				
 		return itemName;
 	}
@@ -568,10 +541,6 @@ public class DRGizmo {
 		tooltipText = tooltipText.replaceAll("\\<.*?\\>", "");
 		
 		//printStatus(tooltipText, true);
-		
-		
-		
-		
 		
 		//get the _item field
 		Object item = getField(inventoryItemContainer, "_item", Object.class);
@@ -607,14 +576,6 @@ public class DRGizmo {
 			printStatusStackTrace(e);
 		}
 		
-		
-		
-		
-		
-		
-		
-		
-		
 		//get the ToString method
 		Method methodToString = null;
 		try {
@@ -641,101 +602,11 @@ public class DRGizmo {
 			// TODO Auto-generated catch block
 			printStatusStackTrace(e);
 		}
-		
-		
-		
-		
-		
-		
-		
-
 				
 		return tooltipText + ", " + itemName + ", " + itemToString;
 		
 	}
-	
-	
-	
-	private void readInventoryItemContainer2(Object inventoryItemContainer) {
-		
-		//printAllFieldsAndMethods(inventoryItemContainer.getClass());
-		
 
-		
-		
-		/*
-		//get the _item field
-		Object item = getField(inventoryItemContainer, "_item", Object.class);
-		
-		//now comes the tricky part, we have to get the name of the item
-		//get the item class, this should be com.threerings.piracy.item.client.data.Item
-		Class itemClass = item.getClass();
-		
-		
-		Method[] methods = null;
-		try {
-			
-			methods = itemClass.getMethods();
-	         for(int i = 0; i < methods.length; i++) {
-	            //printStatus(methods[i].toString(), true);
-	            //printStatus(methods[i].getName(), true);
-	         }
-			//methodGetName = itemClass.getMethod("getName", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		*/
-		
-		
-		
-		
-		/*
-		
-		//get the _item field
-		Object t = getField(inventoryItemContainer, "t", Object.class);
-		
-		//now comes the tricky part, we have to get the name of the item
-		//get the item class, this should be com.threerings.piracy.item.client.data.Item
-		Class iClass = t.getClass();
-		
-		
-		
-		methods = null;
-		try {
-			
-			methods = iClass.getMethods();
-	         for(int i = 0; i < methods.length; i++) {
-	            printStatus(methods[i].toString(), true);
-	            //printStatus(methods[i].getName(), true);
-	         }
-			//methodGetName = itemClass.getMethod("getName", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		
-		*/
-		
-		
-		/*
-		//get the getName method
-		Method methodGetName = null;
-		try {
-			methodGetName = itemClass.getMethod("getName", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		*/
-
-		
-	}
-	
 	
 	private void printAllFieldsAndMethods(Class clazz) {
 		printStatus("\n\n\nFields", true);
