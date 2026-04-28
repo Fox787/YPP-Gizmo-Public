@@ -1,6 +1,13 @@
 package main.java.general;
 
-import java.awt.Window;
+import com.sun.java.accessibility.util.EventQueueMonitor;
+import com.sun.java.accessibility.util.GUIInitializedListener;
+import com.sun.java.accessibility.util.TopLevelWindowListener;
+import com.sun.tools.attach.VirtualMachine;
+import com.sun.tools.attach.VirtualMachineDescriptor;
+
+import javax.swing.*;
+import java.awt.*;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.instrument.Instrumentation;
@@ -10,15 +17,10 @@ import java.util.prefs.Preferences;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.sun.java.accessibility.util.EventQueueMonitor;
-import com.sun.java.accessibility.util.GUIInitializedListener;
-import com.sun.java.accessibility.util.TopLevelWindowListener;
-import com.sun.tools.attach.VirtualMachine;
-import com.sun.tools.attach.VirtualMachineDescriptor;
-
-import javax.swing.*;
-
 public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListener {
+	/** The original work had a Hardcoded Version number and Developer flags
+	 *  I've kept them in place only because it's easier to maintain and I may one day want to do some more test features also.
+	 */
 	public static final double VERSION = 1.0;
 
 	public static final boolean DEVELOPERS = false;
