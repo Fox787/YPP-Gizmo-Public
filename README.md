@@ -19,7 +19,7 @@ Read from Client and stored in Application:
 <img width="295" height="687" alt="gizmo-1" src="https://github.com/user-attachments/assets/f0ca7ee8-2a3f-4bb6-93f5-009cd9a752ac" />
 <img width="300" height="690" alt="gizmo-1 1" src="https://github.com/user-attachments/assets/11356410-af8d-4971-bc10-6787546c6ba1" />
 
-Example of a diffrent activity:
+Example of a different activity:
 <img width="800" height="600" alt="Puzzle Pirates Ozpin 5" src="https://github.com/user-attachments/assets/7b69a4ff-3127-4294-bdc6-7e5a700dd9c7" />
 
 Completed Run Data, including optional buttons used:
