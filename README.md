@@ -35,7 +35,19 @@ Completed Run Data, including optional buttons used:
 - **Cross-Platform Compatibility** — Supports multiple game client implementations
 - **Interactive GUI** — Interface for data visualisation, filtering, and export
 ---
- 
+
+## Data Integration
+
+This tool is specifically designed to empower the following analysis workflows:
+
+- [Cursed Island YPP Forage](https://docs.google.com/spreadsheets/d/1e4hu0NvzBdEVhf2MgD0-7MYhLEIvAEKG8tBv3c_Cd5o/edit?gid=14#gid=14)
+- [Puzzle Pirates Vampire Lair](https://docs.google.com/spreadsheets/d/1_5SVAsvFmNTCMXJXLasZSPK3RgJ97dQmVSiYy1_uKKE/edit?gid=721918292#gid=721918292)
+
+**Workflow:** YPP-Gizmo reads performance metrics from the game client in real-time. 
+At the end of each run, users export the data with a single-click copy-to-clipboard 
+function, then paste it into the relevant analysis sheet.
+
+
 ## Technology Stack
  
 - **Language:** Java
