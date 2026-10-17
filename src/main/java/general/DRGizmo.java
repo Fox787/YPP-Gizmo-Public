@@ -25,12 +25,8 @@ import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.*;
 import java.util.List;
-
-
-
 
 
 public class DRGizmo {
@@ -144,31 +140,127 @@ public class DRGizmo {
 		}
 
 		printStatus("node 5: " + node.getClass().toString(), true);
-		Component test = descend(node, 0);
-		printStatus("test 1: " + test.getClass().toString(), true);
-		test = descend(test, 0);
-		printStatus("test 2: " + test.getClass().toString(), true);
-		if (test.getClass().toString().equals("class com.threerings.yohoho.sea.vessel.client.DutyReportView$DutyHeader")) {
-			printStatus("test 3: " + test.getClass().toString(), true);
-			
-			
-			printStatus("the right node is: " + node.getClass().toString(), true);
-			Container branch = (Container) node;
-			processBranch(branch);
-		} else {
-			
-			printStatus("test 4: " + test.getClass().toString(), true);
-			for (int i = 0; i < ((Container) node).getComponentCount(); i++) {
-				Container branch = (Container) descend(node, i);
-				printStatus("processing branch " + i , true);
-				processBranch(branch);
-			}
+
+		List<Container> stations = new ArrayList<>();
+		collectStations((Container) node, stations, 0, 4);
+		printStatus("stations found: " + stations.size(), true);
+		if (stations.isEmpty()) {
+			printStatus("findDutyReport failed: no stations", true);
+			return false;
+		}
+		for (Container station : stations) {
+			processStation(station);
 		}
 		printStatus("findDutyReport is true", true);
 		return true;
 
 	}
-	
+
+	private final Set<Class<?>> dumped = new HashSet<>();
+
+	/** Station = container whose child0 -> child1 -> child0 is a JLabel with text (the duty title). */
+	private String stationName(Container c) {
+		if (c.getComponentCount() < 1 || !(c.getComponent(0) instanceof Container)) return null;
+		Container header = (Container) c.getComponent(0);
+		if (header.getComponentCount() < 2 || !(header.getComponent(1) instanceof Container)) return null;
+		Container titlePanel = (Container) header.getComponent(1);
+		if (titlePanel.getComponentCount() < 1 || !(titlePanel.getComponent(0) instanceof JLabel)) return null;
+		String t = ((JLabel) titlePanel.getComponent(0)).getText();
+		return (t == null || t.trim().isEmpty()) ? null : t.trim();
+	}
+
+	private void collectStations(Container c, List<Container> out, int depth, int maxDepth) {
+		if (c == null || depth > maxDepth) return;
+		if (stationName(c) != null) { out.add(c); return; }
+		for (int i = 0; i < c.getComponentCount(); i++) {
+			Component child = c.getComponent(i);
+			if (child instanceof Container) collectStations((Container) child, out, depth + 1, maxDepth);
+		}
+	}
+
+	private void processStation(Container station) {
+		String stationName = stationName(station);
+		printStatus(stationName, true);
+		for (int j = 1; j < station.getComponentCount(); j++) {
+			try {
+				processPirateRow(stationName, station.getComponent(j));
+			} catch (Exception e) {
+				printStatus("row " + j + " failed in " + stationName + ": " + e, true);
+			}
+		}
+	}
+
+	private void processPirateRow(String stationName, Component row) {
+		Container pirateData = (Container) ((Container) row).getComponent(1);
+		String name = ((JLabel) pirateData.getComponent(0)).getText();
+		printStatus(name, true);
+
+		Component drLabel = pirateData.getComponent(1);
+		Object innerLabel = safeGetField(drLabel, "_label", Object.class);
+		String dr = innerLabel == null ? null : safeGetField(innerLabel, "b", String.class);
+		printStatus(dr, true);
+
+		int[] tokens = null;
+		if (pirateData.getComponentCount() > 2) {
+			Component tokenPanel = pirateData.getComponent(2);
+			if (dumped.add(tokenPanel.getClass())) {      // once per class, for diagnosis
+				printStatus("fields of " + tokenPanel.getClass().getName() + ":", true);
+				dumpFields(tokenPanel);
+			}
+			tokens = readTokens(tokenPanel);              // null if no token data, same as "no tokenPanel"
+			printStatus(Arrays.toString(tokens), true);
+		}
+		data.put(stationName, name, dr, tokens, getTotalScore(stationName, tokens));
+	}
+
+	/** Finds the first non-static List<int[]> field in the class hierarchy, so no field name is hardcoded. */
+	@SuppressWarnings("unchecked")
+	private int[] readTokens(Component tokenPanel) {
+		List<int[]> rows = null;
+		outer:
+		for (Class<?> k = tokenPanel.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+			for (java.lang.reflect.Field f : k.getDeclaredFields()) {
+				if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !List.class.isAssignableFrom(f.getType())) continue;
+				try {
+					f.setAccessible(true);
+					Object v = f.get(tokenPanel);
+					if (!(v instanceof List)) continue;
+					boolean ok = true;
+					for (Object o : (List<?>) v) if (!(o instanceof int[])) { ok = false; break; }
+					if (ok) { rows = (List<int[]>) v; break outer; }
+				} catch (Exception ignored) { }
+			}
+		}
+		if (rows == null || rows.isEmpty()) return null;
+
+		int width = 0;
+		for (int[] r : rows) if (r != null) width = Math.max(width, r.length);
+		int[] tokens = new int[width];
+		for (int[] r : rows) if (r != null) for (int k = 0; k < r.length; k++) tokens[k] += r[k];
+		return tokens;
+	}
+
+	private <T> T safeGetField(Object target, String field, Class<T> type) {
+		if (target == null) return null;
+		try { return getField(target, field, type); } catch (Exception e) { return null; }
+	}
+
+	void dumpFields(Object o) {
+		for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+			for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+				try {
+					f.setAccessible(true);
+					Object v = f.get(o);
+					String s = v instanceof int[] ? Arrays.toString((int[]) v)
+							: v instanceof Object[] ? Arrays.deepToString((Object[]) v)
+							: String.valueOf(v);
+					printStatus(c.getSimpleName() + "." + f.getName() + " : "
+							+ f.getType().getSimpleName() + " = " + s, true);
+				} catch (Exception e) { /* ignore */ }
+			}
+		}
+	}
+
 	public String scanAhoyTab() {
 		try {
 			if (findWhoResult()) 
