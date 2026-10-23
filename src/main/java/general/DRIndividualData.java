@@ -123,6 +123,10 @@ public class DRIndividualData implements Serializable {
             result += tokens[0] * -1;
             result += tokens[1];
             result += tokens[2] * 2;
+        } else if (station.matches("Navigating")) {
+            result += tokens[0];
+            result += tokens[1] * 2;
+            result += tokens[2] * 3;
         } else {
             result += tokens[0] * diamond;
             result += tokens[1] * circle;

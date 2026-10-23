@@ -74,6 +74,10 @@ public class DRGizmo {
 			result += array[0] * -1;
 			result += array[1];
 			result += array[2] * 2;
+		} else if (station.matches("Navigation")) {
+			result += array[0];
+			result += array[1] * 2;
+			result += array[2] * 3;
 		} else {
 			for(int i = 0; i < array.length; i++) {
 				result += array[i];
@@ -85,8 +89,13 @@ public class DRGizmo {
 	public DRGroupData scanDutyReport() {
 		try {
 			// findDutyReport2 includes Steam client compatibility fixes and should always be used.
-			if (findDutyReport2()) 
+			if (findWolves())
 				return data;
+			if (findDutyReport2())
+				return data;
+
+			scanAllNodes();
+
 			return null;
 		} catch (Exception e) {
 			return null;
@@ -102,58 +111,189 @@ public class DRGizmo {
 		}
 
 	}
-	
+	private static final String TWO_COLUMN_PANEL = "com.threerings.piracy.swing.TwoColumnPanel";
 
-	private boolean findDutyReport2() {
-		
+	private boolean findWolves() {
 		data = new DRGroupData();
-		Component node = window;
+		printStatus("Scan Wolves: ", true);
 
-		//this gets us 90% of the way there.
-		//int[] path = scanRecursiveSearcher("class com.threerings.piracy.swing.TwoColumnPanel");
-
-		int[] steam = findClassRecursive(node, "class com.threerings.yohoho.steam.client.SteamOverlayCanvas", 1, new ArrayList<Integer>());
-
-		if (steam != null) {
-			// If we detect steam, do some shifting Before calling Class Recursive.
-			// This Shifting is to bypass the Steam Overlay that is inserted into the game client, allowing full traversal to the Duty Reports on all devices.
-			printStatus("found steam", true);
-
-			if (null == (node = descendNodes(node, new int[] {0, 1, 1}))) {
-				printStatus("findDutyReport failed 1.1", true);
-			}
-			if (null == (node = descendNodes(node, new int[] {0}))) {
-				printStatus("findDutyReport failed 1.2", true);
-			}
-		}
-
-		int[] path = findClassRecursive(node, "class com.threerings.piracy.swing.TwoColumnPanel", 1, new ArrayList<Integer>());
-		printStatus(Arrays.toString(path), true);
-		if (path == null) {
-			printStatus("findDutyReport failed 0", true);
+		if (window == null) {
+			printStatus("findWolves failed: no window", true);
 			return false;
 		}
-		
-		if (null == (node = descendNodes(node, path))) {
-			printStatus("findDutyReport failed 1", true);
-			return false; 
+
+		int wolfStations = 0;
+		for (Container station : locateStations()) {
+			if (!isWolfStation(station)) continue;
+			processWolfStation(station);
+			wolfStations++;
 		}
 
-		printStatus("node 5: " + node.getClass().toString(), true);
+		if (wolfStations == 0) {
+			printStatus("findWolves failed: no werewolf stations (is the duty report open?)", true);
+			return false;
+		}
+		printStatus("End of FindWolves", true);
+		return true;
+	}
+
+	/** All duty stations under any TwoColumnPanel; falls back to a shape search if the class was renamed. */
+	private List<Container> locateStations() {
+		List<Container> panels = new ArrayList<>();
+		findByClassName(window, TWO_COLUMN_PANEL, panels);
 
 		List<Container> stations = new ArrayList<>();
-		collectStations((Container) node, stations, 0, 4);
-		printStatus("stations found: " + stations.size(), true);
-		if (stations.isEmpty()) {
-			printStatus("findDutyReport failed: no stations", true);
+		for (Container p : panels) collectStations(p, stations, 0, 4);
+
+		if (stations.isEmpty() && window instanceof Container) {
+			collectStations((Container) window, stations, 0, 30);
+		}
+		printStatus("panels=" + panels.size() + " stations=" + stations.size(), true);
+		return stations;
+	}
+
+	private boolean isWolfStation(Container station) {
+		for (int j = 1; j < station.getComponentCount(); j++) {
+			Component tp = tokenPanelOf(station.getComponent(j));
+			if (tp != null && wolfCounterType(tp) != null) return true;
+		}
+		return false;
+	}
+
+	private void processWolfStation(Container station) {
+		String stationName = stationName(station);
+		printStatus(stationName, true);
+
+		for (int j = 1; j < station.getComponentCount(); j++) {
+			try {
+				Container row = (Container) station.getComponent(j);
+				Container pirateData = (Container) row.getComponent(1);
+				String name = ((JLabel) pirateData.getComponent(0)).getText();
+
+				Component drLabel = pirateData.getComponent(1);
+				String dr = readStatus(drLabel);
+
+
+				Component tp = tokenPanelOf(row);
+				String type = tp == null ? null : wolfCounterType(tp);
+				int[] tokens = tp == null ? null : readTokens(tp);
+
+				printStatus(name + " " + type + " " + Arrays.toString(tokens), true);
+				data.put(stationName, name, dr, tokens, getWolfScore(type, tokens));
+			} catch (Exception e) {
+				printStatus("wolf row " + j + " failed in " + stationName + ": " + e, true);
+			}
+		}
+	}
+
+	/** er row -> [1] pirateData -> [2] token panel, or null if the row has none. */
+	private Component tokenPanelOf(Component row) {
+		if (!(row instanceof Container)) return null;
+		Container r = (Container) row;
+		if (r.getComponentCount() < 2 || !(r.getComponent(1) instanceof Container)) return null;
+		Container pd = (Container) r.getComponent(1);
+		return pd.getComponentCount() > 2 ? pd.getComponent(2) : null;
+	}
+
+	/** Returns e.g. "WEREWOLF_MOONS" / "WEREWOLF_CHESTS" if the panel carries a werewolf counter enum, else null. */
+	private String wolfCounterType(Component panel) {
+		for (Class<?> k = panel.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+			for (java.lang.reflect.Field f : k.getDeclaredFields()) {
+				if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !f.getType().isEnum()) continue;
+				try {
+					f.setAccessible(true);
+					Object v = f.get(panel);
+					if (v != null && v.toString().startsWith("WEREWOLF")) return v.toString();
+				} catch (Exception ignored) { }
+			}
+		}
+		return null;
+	}
+
+	private static final int[] WOLF_MOON_WEIGHTS  = {1, 2, 3};
+	private static final int[] WOLF_CHEST_WEIGHTS = {1, 2, 3};
+
+	private int getWolfScore(String type, int[] tokens) {
+		if (tokens == null) return 0;
+		int[] w = "WEREWOLF_MOONS".equals(type) ? WOLF_MOON_WEIGHTS : WOLF_CHEST_WEIGHTS;
+		int score = 0;
+		for (int i = 0; i < tokens.length; i++) score += tokens[i] * (i < w.length ? w[i] : 1);
+		return score;
+	}
+	/** Depth-first search for containers whose class name matches exactly. */
+	private void findByClassName(Component c, String className, List<Container> out) {
+		if (c == null) return;
+		if (c instanceof Container && c.getClass().getName().equals(className)) {
+			out.add((Container) c);
+			return;                                  // don't search inside a match
+		}
+		if (c instanceof Container) {
+			Container cont = (Container) c;
+			for (int i = 0; i < cont.getComponentCount(); i++) {
+				findByClassName(cont.getComponent(i), className, out);
+			}
+		}
+	}
+	/** Status text (Brisk / Steady / Swift ...) from a YoMultiLineLabel. Only "_label" is a hardcoded name. */
+	private String readStatus(Component drLabel) {
+		Object inner = readFieldInHierarchy(drLabel, "_label");
+		if (inner == null) return null;
+
+		String found = null;
+		for (Class<?> k = inner.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+			if (k.getName().startsWith("java.")) break;
+			for (java.lang.reflect.Field f : k.getDeclaredFields()) {
+				if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType() != String.class) continue;
+				try {
+					f.setAccessible(true);
+					String s = (String) f.get(inner);
+					if (s == null || s.trim().isEmpty()) continue;
+					if (found == null) {
+						found = s.trim();
+					} else if (!found.equals(s.trim())) {
+						printStatus("status ambiguous: '" + found + "' vs '" + s.trim() + "' (" + f.getName() + ")", true);
+					}
+				} catch (Exception ignored) { }
+			}
+		}
+		return found;
+	}
+
+	private Object readFieldInHierarchy(Object o, String name) {
+		for (Class<?> k = o.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+			try {
+				java.lang.reflect.Field f = k.getDeclaredField(name);
+				f.setAccessible(true);
+				return f.get(o);
+			} catch (NoSuchFieldException e) {
+				// keep walking up
+			} catch (Exception e) {
+				return null;
+			}
+		}
+		return null;
+	}
+	private boolean findDutyReport2() {
+		data = new DRGroupData();
+		printStatus("Scan Duty Report: ", true);
+
+		if (window == null) {
+			printStatus("findDutyReport failed: no window", true);
 			return false;
 		}
+
+		List<Container> stations = locateStations();   // same helper findWolves uses
+		if (stations.isEmpty()) {
+			printStatus("findDutyReport failed: no stations (is the duty report open?)", true);
+			return false;
+		}
+
 		for (Container station : stations) {
 			processStation(station);
 		}
+
 		printStatus("findDutyReport is true", true);
 		return true;
-
 	}
 
 	private final Set<Class<?>> dumped = new HashSet<>();
@@ -195,19 +335,13 @@ public class DRGizmo {
 		String name = ((JLabel) pirateData.getComponent(0)).getText();
 		printStatus(name, true);
 
-		Component drLabel = pirateData.getComponent(1);
-		Object innerLabel = safeGetField(drLabel, "_label", Object.class);
-		String dr = innerLabel == null ? null : safeGetField(innerLabel, "b", String.class);
+		String dr = readStatus(pirateData.getComponent(1));
 		printStatus(dr, true);
 
 		int[] tokens = null;
 		if (pirateData.getComponentCount() > 2) {
 			Component tokenPanel = pirateData.getComponent(2);
-			if (dumped.add(tokenPanel.getClass())) {      // once per class, for diagnosis
-				printStatus("fields of " + tokenPanel.getClass().getName() + ":", true);
-				dumpFields(tokenPanel);
-			}
-			tokens = readTokens(tokenPanel);              // null if no token data, same as "no tokenPanel"
+			tokens = readTokens(tokenPanel);
 			printStatus(Arrays.toString(tokens), true);
 		}
 		data.put(stationName, name, dr, tokens, getTotalScore(stationName, tokens));

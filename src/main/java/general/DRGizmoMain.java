@@ -138,6 +138,8 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 
 	public void topLevelWindowDestroyed(Window w) {}
 
+
+
 	public static void agentmain(String args, Instrumentation inst) {
 		/* The VM is already up, GUI may already exist, so start immediately */
 		javax.swing.SwingUtilities.invokeLater(() -> new DRGizmoMain(true));
