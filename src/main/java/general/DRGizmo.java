@@ -94,7 +94,15 @@ public class DRGizmo {
 			if (findDutyReport2())
 				return data;
 
+
 			scanAllNodes();
+			System.out.println("\n\n");
+			System.out.println("\n\n");
+			System.out.println("\n\n");
+
+			printBootyTips();
+			printPirateTips(null);
+			System.out.println("\n\n");
 
 			return null;
 		} catch (Exception e) {
@@ -374,27 +382,6 @@ public class DRGizmo {
 		return tokens;
 	}
 
-	private <T> T safeGetField(Object target, String field, Class<T> type) {
-		if (target == null) return null;
-		try { return getField(target, field, type); } catch (Exception e) { return null; }
-	}
-
-	void dumpFields(Object o) {
-		for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
-			for (java.lang.reflect.Field f : c.getDeclaredFields()) {
-				try {
-					f.setAccessible(true);
-					Object v = f.get(o);
-					String s = v instanceof int[] ? Arrays.toString((int[]) v)
-							: v instanceof Object[] ? Arrays.deepToString((Object[]) v)
-							: String.valueOf(v);
-					printStatus(c.getSimpleName() + "." + f.getName() + " : "
-							+ f.getType().getSimpleName() + " = " + s, true);
-				} catch (Exception e) { /* ignore */ }
-			}
-		}
-	}
-
 	public String scanAhoyTab() {
 		try {
 			if (findWhoResult()) 
@@ -405,9 +392,193 @@ public class DRGizmo {
 		}
 
 	}
-	
-	
-	
+
+
+	private static final String APPROX = "\u2245";   // the ≅ glyph
+	private static final java.util.regex.Pattern BATTLES_WON =
+			java.util.regex.Pattern.compile("(?i)^(no|\\d+)\\s+battles?\\s+won$");
+
+	private int emitted;
+	private static final int MAX_LINES = 500;           // safety valve against another flood
+
+	/** Single place to choose the output target. ASSUMPTION: 1-arg printStatus goes to the counter. */
+	private void emit(String s) {
+		if (emitted++ < MAX_LINES) printStatus(s, true);
+		else if (emitted == MAX_LINES + 1) printStatus("... output capped at " + MAX_LINES + " lines", true);
+	}
+
+
+
+
+	/* ------------------------- finders ------------------------- */
+
+	/** Containers that have a direct child JLabel like "No battles won" / "1 battle won". */
+	private void collectByChildLabel(Component c, List<Container> out) {
+		if (!(c instanceof Container)) return;
+		Container cont = (Container) c;
+		for (int i = 0; i < cont.getComponentCount(); i++) {
+			Component ch = cont.getComponent(i);
+			if (ch instanceof JLabel) {
+				String t = textOf(ch);
+				if (BATTLES_WON.matcher(t).matches()) { out.add(cont); return; }
+			}
+		}
+		for (int i = 0; i < cont.getComponentCount(); i++) collectByChildLabel(cont.getComponent(i), out);
+	}
+
+
+	/** The money row is the container that directly holds a GoldBar. */
+	private Container findMoneyPanel(Container c) {
+		for (int i = 0; i < c.getComponentCount(); i++) {
+			if (c.getComponent(i).getClass().getSimpleName().equals("GoldBar")) return c;
+		}
+		for (int i = 0; i < c.getComponentCount(); i++) {
+			Component ch = c.getComponent(i);
+			if (ch instanceof Container) { Container f = findMoneyPanel((Container) ch); if (f != null) return f; }
+		}
+		return null;
+	}
+
+
+	/** name, number, name, number ... */
+	private boolean looksLikePairs(Container c) {
+		int n = c.getComponentCount();
+		if (n < 2 || n % 2 != 0) return false;
+		for (int i = 0; i < n; i += 2) {
+			String name = textOf(c.getComponent(i));
+			String val = textOf(c.getComponent(i + 1));
+			if (name.length() == 0 || parseAmount(name) >= 0 || parseAmount(val) < 0) return false;
+		}
+		return true;
+	}
+
+	/* ------------------------- helpers ------------------------- */
+
+	/** Text via getText() if the component has one (covers the obfuscated number class), else the YoMultiLineLabel field. */
+	private String textOf(Component c) {
+		String t = null;
+		try {
+			java.lang.reflect.Method m = c.getClass().getMethod("getText");
+			m.setAccessible(true);
+			Object o = m.invoke(c);
+			if (o != null) t = o.toString();
+		} catch (Exception ignored) { }
+		if (t == null || t.trim().length() == 0) {
+			String s = readStatus(c);
+			if (s != null) t = s;
+		}
+		return t == null ? "" : t.trim();
+	}
+
+	private long parseAmount(String s) {
+		if (s == null) return -1;
+		String d = s.replace(",", "").trim();
+		if (d.length() == 0) return -1;
+		for (int i = 0; i < d.length(); i++) if (!Character.isDigit(d.charAt(i))) return -1;
+		try { return Long.parseLong(d); } catch (NumberFormatException e) { return -1; }
+	}
+
+
+
+	private String tipOf(Component c) {
+		if (!(c instanceof javax.swing.JComponent)) return "";
+		String t;
+		try { t = ((javax.swing.JComponent) c).getToolTipText(); } catch (Exception e) { return ""; }
+		if (t == null) return "";
+		return t.replaceAll("<[^>]*>", " ").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+	}
+
+	private String buttonNameOf(Component c) {
+		if (!(c instanceof Container)) return null;
+		Container h = (Container) c;
+		for (int i = 0; i < h.getComponentCount(); i++) {
+			if (h.getComponent(i) instanceof javax.swing.AbstractButton) {
+				String t = ((javax.swing.AbstractButton) h.getComponent(i)).getText();
+				if (t != null && t.trim().length() > 0) return t.trim();
+			}
+		}
+		return null;
+	}
+
+	private boolean isPiratePanel(Container c) {
+		if (c.getComponentCount() != 2
+				|| !(c.getComponent(0) instanceof Container)
+				|| !(c.getComponent(1) instanceof Container)) return false;
+		Container header = (Container) c.getComponent(0);
+		if (header.getComponentCount() != 3 || !(header.getComponent(1) instanceof javax.swing.AbstractButton)) return false;
+		String n = ((javax.swing.AbstractButton) header.getComponent(1)).getText();
+		if (n == null || n.trim().length() == 0) return false;
+		Container slots = (Container) c.getComponent(1);
+		if (slots.getComponentCount() == 0) return false;
+		for (int i = 0; i < slots.getComponentCount(); i++) if (!isSlot(slots.getComponent(i))) return false;
+		return true;
+	}
+
+	private boolean isSlot(Component c) {
+		if (!(c instanceof Container)) return false;
+		Container s = (Container) c;
+		return s.getComponentCount() >= 2
+				&& s.getComponent(s.getComponentCount() - 1).getClass().getSimpleName().equals("YoMultiLineLabel");
+	}
+
+	private void collectLootPanels(Component c, List<Container> out) {
+		if (!(c instanceof Container)) return;
+		Container k = (Container) c;
+		if (isPiratePanel(k)) { out.add(k); return; }
+		for (int i = 0; i < k.getComponentCount(); i++) collectLootPanels(k.getComponent(i), out);
+	}
+
+	private void printPirateTips(String who) {          // who = null for every pirate
+		emitted = 0;
+		List<Container> panels = new ArrayList<Container>();
+		collectLootPanels(window, panels);              // strict finder from last time
+
+		for (Container p : panels) {
+			String name = buttonNameOf(p.getComponent(0));
+			if (who != null && !who.equalsIgnoreCase(name)) continue;
+
+			Container slots = (Container) p.getComponent(1);
+			java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<String, Integer>();
+			for (int i = 0; i < slots.getComponentCount(); i++) {
+				String tip = slotTip((Container) slots.getComponent(i));
+				if (tip.length() == 0) continue;
+				Integer n = counts.get(tip);
+				counts.put(tip, n == null ? 1 : n + 1);
+			}
+
+			emit("== " + name + " (" + slots.getComponentCount() + " slots) ==");
+			for (java.util.Map.Entry<String, Integer> e : counts.entrySet()) {
+				emit((e.getValue() > 1 ? e.getValue() + "x " : "") + e.getKey());
+			}
+		}
+	}
+
+	/** The slot's tip: first non-empty tip among its children (the YoMultiLineLabel never has one). */
+	private String slotTip(Container slot) {
+		for (int j = 0; j < slot.getComponentCount(); j++) {
+			String t = tipOf(slot.getComponent(j));
+			if (t.length() > 0) return t;
+		}
+		return "";
+	}
+
+	private void printBootyTips() {
+		emitted = 0;
+		Container money = findMoneyPanelInWindow();
+		if (money == null) { emit("booty: money row not found"); return; }
+		for (int i = 0; i < money.getComponentCount(); i++) {
+			Component c = money.getComponent(i);
+			long v = parseAmount(textOf(c));
+			String tip = tipOf(c);
+			if (v >= 0 && tip.length() > 0) emit(tip + ": " + v);
+		}
+	}
+
+	private Container findMoneyPanelInWindow() {
+		List<Container> contents = new ArrayList<Container>();
+		collectByChildLabel(window, contents);          // finder from the earlier booty code
+		return contents.isEmpty() ? null : findMoneyPanel(contents.get(0));
+	}
 	
 	private boolean findWhoResult() {
 		
