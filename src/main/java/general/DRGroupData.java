@@ -317,6 +317,14 @@ public class DRGroupData implements Serializable {
 
     public String toString(boolean ignoreAI, boolean writeDate, boolean useTabs, String ocean, boolean writeStationHeaders,
                            boolean writeStation, boolean writePirate, boolean writeRating, boolean writeTokenScore, boolean writeTokenArray, boolean writeSheetCombo) {
+        return toString(ignoreAI, writeDate, useTabs, ocean, writeStationHeaders, writeStation, writePirate, writeRating,
+                writeTokenScore, writeTokenArray, writeSheetCombo, null);
+    }
+
+    /** As above; with rates (station -> pirate -> score per minute), each line ends with "(rate)" when known. */
+    public String toString(boolean ignoreAI, boolean writeDate, boolean useTabs, String ocean, boolean writeStationHeaders,
+                           boolean writeStation, boolean writePirate, boolean writeRating, boolean writeTokenScore, boolean writeTokenArray, boolean writeSheetCombo,
+                           java.util.Map<String, java.util.Map<String, Double>> rates) {
         StringBuilder s = new StringBuilder();
 
         String seperator = " ";
@@ -359,6 +367,8 @@ public class DRGroupData implements Serializable {
                     }
                     sTemp.append(d.getTokenScore() + fill + Arrays.toString(d.getTokens()) + seperator);
                 }
+                if (rates != null && rates.containsKey(station) && rates.get(station).containsKey(pirate))
+                    sTemp.append(String.format("(%.2f)", rates.get(station).get(pirate)) + seperator);
 
                 s.append(sTemp.toString().trim());
                 s.append(System.getProperty("line.separator"));

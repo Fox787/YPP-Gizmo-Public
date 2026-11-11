@@ -77,6 +77,11 @@ public class RadioButtonProfileSelector extends JPanel {
 
         if (selectedProfile == null) {
            createDefaultProfile();
+           // Nothing selected on a fresh install left every option off (and the ocean on Obsidian),
+           // so DR lines printed only the ocean. Start on the CI template (dens score the same way),
+           // which createDefaultProfile made.
+           selectedProfile = "CI";
+           globalPrefs.put(CURRENT_PROFILE_KEY, selectedProfile);
         }
 
         loadProfiles();
