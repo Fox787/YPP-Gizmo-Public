@@ -147,6 +147,7 @@ public class DRGizmo {
 			return false;
 		}
 		printStatus("End of FindWolves", true);
+		data.setActivity(RecordChecker.DEN);
 		return true;
 	}
 
@@ -305,7 +306,8 @@ public class DRGizmo {
 			processStation(station);
 		}
 
-		printStatus("findDutyReport is true", true);
+		data.setActivity(RecordChecker.activityOf(data));
+		printStatus("findDutyReport is true (" + data.getActivity() + ")", true);
 		return true;
 	}
 

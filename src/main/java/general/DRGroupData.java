@@ -14,8 +14,23 @@ public class DRGroupData implements Serializable {
 
     public LinkedHashMap<String, LinkedHashMap<String, DRIndividualData>> data;
 
+    /**
+     * Where this report came from: one of RecordChecker.CI / LAIR / DEN, or null when unknown
+     * (reports saved before this was recorded). Set by the scanner, which knows whether it read
+     * werewolf counters; RecordChecker.activityOf falls back to the stations when it's null.
+     */
+    private String activity;
+
     public DRGroupData() {
         data = new LinkedHashMap<String, LinkedHashMap<String, DRIndividualData>>();
+    }
+
+    public String getActivity() {
+        return activity;
+    }
+
+    public void setActivity(String activity) {
+        this.activity = activity;
     }
 
     public String getBrokenRecords(int individual, int man1, int man2, int man3, int man4, int man5, int man6, int man7) {
@@ -276,6 +291,7 @@ public class DRGroupData implements Serializable {
 
     public DRGroupData copy() {
         DRGroupData result = new DRGroupData();
+        result.activity = activity;
         for (String station : data.keySet()) {
             for (String pirate : data.get(station).keySet()) {
                 result.put(new DRIndividualData(data.get(station).get(pirate)));

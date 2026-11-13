@@ -20,6 +20,11 @@ public class DRPersistantData implements Serializable {
         data.add(d);
     }
 
+    /** The duty reports themselves (not copies), in order. */
+    public List<DRGroupData> groups() {
+        return data;
+    }
+
     public List<DRGroupData> getAll() {
         List<DRGroupData> result = new ArrayList<DRGroupData>();
         for (DRGroupData d : data) {
@@ -33,7 +38,9 @@ public class DRPersistantData implements Serializable {
         DRPersistantData tempData = new DRPersistantData();
         //copy and take only forage so we can safely calculate for CCs only
         for (DRGroupData group : data) {
-            tempData.add(group.get(forage).copy());
+            if (group.get(forage) != null) {
+                tempData.add(group.get(forage).copy());
+            }
         }
         tempData.calculateCustomTokenScore(0, 0, 0, 0, 0, 0, 0, 0, 1);
 
@@ -48,6 +55,9 @@ public class DRPersistantData implements Serializable {
                 }
             }
         }
+
+        if (!masterGroupData.data.containsKey(forage))
+            return "";
 
         //check for entry individual record
         for (String pirate : masterGroupData.data.get(forage).keySet()) {
@@ -162,6 +172,9 @@ public class DRPersistantData implements Serializable {
                 }
             }
         }
+
+        if (!masterGroupData.data.containsKey(forage))
+            return "";
 
         //check for entry individual record
         for (String pirate : masterGroupData.data.get(forage).keySet()) {

@@ -63,6 +63,14 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			SINGLEDRINDIVIDUAL = "singledrindividual",
 			SINGLEDR7 = "singledr7", SINGLEDR6 = "singledr6", SINGLEDR5 = "singledr5", SINGLEDR4 = "singledr4",
 			SINGLEDR3 = "singledr3", SINGLEDR2 = "singledr2", SINGLEDR1 = "singledr1",
+
+			// Lair records. Crew keys end in the crew size (12, 7, 6, 5, 4).
+			LAIRICS = "lairics", LAIRCHESTS = "lairchests",
+			LAIRTOTALCHESTS = "lairtotalchests", LAIRFRAY = "lairfray", LAIRIC = "lairic",
+			LAIRCARPSCORE = "laircarpscore", LAIRCARPHOLES = "laircarpholes", LAIRVAMPIREPROOF = "lairvampireproof",
+
+			// Wolves records (placeholder).
+			WOLVESFURRBALLS4 = "wolvesfurrballs4",
 			TREEDATA = "treedata";
 
 			private static final String[] GLOBAL_SETTINGS = {
@@ -73,6 +81,12 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				// Score Records - also records, so global
 				SINGLEDRINDIVIDUAL, SINGLEDR7, SINGLEDR6, SINGLEDR5, SINGLEDR4, SINGLEDR3, SINGLEDR2, SINGLEDR1,
 				FULLENTRYINDIVIDUAL, FULLENTRY7, FULLENTRY6, FULLENTRY5, FULLENTRY4, FULLENTRY3, FULLENTRY2, FULLENTRY1,
+
+				// Lair and Wolves records
+				LAIRICS + "12", LAIRICS + "7", LAIRICS + "6", LAIRICS + "5", LAIRICS + "4",
+				LAIRCHESTS + "12", LAIRCHESTS + "7", LAIRCHESTS + "6", LAIRCHESTS + "5", LAIRCHESTS + "4",
+				LAIRTOTALCHESTS, LAIRFRAY, LAIRIC, LAIRCARPSCORE, LAIRCARPHOLES, LAIRVAMPIREPROOF,
+				WOLVESFURRBALLS4,
 
 				// Window size - global
 				"width", "height",
@@ -130,6 +144,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			formattedTextFieldSingleDR5, formattedTextFieldSingleDR4, formattedTextFieldSingleDR3, formattedTextFieldSingleDR2, formattedTextFieldSingleDR1;
 	private JFormattedTextField formattedTextFieldFullEntryIndividual, formattedTextFieldFullEntry7, formattedTextFieldFullEntry6,
 			formattedTextFieldFullEntry5, formattedTextFieldFullEntry4, formattedTextFieldFullEntry3, formattedTextFieldFullEntry2, formattedTextFieldFullEntry1;
+
+	/** Records tab: Lair crew records follow RecordChecker.LAIR_CREW_SIZES. */
+	private final JFormattedTextField[] formattedTextFieldLairICs = new JFormattedTextField[RecordChecker.LAIR_CREW_SIZES.length];
+	private final JFormattedTextField[] formattedTextFieldLairChests = new JFormattedTextField[RecordChecker.LAIR_CREW_SIZES.length];
+	private JFormattedTextField formattedTextFieldLairTotalChests, formattedTextFieldLairFray, formattedTextFieldLairIC,
+			formattedTextFieldLairCarpScore, formattedTextFieldLairCarpHoles, formattedTextFieldLairVampireProof;
+	private JFormattedTextField formattedTextFieldWolvesFurrballs4;
 
 	private RadioButtonProfileSelector profileSelector;
 	private Preferences currentPrefs;
@@ -251,6 +272,256 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private static int intOf(JTextField f, int def) {
 		try { return Integer.parseInt(f.getText().replaceAll(",", "").trim()); } catch (NumberFormatException e) { return def; }
 	}
+	private static double doubleOf(JTextField f, double def) {
+		try { return Double.parseDouble(f.getText().replaceAll(",", "").trim()); } catch (NumberFormatException e) { return def; }
+	}
+
+	/** Titled box for a column of records on the Records tab. */
+	private static JPanel recordBox(String title) {
+		JPanel p = new JPanel();
+		p.setAlignmentX(Component.LEFT_ALIGNMENT);
+		p.setAlignmentY(Component.TOP_ALIGNMENT);
+		p.setBorder(new TitledBorder(null, title, TitledBorder.LEADING, TitledBorder.TOP, null, null));
+		p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+		return p;
+	}
+
+	/** Label and whole-number field on one line, added to parent. Each field gets its own formatter. */
+	private static JFormattedTextField recordField(JPanel parent, String label, String tip) {
+		return recordField(parent, label, tip, 92);
+	}
+
+	private static JFormattedTextField recordField(JPanel parent, String label, String tip, int labelWidth) {
+		NumberFormatter f = new NumberFormatter(NumberFormat.getIntegerInstance());
+		f.setValueClass(Integer.class);
+		f.setMinimum(0);
+		f.setAllowsInvalid(true);
+
+		Box row = Box.createHorizontalBox();
+		row.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JLabel l = new JLabel(label);
+		l.setPreferredSize(new Dimension(labelWidth, 20));
+		l.setMinimumSize(new Dimension(labelWidth, 20));
+		l.setMaximumSize(new Dimension(labelWidth, 20));
+		row.add(l);
+
+		JFormattedTextField field = new JFormattedTextField(f);
+		field.setPreferredSize(new Dimension(40, 20));
+		field.setMinimumSize(new Dimension(40, 20));
+		field.setMaximumSize(new Dimension(40, 20));
+		if (tip != null) {
+			l.setToolTipText(tip);
+			field.setToolTipText(tip);
+		}
+		row.add(field);
+		parent.add(row);
+		return field;
+	}
+
+	/** The Lair records as currently typed on the Records tab (blank counts as 0, i.e. not set). */
+	private RecordChecker.LairRecords lairRecords() {
+		RecordChecker.LairRecords r = new RecordChecker.LairRecords();
+		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
+			r.crewICs[i] = intOf(formattedTextFieldLairICs[i], 0);
+			r.crewChests[i] = intOf(formattedTextFieldLairChests[i], 0);
+		}
+		r.totalChests = intOf(formattedTextFieldLairTotalChests, 0);
+		r.fray = intOf(formattedTextFieldLairFray, 0);
+		r.ic = intOf(formattedTextFieldLairIC, 0);
+		r.carpScore = intOf(formattedTextFieldLairCarpScore, 0);
+		r.carpHoles = intOf(formattedTextFieldLairCarpHoles, 0);
+		r.vampireProof = intOf(formattedTextFieldLairVampireProof, 0);
+		return r;
+	}
+
+	/** Prints broken or tied records under a heading naming the activity; nothing when there are none. */
+	private void announceRecords(String activity, String... found) {
+		StringBuilder sb = new StringBuilder();
+		for (String f : found) if (f != null && !f.trim().isEmpty()) sb.append(f.trim()).append(System.getProperty("line.separator"));
+		if (sb.length() == 0) {
+			printStatus("Broken Record Alert (" + activity + "): no records broken", true);
+			return;
+		}
+		printStatus("*** " + activity + " record! ***", false);
+		printStatus(sb.toString().trim(), false);
+	}
+
+	/** Scan: checks one duty report against the records for the activity it came from. */
+	private void checkScanRecords(DRGroupData data) {
+		String activity = RecordChecker.activityOf(data);
+		if (RecordChecker.CI.equals(activity)) {
+			announceRecords("CI",
+				data.getBrokenRecords(intOf(formattedTextFieldForageIndividual, 0),
+					intOf(formattedTextFieldForage1, 0), intOf(formattedTextFieldForage2, 0),
+					intOf(formattedTextFieldForage3, 0), intOf(formattedTextFieldForage4, 0),
+					intOf(formattedTextFieldForage5, 0), intOf(formattedTextFieldForage6, 0),
+					intOf(formattedTextFieldForage7, 0)),
+				data.getBrokenRecords(doubleOf(formattedTextFieldSingleDRIndividual, 0),
+					doubleOf(formattedTextFieldSingleDR1, 0), doubleOf(formattedTextFieldSingleDR2, 0),
+					doubleOf(formattedTextFieldSingleDR3, 0), doubleOf(formattedTextFieldSingleDR4, 0),
+					doubleOf(formattedTextFieldSingleDR5, 0), doubleOf(formattedTextFieldSingleDR6, 0),
+					doubleOf(formattedTextFieldSingleDR7, 0)));
+		} else if (RecordChecker.LAIR.equals(activity)) {
+			announceRecords("Lair", RecordChecker.lairFray(data, lairRecords()));
+		} else if (RecordChecker.DEN.equals(activity)) {
+			printStatus("Broken Record Alert: Wolves records aren't checked yet", true);
+		} else {
+			printStatus("Broken Record Alert: couldn't tell if this report is CI, Lair or Den", true);
+		}
+	}
+
+	/** Score All: checks the entry (every DR in the tree), each activity against its own records. */
+	private void checkEntryRecords(DRPersistantData all) {
+		DRPersistantData ci = RecordChecker.only(all, RecordChecker.CI);
+		DRPersistantData lair = RecordChecker.only(all, RecordChecker.LAIR);
+		DRPersistantData den = RecordChecker.only(all, RecordChecker.DEN);
+		int kinds = (ci.isEmpty() ? 0 : 1) + (lair.isEmpty() ? 0 : 1) + (den.isEmpty() ? 0 : 1);
+		if (kinds > 1)
+			printStatus("Broken Record Alert: the DR Tree mixes CI, Lair and Den reports; each is checked on its own", false);
+
+		if (!ci.isEmpty()) {
+			// getBrokenRecords works on copies, so the scores printed above aren't changed.
+						announceRecords("CI",
+				ci.getBrokenRecords(intOf(formattedTextFieldEntryIndividual, 0),
+					intOf(formattedTextFieldEntry1, 0), intOf(formattedTextFieldEntry2, 0),
+					intOf(formattedTextFieldEntry3, 0), intOf(formattedTextFieldEntry4, 0),
+					intOf(formattedTextFieldEntry5, 0), intOf(formattedTextFieldEntry6, 0),
+					intOf(formattedTextFieldEntry7, 0)),
+				ci.getBrokenRecords(doubleOf(formattedTextFieldFullEntryIndividual, 0),
+					doubleOf(formattedTextFieldFullEntry1, 0), doubleOf(formattedTextFieldFullEntry2, 0),
+					doubleOf(formattedTextFieldFullEntry3, 0), doubleOf(formattedTextFieldFullEntry4, 0),
+					doubleOf(formattedTextFieldFullEntry5, 0), doubleOf(formattedTextFieldFullEntry6, 0),
+					doubleOf(formattedTextFieldFullEntry7, 0)));
+		}
+		if (!lair.isEmpty()) announceRecords("Lair", RecordChecker.lairEntry(lair, lairRecords()));
+		if (!den.isEmpty()) printStatus("Broken Record Alert: Wolves records aren't checked yet", true);
+	}
+
+	/** Score records hold decimals; every other record is a whole number. */
+	private static boolean isDecimalRecord(String key) {
+		return key.startsWith("singledr") || key.startsWith("fullentry");
+	}
+
+	/** Every record on the Records tab by its settings key, in the order shown. */
+	private java.util.LinkedHashMap<String, JFormattedTextField> recordFields() {
+		java.util.LinkedHashMap<String, JFormattedTextField> m = new java.util.LinkedHashMap<>();
+		m.put(CCENTRYINDIVIDUAL, formattedTextFieldEntryIndividual);
+		m.put(CCENTRY7, formattedTextFieldEntry7); m.put(CCENTRY6, formattedTextFieldEntry6);
+		m.put(CCENTRY5, formattedTextFieldEntry5); m.put(CCENTRY4, formattedTextFieldEntry4);
+		m.put(CCENTRY3, formattedTextFieldEntry3); m.put(CCENTRY2, formattedTextFieldEntry2);
+		m.put(CCENTRY1, formattedTextFieldEntry1);
+		m.put(CCFORAGEINDIVIDUAL, formattedTextFieldForageIndividual);
+		m.put(CCFORAGE7, formattedTextFieldForage7); m.put(CCFORAGE6, formattedTextFieldForage6);
+		m.put(CCFORAGE5, formattedTextFieldForage5); m.put(CCFORAGE4, formattedTextFieldForage4);
+		m.put(CCFORAGE3, formattedTextFieldForage3); m.put(CCFORAGE2, formattedTextFieldForage2);
+		m.put(CCFORAGE1, formattedTextFieldForage1);
+		m.put(SINGLEDRINDIVIDUAL, formattedTextFieldSingleDRIndividual);
+		m.put(SINGLEDR7, formattedTextFieldSingleDR7); m.put(SINGLEDR6, formattedTextFieldSingleDR6);
+		m.put(SINGLEDR5, formattedTextFieldSingleDR5); m.put(SINGLEDR4, formattedTextFieldSingleDR4);
+		m.put(SINGLEDR3, formattedTextFieldSingleDR3); m.put(SINGLEDR2, formattedTextFieldSingleDR2);
+		m.put(SINGLEDR1, formattedTextFieldSingleDR1);
+		m.put(FULLENTRYINDIVIDUAL, formattedTextFieldFullEntryIndividual);
+		m.put(FULLENTRY7, formattedTextFieldFullEntry7); m.put(FULLENTRY6, formattedTextFieldFullEntry6);
+		m.put(FULLENTRY5, formattedTextFieldFullEntry5); m.put(FULLENTRY4, formattedTextFieldFullEntry4);
+		m.put(FULLENTRY3, formattedTextFieldFullEntry3); m.put(FULLENTRY2, formattedTextFieldFullEntry2);
+		m.put(FULLENTRY1, formattedTextFieldFullEntry1);
+		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++)
+			m.put(LAIRICS + RecordChecker.LAIR_CREW_SIZES[i], formattedTextFieldLairICs[i]);
+		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++)
+			m.put(LAIRCHESTS + RecordChecker.LAIR_CREW_SIZES[i], formattedTextFieldLairChests[i]);
+		m.put(LAIRTOTALCHESTS, formattedTextFieldLairTotalChests);
+		m.put(LAIRFRAY, formattedTextFieldLairFray);
+		m.put(LAIRIC, formattedTextFieldLairIC);
+		m.put(LAIRCARPSCORE, formattedTextFieldLairCarpScore);
+		m.put(LAIRCARPHOLES, formattedTextFieldLairCarpHoles);
+		m.put(LAIRVAMPIREPROOF, formattedTextFieldLairVampireProof);
+		m.put(WOLVESFURRBALLS4, formattedTextFieldWolvesFurrballs4);
+		return m;
+	}
+
+	/** Saves only the records (they're global, so every profile sees them). */
+	private void saveRecords() {
+		for (java.util.Map.Entry<String, JFormattedTextField> e : recordFields().entrySet()) {
+			if (isDecimalRecord(e.getKey())) globalPrefs.putDouble(e.getKey(), doubleOf(e.getValue(), 0));
+			else globalPrefs.putInt(e.getKey(), intOf(e.getValue(), 0));
+		}
+		try {
+			globalPrefs.flush();
+		} catch (BackingStoreException ex) {
+			printStatus("Error saving records: " + ex.getMessage(), false);
+		}
+	}
+
+	/** Reads a shared records file into the Records tab and saves it. Records not in the file are left as they are. */
+	private void importRecords() {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Import Records");
+		chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Records file (.json, .txt)", "json", "txt"));
+		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+		java.io.File file = chooser.getSelectedFile();
+
+		java.util.Map<String, String> read;
+		try {
+			read = RecordsFile.parse(new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8));
+		} catch (IOException | IllegalArgumentException ex) {
+			JOptionPane.showMessageDialog(this, "Couldn't read " + file.getName() + ":\n" + ex.getMessage(),
+					"Import Records", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+
+		java.util.LinkedHashMap<String, JFormattedTextField> fields = recordFields();
+		java.util.List<String> unknown = new ArrayList<>();
+		int known = 0;
+		for (String key : read.keySet()) {
+			if (fields.containsKey(key)) known++;
+			else unknown.add(key);
+		}
+		if (known == 0) {
+			JOptionPane.showMessageDialog(this, file.getName() + " has no records Gizmo knows.",
+					"Import Records", JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		int ok = JOptionPane.showConfirmDialog(this, "Import " + known + " records from " + file.getName()
+				+ "?\nThis replaces those records on the Records tab.", "Import Records", JOptionPane.OK_CANCEL_OPTION);
+		if (ok != JOptionPane.OK_OPTION) return;
+
+		for (java.util.Map.Entry<String, String> e : read.entrySet()) {
+			JFormattedTextField f = fields.get(e.getKey());
+			if (f == null) continue;
+			double v = Double.parseDouble(e.getValue());
+			if (isDecimalRecord(e.getKey())) f.setValue(v);
+			else f.setValue((int) Math.round(v));
+		}
+		saveRecords();
+		printStatus("Imported " + known + " records from " + file.getName(), false);
+		if (!unknown.isEmpty()) printStatus("Not recognised, skipped: " + String.join(", ", unknown), false);
+	}
+
+	/** Writes every record on the Records tab to a file others can import. */
+	private void exportRecords() {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Export Records");
+		chooser.setSelectedFile(new java.io.File("gizmo-records.json"));
+		if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+		java.io.File file = chooser.getSelectedFile();
+		if (file.exists() && JOptionPane.showConfirmDialog(this, file.getName() + " already exists. Replace it?",
+				"Export Records", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+
+		java.util.LinkedHashMap<String, String> out = new java.util.LinkedHashMap<>();
+		for (java.util.Map.Entry<String, JFormattedTextField> e : recordFields().entrySet()) {
+			if (isDecimalRecord(e.getKey()))
+				out.put(e.getKey(), new java.math.BigDecimal(doubleOf(e.getValue(), 0)).setScale(2, RoundingMode.HALF_UP).toPlainString());
+			else
+				out.put(e.getKey(), String.valueOf(intOf(e.getValue(), 0)));
+		}
+		try {
+			java.nio.file.Files.write(file.toPath(), RecordsFile.write(out).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			printStatus("Records exported to " + file.getAbsolutePath(), false);
+		} catch (IOException ex) {
+			printStatus("Export failed: " + ex.getMessage(), false);
+		}
+	}
+
 	private WolfWatch wolfWatch;
 
 	/** Label, text field and browse button on one line. */
@@ -831,10 +1102,48 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				formattedTextFieldLargeChest.setMaximumSize(new Dimension(30, 23));
 				horizontalBoxLargeChest.add(formattedTextFieldLargeChest);
 
+			// Records tab: one box per activity. Broken Record Alert checks the box for the activity scanned.
+			JPanel panelRecords = new JPanel();
+			tabbedPane.addTab("Records", null, panelRecords, null);
+			panelRecords.setLayout(new BorderLayout(0, 0));
+
+				JScrollPane scrollPaneRecords = new JScrollPane();
+				panelRecords.add(scrollPaneRecords, BorderLayout.CENTER);
+
+				JPanel panelRecords_2 = new JPanel();
+				scrollPaneRecords.setViewportView(panelRecords_2);
+				panelRecords_2.setLayout(new BoxLayout(panelRecords_2, BoxLayout.Y_AXIS));
+
+				JButton buttonImportRecords = new JButton("Import");
+				buttonImportRecords.setToolTipText("Fill in the records from a shared records file");
+				buttonImportRecords.addActionListener(ev -> importRecords());
+				JButton buttonExportRecords = new JButton("Export");
+				buttonExportRecords.setToolTipText("Write these records to a file others can import");
+				buttonExportRecords.addActionListener(ev -> exportRecords());
+				JButton buttonSaveRecords = new JButton("Save");
+				buttonSaveRecords.setToolTipText("Save the records (Save Prefs on the Options tab saves them too)");
+				buttonSaveRecords.addActionListener(ev -> {
+					saveRecords();
+					printStatus("Records saved", false);
+				});
+				JPanel panelRecordsButtons = new JPanel();
+				panelRecordsButtons.setLayout(new BoxLayout(panelRecordsButtons, BoxLayout.X_AXIS));
+				panelRecordsButtons.add(buttonImportRecords);
+				panelRecordsButtons.add(buttonExportRecords);
+				panelRecordsButtons.add(Box.createHorizontalGlue());
+				panelRecordsButtons.add(buttonSaveRecords);
+				panelRecords.add(panelRecordsButtons, BorderLayout.SOUTH);
+
+			JPanel panelRecordsCI = new JPanel();
+			panelRecordsCI.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelRecordsCI.setBorder(new TitledBorder(null, "CI", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelRecordsCI.setLayout(new BoxLayout(panelRecordsCI, BoxLayout.Y_AXIS));
+			panelRecords_2.add(panelRecordsCI);
+
 			JPanel panelCCRecords = new JPanel();
 			panelCCRecords.setAlignmentX(Component.LEFT_ALIGNMENT);
 			panelCCRecords.setBorder(new TitledBorder(null, "CC Records", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelOptions_2.add(panelCCRecords);
+			panelRecordsCI.add(panelCCRecords);
 			panelCCRecords.setLayout(new BoxLayout(panelCCRecords, BoxLayout.X_AXIS));
 
 				JPanel panelForageEntry = new JPanel();
@@ -1090,7 +1399,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			JPanel panelScoreRecords = new JPanel();
 			panelScoreRecords.setAlignmentX(Component.LEFT_ALIGNMENT);
 			panelScoreRecords.setBorder(new TitledBorder(null, "Score Records", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelOptions_2.add(panelScoreRecords);
+			panelRecordsCI.add(panelScoreRecords);
 			panelScoreRecords.setLayout(new BoxLayout(panelScoreRecords, BoxLayout.X_AXIS));
 
 			JPanel panelSingleDR = new JPanel();
@@ -1343,6 +1652,47 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				formattedTextFieldFullEntry1.setMaximumSize(new Dimension(50, 20));
 				horizontalBoxFullEntry1.add(formattedTextFieldFullEntry1);
 
+
+			JPanel panelRecordsLair = new JPanel();
+			panelRecordsLair.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelRecordsLair.setBorder(new TitledBorder(null, "Lair", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelRecordsLair.setLayout(new BoxLayout(panelRecordsLair, BoxLayout.Y_AXIS));
+			panelRecords_2.add(panelRecordsLair);
+
+				JPanel panelLairCrew = new JPanel();
+				panelLairCrew.setAlignmentX(Component.LEFT_ALIGNMENT);
+				panelLairCrew.setLayout(new BoxLayout(panelLairCrew, BoxLayout.X_AXIS));
+				panelRecordsLair.add(panelLairCrew);
+
+				// Crew records for one entry (Score All), by how many pirates were in it.
+				JPanel panelLairICs = recordBox("Most ICs");
+				panelLairICs.setToolTipText("Most ICs by the crew in one entry - Score All");
+				panelLairCrew.add(panelLairICs);
+				JPanel panelLairChests = recordBox("Most Chests");
+				panelLairChests.setToolTipText("Most chests (all types) by the crew in one entry - Score All");
+				panelLairCrew.add(panelLairChests);
+				for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
+					String crew = RecordChecker.LAIR_CREW_SIZES[i] + " Pirates";
+					formattedTextFieldLairICs[i] = recordField(panelLairICs, crew, "ICs in one entry with " + crew, 62);
+					formattedTextFieldLairChests[i] = recordField(panelLairChests, crew, "Chests in one entry with " + crew, 62);
+				}
+
+				JPanel panelLairIndividual = recordBox("Individual");
+				panelRecordsLair.add(panelLairIndividual);
+				formattedTextFieldLairTotalChests = recordField(panelLairIndividual, "Total Chests", "Most chests (all types) by one pirate in one entry - Score All");
+				formattedTextFieldLairFray = recordField(panelLairIndividual, "Fray Record", "Most chests (all types) by one pirate in one fray - Scan");
+				formattedTextFieldLairIC = recordField(panelLairIndividual, "IC Record", "Most ICs by one pirate in one entry - Score All");
+				formattedTextFieldLairCarpScore = recordField(panelLairIndividual, "Carp Score", "Highest carp score in one fray - Scan");
+				formattedTextFieldLairCarpHoles = recordField(panelLairIndividual, "Carp Holes", "Most carp holes (all three numbers) in one fray - Scan");
+				formattedTextFieldLairVampireProof = recordField(panelLairIndividual, "Vampire Proof", "Most vampire proof in one fray - Scan");
+
+			JPanel panelRecordsWolves = new JPanel();
+			panelRecordsWolves.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelRecordsWolves.setBorder(new TitledBorder(null, "Wolves", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelRecordsWolves.setLayout(new BoxLayout(panelRecordsWolves, BoxLayout.Y_AXIS));
+			panelRecords_2.add(panelRecordsWolves);
+
+				formattedTextFieldWolvesFurrballs4 = recordField(panelRecordsWolves, "4 Furrballs", "Placeholder: not checked yet");
 
 				JPanel panelTests = new JPanel();
 				if (DRGizmoMain.DEVELOPERS) {
@@ -1620,30 +1970,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				printStatus(dataString, false);
 				// Without the Score/min option, the per-minute lists still print separately.
 				if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(perMinute, false);
-				//check for broken records
+				//check for broken records, against the records for the activity this report is from
 				if (checkBoxBrokenRecordAlert.isSelected()) {
-					String brokenRecords = data.getBrokenRecords(Integer.parseInt(formattedTextFieldForageIndividual.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldForage1.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldForage2.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldForage3.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldForage4.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldForage5.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldForage6.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldForage7.getText().replaceAll(",", "")));
-					String brokenRecordsDR = data.getBrokenRecords(Double.parseDouble(formattedTextFieldSingleDRIndividual.getText().replaceAll(",", "")),
-						Double.parseDouble(formattedTextFieldSingleDR1.getText().replaceAll(",", "")),
-						Double.parseDouble(formattedTextFieldSingleDR2.getText().replaceAll(",", "")),
-						Double.parseDouble(formattedTextFieldSingleDR3.getText().replaceAll(",", "")),
-						Double.parseDouble(formattedTextFieldSingleDR4.getText().replaceAll(",", "")),
-						Double.parseDouble(formattedTextFieldSingleDR5.getText().replaceAll(",", "")),
-						Double.parseDouble(formattedTextFieldSingleDR6.getText().replaceAll(",", "")),
-						Double.parseDouble(formattedTextFieldSingleDR7.getText().replaceAll(",", "")));
-					if (!brokenRecords.isEmpty()) {
-						printStatus(brokenRecords, false);
-					}
-					if (!brokenRecordsDR.isEmpty()){
-						printStatus(brokenRecordsDR, false);
-					}
+					checkScanRecords(data);
 				}
 
 				//copy
@@ -1702,31 +2031,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						checkBoxScore2TokenArray.isSelected(), checkBoxScore2SheetCombo.isSelected());
 				printStatus(dataString, false);
 
-				//check for broken records
+				//check for broken records: each activity in the tree against its own records
 				if (checkBoxBrokenRecordAlert.isSelected()) {
-					String brokenRecords = data.getBrokenRecords(Integer.parseInt(formattedTextFieldEntryIndividual.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldEntry1.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldEntry2.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldEntry3.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldEntry4.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldEntry5.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldEntry6.getText().replaceAll(",", "")),
-						Integer.parseInt(formattedTextFieldEntry7.getText().replaceAll(",", "")));
-
-					String brokenRecordsFull = data.getBrokenRecords(Double.parseDouble(formattedTextFieldFullEntryIndividual.getText().replaceAll(",", "")),
-							Double.parseDouble(formattedTextFieldFullEntry1.getText().replaceAll(",", "")),
-							Double.parseDouble(formattedTextFieldFullEntry2.getText().replaceAll(",", "")),
-							Double.parseDouble(formattedTextFieldFullEntry3.getText().replaceAll(",", "")),
-							Double.parseDouble(formattedTextFieldFullEntry4.getText().replaceAll(",", "")),
-							Double.parseDouble(formattedTextFieldFullEntry5.getText().replaceAll(",", "")),
-							Double.parseDouble(formattedTextFieldFullEntry6.getText().replaceAll(",", "")),
-							Double.parseDouble(formattedTextFieldFullEntry7.getText().replaceAll(",", "")));
-					if (!brokenRecords.isEmpty()) {
-						printStatus(brokenRecords, false);
-					}
-					if (!brokenRecordsFull.isEmpty()){
-						printStatus(brokenRecordsFull, false);
-					}
+					checkEntryRecords(data);
 				}
 
 				//copy
@@ -1960,8 +2267,17 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 
+	/** A DR's node in the tree (shown as its number); remembers whether the DR was CI, Lair or Den. */
+	static final class DRGroupNode extends DefaultMutableTreeNode {
+		final String activity;
+
+		DRGroupNode(String activity) {
+			this.activity = activity;
+		}
+	}
+
 	public void addDRToTree(DRGroupData dr) {
-		DefaultMutableTreeNode nodeNumber = new DefaultMutableTreeNode();
+		DefaultMutableTreeNode nodeNumber = new DRGroupNode(RecordChecker.activityOf(dr));
 		//DefaultMutableTreeNode parent = new DefaultMutableTreeNode(userObject)
 
 		//make a node (1, 2, 3, ...) for this dr and decend into it
@@ -1996,6 +2312,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		for (int groupIndex = 0; groupIndex < drTreeRootNode.getChildCount(); groupIndex++) {
 			TreeNode groupNodes = drTreeRootNode.getChildAt(groupIndex);
 			DRGroupData groupData = new DRGroupData();
+			if (groupNodes instanceof DRGroupNode) groupData.setActivity(((DRGroupNode) groupNodes).activity);
 
 			for (int stationIndex = 0; stationIndex < groupNodes.getChildCount(); stationIndex++) {
 				TreeNode stationNodes = groupNodes.getChildAt(stationIndex);
@@ -2185,6 +2502,19 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		formattedTextFieldFullEntry3.setValue(globalPrefs.getDouble(FULLENTRY3, 0));
 		formattedTextFieldFullEntry2.setValue(globalPrefs.getDouble(FULLENTRY2, 0));
 		formattedTextFieldFullEntry1.setValue(globalPrefs.getDouble(FULLENTRY1, 0));
+
+		// GLOBAL SETTINGS - Lair and Wolves records (0 = not set)
+		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
+			formattedTextFieldLairICs[i].setValue(globalPrefs.getInt(LAIRICS + RecordChecker.LAIR_CREW_SIZES[i], 0));
+			formattedTextFieldLairChests[i].setValue(globalPrefs.getInt(LAIRCHESTS + RecordChecker.LAIR_CREW_SIZES[i], 0));
+		}
+		formattedTextFieldLairTotalChests.setValue(globalPrefs.getInt(LAIRTOTALCHESTS, 0));
+		formattedTextFieldLairFray.setValue(globalPrefs.getInt(LAIRFRAY, 0));
+		formattedTextFieldLairIC.setValue(globalPrefs.getInt(LAIRIC, 0));
+		formattedTextFieldLairCarpScore.setValue(globalPrefs.getInt(LAIRCARPSCORE, 0));
+		formattedTextFieldLairCarpHoles.setValue(globalPrefs.getInt(LAIRCARPHOLES, 0));
+		formattedTextFieldLairVampireProof.setValue(globalPrefs.getInt(LAIRVAMPIREPROOF, 0));
+		formattedTextFieldWolvesFurrballs4.setValue(globalPrefs.getInt(WOLVESFURRBALLS4, 0));
 	}
 
 	/**
@@ -2278,6 +2608,19 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			globalPrefs.putDouble(FULLENTRY3, Double.parseDouble(formattedTextFieldFullEntry3.getText().replaceAll(",", "")));
 			globalPrefs.putDouble(FULLENTRY2, Double.parseDouble(formattedTextFieldFullEntry2.getText().replaceAll(",", "")));
 			globalPrefs.putDouble(FULLENTRY1, Double.parseDouble(formattedTextFieldFullEntry1.getText().replaceAll(",", "")));
+
+			// GLOBAL SETTINGS - Lair and Wolves records
+			for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
+				globalPrefs.putInt(LAIRICS + RecordChecker.LAIR_CREW_SIZES[i], intOf(formattedTextFieldLairICs[i], 0));
+				globalPrefs.putInt(LAIRCHESTS + RecordChecker.LAIR_CREW_SIZES[i], intOf(formattedTextFieldLairChests[i], 0));
+			}
+			globalPrefs.putInt(LAIRTOTALCHESTS, intOf(formattedTextFieldLairTotalChests, 0));
+			globalPrefs.putInt(LAIRFRAY, intOf(formattedTextFieldLairFray, 0));
+			globalPrefs.putInt(LAIRIC, intOf(formattedTextFieldLairIC, 0));
+			globalPrefs.putInt(LAIRCARPSCORE, intOf(formattedTextFieldLairCarpScore, 0));
+			globalPrefs.putInt(LAIRCARPHOLES, intOf(formattedTextFieldLairCarpHoles, 0));
+			globalPrefs.putInt(LAIRVAMPIREPROOF, intOf(formattedTextFieldLairVampireProof, 0));
+			globalPrefs.putInt(WOLVESFURRBALLS4, intOf(formattedTextFieldWolvesFurrballs4, 0));
 
 			// GLOBAL SETTINGS - Window size
 			globalPrefs.putInt("width", getWidth());
