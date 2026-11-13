@@ -111,26 +111,40 @@ public final class ActivityTracker {
 				Object found = findScene(window, 0);
 				if (found != null) scene = found; // while puzzling the scene view is hidden; keep the last one
 			}
-			if (scene == null || !isWoodhallow(scene)) return;
+			String kind = scene == null ? null : sceneKind(scene);
+			if (kind == null) return;
+			if (!kind.equals(RecordChecker.DEN)) {
+				// Cursed Isles / Vampire Lair: only note that station symbols are showing, for auto scan.
+				Object set = scene.getClass().getField("occupantInfo").get(scene);
+				if (!(set instanceof Iterable)) return;
+				for (Object info : (Iterable<?>) set) {
+					if (observe(info, now) != 0) { lastSymbolAt = now; lastSymbolKind = kind; }
+				}
+				return;
+			}
 			if (now - lastAtWoodhallow > ARRIVAL_GAP_MS && onArrival != null) onArrival.accept(lastAtWoodhallow == 0);
 			lastAtWoodhallow = now;
 			if (fraying(scene)) return;
 			Object set = scene.getClass().getField("occupantInfo").get(scene);
 			if (!(set instanceof Iterable)) return;
-			for (Object info : (Iterable<?>) set) observe(info, now);
+			for (Object info : (Iterable<?>) set) {
+				if (observe(info, now) != 0) { lastSymbolAt = now; lastSymbolKind = kind; }
+			}
 		} catch (ReflectiveOperationException | RuntimeException ignored) {
 			// A client update can rename things; just stop counting rather than break anything.
 		}
 	}
 
-	private void observe(Object info, long now) throws ReflectiveOperationException {
-		if (isNpc(info)) return;
+	/** Feeds one occupant; returns the symbol code over their head (0 = none, NPC or unreadable). */
+	private int observe(Object info, long now) throws ReflectiveOperationException {
+		if (isNpc(info)) return 0;
 		Field f;
-		try { f = info.getClass().getField("activity"); } catch (NoSuchFieldException e) { return; } // NPCs, pets
+		try { f = info.getClass().getField("activity"); } catch (NoSuchFieldException e) { return 0; } // NPCs, pets
 		int code = ((Number) f.get(info)).intValue();
 		Object name = info.getClass().getField("username").get(info);
-		if (name == null) return;
+		if (name == null) return 0;
 		update(name.toString(), code, now);
+		return code;
 	}
 
 	/**
@@ -148,10 +162,36 @@ public final class ActivityTracker {
 		}
 	}
 
-	/** Only Woodhallow is tracked. */
+	/** Only Woodhallow is timed. */
 	static boolean isWoodhallow(Object scene) {
-		return scene.getClass().getSimpleName().equals("WerewolfIsleSceneObject");
+		return RecordChecker.DEN.equals(sceneKind(scene));
 	}
+
+	/**
+	 * Which station activity a scene is: RecordChecker.DEN (Woodhallow, WerewolfIsleSceneObject),
+	 * CI (Cursed Isles forage, GauntletSceneObject) or LAIR (VampireLairSceneObject); null for anything else.
+	 */
+	static String sceneKind(Object scene) {
+		for (Class<?> k = scene.getClass(); k != null; k = k.getSuperclass()) {
+			switch (k.getSimpleName()) {
+				case "WerewolfIsleSceneObject": return RecordChecker.DEN;
+				case "GauntletSceneObject": return RecordChecker.CI;
+				case "VampireLairSceneObject": return RecordChecker.LAIR;
+				default: break;
+			}
+		}
+		return null;
+	}
+
+	/** Last time any pirate in a Den / CI / Lair scene had a station symbol over their head, and which scene. */
+	private long lastSymbolAt;
+	private String lastSymbolKind;
+
+	/** When a station symbol was last seen in a Den, CI or Lair scene; 0 if never. For auto scan. */
+	public long lastSymbolAt() { return lastSymbolAt; }
+
+	/** RecordChecker.DEN / CI / LAIR for lastSymbolAt(); null if never seen. */
+	public String lastSymbolKind() { return lastSymbolKind; }
 
 	static boolean fraying(Object scene) {
 		try { return scene.getClass().getField("fraying").getBoolean(scene); }

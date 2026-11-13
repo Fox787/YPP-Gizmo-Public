@@ -46,7 +46,7 @@ public class DRGroupData implements Serializable {
 
             //check individuals for all
             for (String pirate : tempData.data.get(forage).keySet()) {
-                if (tempData.get(forage, pirate).getTokenScore() >= individual) {
+                if (tempData.get(forage, pirate).getTokenScore() >= individual && individual > 0) {
                     //if its bigger than the current record
                     if (tempData.get(forage, pirate).getTokenScore() > individual)
                         result += (pirate + " got " + tempData.get(forage, pirate).getTokenScore() + ""
@@ -66,7 +66,7 @@ public class DRGroupData implements Serializable {
                 //see if we beat any records
                 switch (size()) {
                     case 7:
-                        if (ccCount >= man7) {
+                        if (ccCount >= man7 && man7 > 0) {
                             if (ccCount > man7)
                                 result += "We got " + ccCount + " CCs in one forage which beats the old record of " + man7 + "." + newLine;
                             else
@@ -74,7 +74,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 6:
-                        if (ccCount >= man6) {
+                        if (ccCount >= man6 && man6 > 0) {
                             if (ccCount > man6)
                                 result += "We got " + ccCount + " CCs in one forage which beats the old record of " + man6 + "." + newLine;
                             else
@@ -82,7 +82,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 5:
-                        if (ccCount >= man5) {
+                        if (ccCount >= man5 && man5 > 0) {
                             if (ccCount > man5)
                                 result += "We got " + ccCount + " CCs in one forage which beats the old record of " + man5 + "." + newLine;
                             else
@@ -90,7 +90,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 4:
-                        if (ccCount >= man4) {
+                        if (ccCount >= man4 && man4 > 0) {
                             if (ccCount > man4)
                                 result += "We got " + ccCount + " CCs in one forage which beats the old record of " + man4 + "." + newLine;
                             else
@@ -98,7 +98,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 3:
-                        if (ccCount >= man3) {
+                        if (ccCount >= man3 && man3 > 0) {
                             if (ccCount > man3)
                                 result += "We got " + ccCount + " CCs in one forage which beats the old record of " + man3 + "." + newLine;
                             else
@@ -106,7 +106,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 2:
-                        if (ccCount >= man2) {
+                        if (ccCount >= man2 && man2 > 0) {
                             if (ccCount > man2)
                                 result += "We got " + ccCount + " CCs in one forage which beats the old record of " + man2 + "." + newLine;
                             else
@@ -114,7 +114,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 1:
-                        if (ccCount >= man1) {
+                        if (ccCount >= man1 && man1 > 0) {
                             if (ccCount > man1)
                                 result += "You got " + ccCount + " CCs in one forage which beats the old record of " + man1 + "." + newLine;
                             else
@@ -142,7 +142,7 @@ public class DRGroupData implements Serializable {
             }
             //check individuals for all
             for (String pirate : tempData.data.get(forage).keySet()) {
-                if (tempData.get(forage, pirate).getTokenScore() >= individual) {
+                if (tempData.get(forage, pirate).getTokenScore() >= individual && individual > 0) {
                     //if its bigger than the current record
                     if (tempData.get(forage, pirate).getTokenScore() > individual)
                         result += (pirate + " got " + tempData.get(forage, pirate).getTokenScore() + ""
@@ -167,7 +167,7 @@ public class DRGroupData implements Serializable {
                 //see if we beat any records
                 switch (size()) {
                     case 7:
-                        if (ccCount >= man7) {
+                        if (ccCount >= man7 && man7 > 0) {
                             if (ccCount > man7)
                                 result += "We got " + ccCount + " Score in one forage which beats the old record of " + man7 + "." + newLine;
                             else
@@ -175,7 +175,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 6:
-                        if (ccCount >= man6) {
+                        if (ccCount >= man6 && man6 > 0) {
                             if (ccCount > man6)
                                 result += "We got " + ccCount + " Score in one forage which beats the old record of " + man6 + "." + newLine;
                             else
@@ -183,7 +183,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 5:
-                        if (ccCount >= man5) {
+                        if (ccCount >= man5 && man5 > 0) {
                             if (ccCount > man5)
                                 result += "We got " + ccCount + " Score in one forage which beats the old record of " + man5 + "." + newLine;
                             else
@@ -191,7 +191,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 4:
-                        if (ccCount >= man4) {
+                        if (ccCount >= man4 && man4 > 0) {
                             if (ccCount > man4)
                                 result += "We got " + ccCount + " Score in one forage which beats the old record of " + man4 + "." + newLine;
                             else
@@ -199,7 +199,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 3:
-                        if (ccCount >= man3) {
+                        if (ccCount >= man3 && man3 > 0) {
                             if (ccCount > man3)
                                 result += "We got " + ccCount + " Score in one forage which beats the old record of " + man3 + "." + newLine;
                             else
@@ -207,7 +207,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 2:
-                        if (ccCount >= man2) {
+                        if (ccCount >= man2 && man2 > 0) {
                             if (ccCount > man2)
                                 result += "We got " + ccCount + " Score in one forage which beats the old record of " + man2 + "." + newLine;
                             else
@@ -215,7 +215,7 @@ public class DRGroupData implements Serializable {
                         }
                         break;
                     case 1:
-                        if (ccCount >= man1) {
+                        if (ccCount >= man1 && man1 > 0) {
                             if (ccCount > man1)
                                 result += "You got " + ccCount + " Score in one forage which beats the old record of " + man1 + "." + newLine;
                             else

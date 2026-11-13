@@ -172,15 +172,41 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private RunLog runLog;
 	private StationClock stationClock;
 	private long lastChatLookup;
+	/** Auto scan for every activity (Den, CI, Lair) or none; off means scanning by hand. */
 	private JCheckBox checkBoxAutoScan;
 	public static final String AUTOSCAN = "autoscan";
 	/** Station timer already auto-scanned for, and the last duty report scanned (by hand or auto). */
 	private long autoScannedDeadline;
 	private String lastScannedReport;
+	/** Auto scan was looking for a report on the previous tick. */
+	private boolean autoScanArmed;
+	/** How long after the last station symbol auto scan keeps looking for the duty report. */
+	private static final long AUTOSCAN_SYMBOL_WINDOW_MS = 3 * 60_000L;
 
 	/** Score-per-minute lists still to copy, next first. */
 	private final java.util.ArrayDeque<String> pendingCopies = new java.util.ArrayDeque<>();
 	private boolean pasteWatchInstalled;
+
+	/** Puzzle Pirates chat takes at most this many characters per message. */
+	static final int CHAT_LIMIT = 240;
+
+	/** The text as one piece if it fits in a chat message, else whole lines packed into pieces that each fit. */
+	static java.util.List<String> splitForChat(String text) {
+		java.util.List<String> out = new java.util.ArrayList<>();
+		if (text.length() <= CHAT_LIMIT) { out.add(text); return out; }
+		String nl = System.getProperty("line.separator");
+		StringBuilder cur = new StringBuilder();
+		for (String line : text.split("\\r?\\n")) {
+			if (cur.length() > 0 && cur.length() + nl.length() + line.length() > CHAT_LIMIT) {
+				out.add(cur.toString());
+				cur.setLength(0);
+			}
+			if (cur.length() > 0) cur.append(nl);
+			cur.append(line);
+		}
+		if (cur.length() > 0) out.add(cur.toString());
+		return out;
+	}
 
 	private static void copyToClipboard(String s) {
 		StringSelection selection = new StringSelection(s);
@@ -209,18 +235,43 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 	}
 
+	/** Auto scan is on and this is an activity it covers (RecordChecker.DEN / CI / LAIR). */
+	private boolean autoScanWanted(String activity) {
+		if (!checkBoxAutoScan.isSelected()) return false;
+		return RecordChecker.DEN.equals(activity) || RecordChecker.CI.equals(activity) || RecordChecker.LAIR.equals(activity);
+	}
+
+	/**
+	 * Auto scan looks for a new duty report while either
+	 *  - a Den station period ended in the last 2 minutes (chat log), or
+	 *  - a station symbol was over someone's head in a Den, Cursed Isles or Vampire Lair scene in the
+	 *    last few minutes (foraging, carpentry, treasure haul...),
+	 * and auto scan is ticked. A report that is new is scanned once, like the Scan button.
+	 */
 	private void autoScanTick() {
-		if (!checkBoxAutoScan.isSelected()) return;
 		long now = System.currentTimeMillis();
-		long d = activityTracker.lastStationEnd(now);
-		if (d == 0 || d == autoScannedDeadline || now - d > 120_000) return;
+		long d = checkBoxAutoScan.isSelected() ? activityTracker.lastStationEnd(now) : 0;
+		boolean byClock = d != 0 && d != autoScannedDeadline && now - d <= 120_000;
+		long seen = activityTracker.lastSymbolAt();
+		boolean bySymbol = seen != 0 && now - seen <= AUTOSCAN_SYMBOL_WINDOW_MS && autoScanWanted(activityTracker.lastSymbolKind());
+		boolean wasArmed = autoScanArmed;
+		autoScanArmed = byClock || bySymbol;
+		if (!autoScanArmed) return;
 		try {
 			// Look quietly first, so an empty attempt doesn't fill the Output tab.
 			DRGroupData found = new DRGizmo(window, new JTextArea(), false).findDutyReportQuietly();
 			if (found == null || found.isEmpty()) return;
-			if (found.toString().equals(lastScannedReport)) return;   // still the previous report
-			autoScannedDeadline = d;
-			printStatus("Auto scan: stations ended, reading the duty report", false);
+			String key = found.toString();
+			if (!wasArmed && !byClock && lastScannedReport == null) {
+				// Just started watching and a report is already open: it is from before, leave it.
+				lastScannedReport = key;
+				return;
+			}
+			if (key.equals(lastScannedReport)) return;   // still the previous report
+			String activity = RecordChecker.activityOf(found);
+			if (!autoScanWanted(activity)) return;        // not an activity the player opted into
+			if (byClock) autoScannedDeadline = d;
+			printStatus("Auto scan: reading the " + (activity == null ? "" : activity + " ") + "duty report", false);
 			buttonScan.doClick();
 		} catch (RuntimeException ignored) {
 			// Try again on the next tick.
@@ -904,7 +955,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					panelPrintOptionsScan_2.add(checkBoxScan2SheetCombo);
 
 					checkBoxScan2ScorePerMinute = new JCheckBox("Score/min");
-					checkBoxScan2ScorePerMinute.setToolTipText("Adds (score per minute) to each pirate's line instead of a separate list.");
+					checkBoxScan2ScorePerMinute.setToolTipText("Wolves Den only: adds (score per minute) to each pirate's line instead of a separate list.");
 					panelPrintOptionsScan_2.add(checkBoxScan2ScorePerMinute);
 
 				JPanel panelPrintOptionsScore = new JPanel();
@@ -1147,7 +1198,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelCCRecords.setLayout(new BoxLayout(panelCCRecords, BoxLayout.X_AXIS));
 
 				JPanel panelForageEntry = new JPanel();
-				panelForageEntry.setBorder(new TitledBorder(null, "Single Entry", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+				panelForageEntry.setBorder(new TitledBorder(null, "Full Entry", TitledBorder.LEADING, TitledBorder.TOP, null, null));
 				panelCCRecords.add(panelForageEntry);
 				panelForageEntry.setLayout(new BoxLayout(panelForageEntry, BoxLayout.Y_AXIS));
 
@@ -1272,8 +1323,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				horizontalBoxEntry1.add(formattedTextFieldEntry1);
 
 			JPanel panelSingleForage = new JPanel();
-			panelSingleForage.setBorder(new TitledBorder(null, "Single Forage", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelCCRecords.add(panelSingleForage);
+			panelSingleForage.setBorder(new TitledBorder(null, "Single DR", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelCCRecords.add(panelSingleForage, 0);	// left, matching Score Records (Single DR | Full Entry)
 			panelSingleForage.setLayout(new BoxLayout(panelSingleForage, BoxLayout.Y_AXIS));
 
 				Box horizontalBoxForageIndividual = Box.createHorizontalBox();
@@ -1789,9 +1840,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				else runLog.startNewRun();
 			});
 
-			// Auto scan: once the station timer runs out, look for the new duty report every 2 seconds
-			// for up to 2 minutes and scan it the same way the Scan button does.
-			checkBoxAutoScan = new JCheckBox("Auto scan DR when stations end");
+			// Auto scan: while stations are running (or just after), look for a new duty report every
+			// 2 seconds and scan it the same way the Scan button does. One setting for Den, CI and Lair;
+			// untick to scan by hand.
+			checkBoxAutoScan = new JCheckBox("Auto Scan DR");
+			checkBoxAutoScan.setToolTipText("Scan the duty report on its own after each Wolves Den, Cursed Isles or Vampire Lair round. Untick to scan by hand.");
 			checkBoxAutoScan.setSelected(globalPrefs.getBoolean(AUTOSCAN, true));
 			checkBoxAutoScan.addActionListener(ev -> globalPrefs.putBoolean(AUTOSCAN, checkBoxAutoScan.isSelected()));
 			panelQuickOptions.add(checkBoxAutoScan);
@@ -1948,18 +2001,24 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						intOf(formattedTextFieldSmallChest, 1),
 						intOf(formattedTextFieldMediumChest, 2),
 						intOf(formattedTextFieldLargeChest, 3));
-				// Score per minute first, so it can go on the same lines as the report.
+				// Score per minute first, so it can go on the same lines as the report. Only Wolves Den
+				// reports are timed; CI and Lair reports print just the options the player ticked.
+				boolean isDen = RecordChecker.DEN.equals(RecordChecker.activityOf(data));
 				String perMinute = null;
 				java.util.Map<String, java.util.Map<String, Double>> rates = null;
-				try {
-					perMinute = activityTracker.report(data);
-					ActivityTracker.Period fresh = activityTracker.takeNewPeriod();
-					if (fresh != null) printStatus("Saved to " + runLog.record(fresh), true);
-					rates = ActivityTracker.rates(activityTracker.lastPeriod());
-				} catch (IOException | RuntimeException ex) {
-					printStatus("Score per minute failed: " + ex, false);
+				ActivityTracker.Period timed = null;
+				if (isDen) {
+					try {
+						perMinute = activityTracker.report(data);
+						ActivityTracker.Period fresh = activityTracker.takeNewPeriod();
+						if (fresh != null) printStatus("Saved to " + runLog.record(fresh), true);
+						timed = activityTracker.lastPeriod();
+						rates = ActivityTracker.rates(timed);
+					} catch (IOException | RuntimeException ex) {
+						printStatus("Score per minute failed: " + ex, false);
+					}
 				}
-				boolean inline = checkBoxScan2ScorePerMinute.isSelected();
+				boolean inline = isDen && checkBoxScan2ScorePerMinute.isSelected();
 				//print dr to output with print settings
 				String dataString = data.toString(checkBoxIgnoreAI.isSelected(), checkBoxScanWriteDate.isSelected(),
 						checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
@@ -1977,17 +2036,33 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 				//copy
 				if (checkBoxAutoCopy.isSelected()) {
-					// Minimal score-per-minute lists when there are timings: Dnav first, the rest queued
-					// for after each Ctrl+V. Otherwise the duty report as before.
-					ActivityTracker.Period pm = activityTracker.lastPeriod();
-					java.util.List<String> blocks = pm == null ? java.util.Collections.emptyList()
-							: ActivityTracker.blocks(pm, checkBoxScanUseTabs.isSelected() ? "\t" : " ", false);
+					// First the report exactly as printed, split by station when it is over the chat limit;
+					// then (Den only, when Score/min isn't already on the lines) the score-per-minute lists.
+					// The first piece is copied now, the rest after each Ctrl+V.
+					java.util.List<String> pieces = new java.util.ArrayList<>();
+					if (dataString.length() <= CHAT_LIMIT) {
+						pieces.add(dataString);
+					} else {
+						for (String station : data.data.keySet()) {
+							String part = data.get(station).toString(checkBoxIgnoreAI.isSelected(), checkBoxScanWriteDate.isSelected(),
+									checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
+									checkBoxScanStationHeaders.isSelected(), checkBoxScan2Station.isSelected(), checkBoxScan2Pirate.isSelected(),
+									checkBoxScan2Rating.isSelected(), checkBoxScan2TokenScore.isSelected(),
+									checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected(),
+									inline ? rates : null);
+							pieces.addAll(splitForChat(part));
+						}
+					}
+					if (timed != null && !inline)
+						for (String block : ActivityTracker.blocks(timed, checkBoxScanUseTabs.isSelected() ? "\t" : " ", false))
+							pieces.addAll(splitForChat(block));
+					pieces.removeIf(String::isEmpty);
 					pendingCopies.clear();
-					if (!blocks.isEmpty()) {
-						pendingCopies.addAll(blocks);
+					if (pieces.size() > 1) {
+						pendingCopies.addAll(pieces);
 						copyNext();
 					} else {
-						copyToClipboard(dataString);
+						copyToClipboard(pieces.isEmpty() ? dataString : pieces.get(0));
 					}
 				}
 			} else if (gizmo.getBootyDivision() != null) {
