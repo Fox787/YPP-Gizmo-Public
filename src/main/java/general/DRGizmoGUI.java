@@ -241,6 +241,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		return RecordChecker.DEN.equals(activity) || RecordChecker.CI.equals(activity) || RecordChecker.LAIR.equals(activity);
 	}
 
+	/** How often auto scan looks for a new duty report while it is armed. */
+	static final int AUTOSCAN_TICK_MS = 1000;
+
 	/**
 	 * Auto scan looks for a new duty report while either
 	 *  - a Den station period ended in the last 2 minutes (chat log), or
@@ -1848,7 +1851,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			checkBoxAutoScan.setSelected(globalPrefs.getBoolean(AUTOSCAN, true));
 			checkBoxAutoScan.addActionListener(ev -> globalPrefs.putBoolean(AUTOSCAN, checkBoxAutoScan.isSelected()));
 			panelQuickOptions.add(checkBoxAutoScan);
-			new javax.swing.Timer(2000, ev -> autoScanTick()).start();
+			new javax.swing.Timer(AUTOSCAN_TICK_MS, ev -> autoScanTick()).start();
 
 			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
 			labelSymbols = new JLabel("Symbols: not found yet");
@@ -2036,11 +2039,15 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 				//copy
 				if (checkBoxAutoCopy.isSelected()) {
-					// First the report exactly as printed, split by station when it is over the chat limit;
-					// then (Den only, when Score/min isn't already on the lines) the score-per-minute lists.
+					// Den with timings: "/ve" chat messages, each pirate's score and score per minute, Dnav
+					// first, split by station and then between pirates to fit 240 characters.
+					// CI / Lair (no timings): the report as printed, split by station and then between
+					// pirates when it is over the chat limit.
 					// The first piece is copied now, the rest after each Ctrl+V.
 					java.util.List<String> pieces = new java.util.ArrayList<>();
-					if (dataString.length() <= CHAT_LIMIT) {
+					if (timed != null) {
+						pieces.addAll(ActivityTracker.chatMessages(timed));
+					} else if (dataString.length() <= CHAT_LIMIT) {
 						pieces.add(dataString);
 					} else {
 						for (String station : data.data.keySet()) {
@@ -2048,14 +2055,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 									checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
 									checkBoxScanStationHeaders.isSelected(), checkBoxScan2Station.isSelected(), checkBoxScan2Pirate.isSelected(),
 									checkBoxScan2Rating.isSelected(), checkBoxScan2TokenScore.isSelected(),
-									checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected(),
-									inline ? rates : null);
+									checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected(), null);
 							pieces.addAll(splitForChat(part));
 						}
 					}
-					if (timed != null && !inline)
-						for (String block : ActivityTracker.blocks(timed, checkBoxScanUseTabs.isSelected() ? "\t" : " ", false))
-							pieces.addAll(splitForChat(block));
 					pieces.removeIf(String::isEmpty);
 					pendingCopies.clear();
 					if (pieces.size() > 1) {

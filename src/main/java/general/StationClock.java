@@ -137,6 +137,17 @@ public final class StationClock {
 		return null;
 	}
 
+	/**
+	 * How long stations last, from Thalassa's duty_seconds: 2:00 for the first wave, otherwise
+	 * 2:00 + 3:00 x survivors / crew, both read from the chat log's "N o' M still standin'!" line.
+	 * So 5:00 with everyone standing, and e.g. 3:07.5 with 3 of 8.
+	 */
+	public long duration(Period p) {
+		boolean first = !periods.isEmpty() && periods.get(0) == p;
+		if (first || p.crew <= 0) return 120_000L;
+		return 120_000L + Math.round(180_000.0 * p.survivors / p.crew);
+	}
+
 	public Period current() {
 		return periods.isEmpty() ? null : periods.get(periods.size() - 1);
 	}

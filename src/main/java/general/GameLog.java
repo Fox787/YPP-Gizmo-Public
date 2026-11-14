@@ -52,7 +52,42 @@ public final class GameLog {
 	}
 
 	public static Info read() {
-		return read(newestLog(clientFolder()));
+		return read(ownLog(clientFolder()));
+	}
+
+	private static final java.util.regex.Pattern LOG_NAME = java.util.regex.Pattern.compile("^yohoho_(\\d+)\\.log$");
+
+	/**
+	 * This client's own game log. With two clients open, both write yohoho_<start millis>.log into the
+	 * same folder, so "newest" flips between them. Each client names its log after when it started, so
+	 * take the log whose name is closest to when this Java process started (within two minutes).
+	 * Falls back to the newest log.
+	 */
+	public static Path ownLog(Path folder) {
+		long jvmStart;
+		try {
+			// ProcessHandle is in java.base, so it's there even in a trimmed-down bundled Java.
+			java.util.Optional<java.time.Instant> started = ProcessHandle.current().info().startInstant();
+			if (!started.isPresent()) return newestLog(folder);
+			jvmStart = started.get().toEpochMilli();
+		} catch (RuntimeException | Error e) {
+			return newestLog(folder);
+		}
+		// The log named closest to this process's start. (The launcher writes a short log of its own
+		// ~20 s before the game starts, so "first after" picked the launcher's log, not the game's.)
+		Path best = null;
+		long bestGap = Long.MAX_VALUE;
+		try (DirectoryStream<Path> ds = Files.newDirectoryStream(folder, "yohoho_*.log")) {
+			for (Path p : ds) {
+				Matcher m = LOG_NAME.matcher(p.getFileName().toString());
+				if (!m.matches()) continue;
+				long gap = Math.abs(Long.parseLong(m.group(1)) - jvmStart);
+				if (gap <= 120_000 && gap < bestGap) { best = p; bestGap = gap; }
+			}
+		} catch (IOException | RuntimeException e) {
+			return newestLog(folder);
+		}
+		return best != null ? best : newestLog(folder);
 	}
 
 	/** Reads the whole log; the latest value of each field wins. Returns null if the file can't be read. */

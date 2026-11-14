@@ -20,8 +20,7 @@ import java.util.prefs.Preferences;
  * leaving the scene or the puzzle being finished early don't shorten anyone's time, so idling can't
  * raise a rate. Time before a pirate's first symbol in the period goes to that first station.
  *
- * Activity codes are numbers. Which code is which station is learned from duty reports: for each
- * station, the code its pirates spent longest on wins, and is remembered for next time.
+ * Activity codes are numbers; the Woodhallow stations' codes are fixed (BUILT_IN_CODES).
  */
 public final class ActivityTracker {
 
@@ -38,11 +37,15 @@ public final class ActivityTracker {
 		Map<Integer, Long> times(long start, long end) {
 			Map<Integer, Long> out = new HashMap<>();
 			if (end <= start) return out;
-			// Symbol at the start: the last change before it, else the first change inside the window.
+			// Symbol at the start. A symbol left over from the last wave is stale for the first few
+			// seconds (it updates once the pirate is in this wave's puzzle), so a change in the first
+			// 15 s counts from the start. A later change is a real switch, and the start keeps the old
+			// symbol. With nothing before the window, the first symbol inside it counts from the start.
 			int code = 0;
 			int i = 0;
-			for (; i < changes.size() && changes.get(i)[0] <= start; i++) code = (int) changes.get(i)[1];
-			if (code == 0 && i < changes.size() && changes.get(i)[0] < end) code = (int) changes.get(i)[1];
+			for (; i < changes.size() && changes.get(i)[0] < start; i++) code = (int) changes.get(i)[1];
+			if (i < changes.size() && changes.get(i)[0] < end
+					&& (code == 0 || changes.get(i)[0] - start <= STALE_MS)) code = (int) changes.get(i)[1];
 			if (code == 0) return out;
 			long from = start;
 			for (; i < changes.size() && changes.get(i)[0] < end; i++) {
@@ -67,9 +70,16 @@ public final class ActivityTracker {
 	}
 
 	static final long MAX_PERIOD_MS = 5 * 60_000L;
-	static final long OTHERS_LAG_MS = 300;
-	/** Station periods are 2 or 5 minutes; a measured length this close to one is snapped to it. */
+	/** A symbol change this soon after stations open is the old wave's symbol catching up, not a switch. */
+	static final long STALE_MS = 15_000;
+	static final long OTHERS_LAG_MS = 100;
+	/** A measured length this close to the expected one is snapped to it. */
 	static final long SNAP_MS = 15_000;
+
+	static long snap(long len, long expected) {
+		if (expected > 0 && Math.abs(len - expected) <= SNAP_MS) return expected;
+		return snap(len);
+	}
 
 	/** The pirate running this client, whose symbols aren't delayed by the server. */
 	private String self = "";
@@ -293,31 +303,44 @@ public final class ActivityTracker {
 		if (key.equals(lastReportKey)) return lastReportText;   // same report scanned again
 
 		Period period = new Period();
+		long expectedLength = 0;
 		StationClock.Period sp = clock == null ? null : clock.lastEnded(now);
 		if (sp != null && sp.end > lastEnd) {
 			period.start = sp.start;
 			period.end = Math.min(sp.end, now);
 			period.timedToTimer = true;
+			expectedLength = clock.duration(sp);
 		} else {
 			// No station messages found (chat log missing?): from the last report, or the last 15 minutes, to now.
 			period.start = Math.max(lastEnd, now - 15 * 60_000L);
 			period.end = now;
 		}
 		// A station period never runs past 5 minutes, whatever the messages say, and a length within
-		// 15 s of 2 or 5 minutes is taken as exactly that (chat timestamps are only to the second).
+		// 15 s of the expected one (2:00 + 3:00 x survivors / crew, from the chat log's
+		// "N o' M still standin'!") is taken as exactly that, since chat timestamps are only to the second.
 		period.end = Math.min(period.end, period.start + MAX_PERIOD_MS);
-		if (period.timedToTimer) period.end = period.start + snap(period.end - period.start);
+		if (period.timedToTimer) period.end = period.start + snap(period.end - period.start, expectedLength);
 		periods.add(period);
 		fresh = period;
 
-		Map<String, Integer> codes = assignCodes(dr, period);
+		Map<String, Integer> codes = assignCodes(dr);
+		Map<String, Integer> stationsOf = new HashMap<>();
+		for (LinkedHashMap<String, DRIndividualData> m : dr.data.values())
+			for (String n : m.keySet()) stationsOf.merge(n, 1, Integer::sum);
 		for (Map.Entry<String, LinkedHashMap<String, DRIndividualData>> st : dr.data.entrySet()) {
 			String station = st.getKey();
 			int code = codes.getOrDefault(station, 0);
 			for (DRIndividualData d : st.getValue().values()) {
 				PirateState p = pirates.get(d.getName());
-				Long ms = (p == null || code == 0) ? null : p.times(period.start, period.end).get(code);
-				long t = ms == null ? 0 : ms;
+				long t;
+				if (stationsOf.get(d.getName()) == 1 && period.timedToTimer) {
+					// No station switch (only on one station's report): they puzzled the whole period,
+					// whether or not their symbol was seen.
+					t = period.end - period.start;
+				} else {
+					Long ms = (p == null || code == 0) ? null : p.times(period.start, period.end).get(code);
+					t = ms == null ? 0 : ms;
+				}
 				Row row = new Row();
 				row.station = station;
 				row.pirate = d.getName();
@@ -368,6 +391,58 @@ public final class ActivityTracker {
 		return out;
 	}
 
+	static final int CHAT_LIMIT = 240;
+
+	/**
+	 * Chat messages for pasting into the vessel channel, one line per station name and per pirate.
+	 * Everything in one message when it fits in 240 characters; otherwise one per station, and a
+	 * station that is still too long is split between pirates. Duty report order, Dnav first.
+	 */
+	public static List<String> chatMessages(Period period) {
+		Map<String, List<String>> byStation = new LinkedHashMap<>();
+		for (Row r : period.rows)
+			byStation.computeIfAbsent(r.station, k -> new ArrayList<>())
+					.add(r.pirate + " " + r.score + " (" + (r.ms > 0 ? String.format("%.2f", rate(r)) : "-") + ")");
+		List<String> order = new ArrayList<>(byStation.keySet());
+		order.sort(Comparator.comparingInt(ActivityTracker::stationOrder));
+
+		// One line per station name and per pirate:
+		//   /ve Nav
+		//   Rustyspoony 3 (1.53)
+		//   Forage
+		//   Jice 27 (13.94)
+		List<String> parts = new ArrayList<>();
+		for (String st : order) parts.add(shortName(st) + "\n" + String.join("\n", byStation.get(st)));
+		List<String> out = new ArrayList<>();
+		// A blank line between stations when it still fits in one message; without it if that's
+		// what makes it fit.
+		String spaced = "/ve " + String.join("\n\n", parts);
+		if (spaced.length() <= CHAT_LIMIT) { out.add(spaced); return out; }
+		String all = "/ve " + String.join("\n", parts);
+		if (all.length() <= CHAT_LIMIT) { out.add(all); return out; }
+
+		for (String st : order) {
+			String head = "/ve " + shortName(st);
+			StringBuilder msg = new StringBuilder(head);
+			for (String entry : byStation.get(st)) {
+				if (msg.length() > head.length() && msg.length() + 1 + entry.length() > CHAT_LIMIT) {
+					out.add(msg.toString());
+					msg = new StringBuilder(head);
+				}
+				msg.append('\n').append(entry);
+			}
+			out.add(msg.toString());
+		}
+		return out;
+	}
+
+	private static String shortName(String station) {
+		String l = station.toLowerCase();
+		if (l.startsWith("navigat")) return "Nav";
+		if (l.startsWith("forag")) return "Forage";
+		return station;
+	}
+
 	/** station -> pirate -> score per minute, for rows with a known time; empty if period is null. */
 	public static Map<String, Map<String, Double>> rates(Period period) {
 		Map<String, Map<String, Double>> out = new HashMap<>();
@@ -386,56 +461,21 @@ public final class ActivityTracker {
 		return 2;
 	}
 
-	/**
-	 * Which symbol code is which station. Evidence for a station comes from pirates listed on that
-	 * station only (someone on both can't tell them apart), weighted by time. Two stations never share
-	 * a code; with too little evidence the remembered code is used.
-	 */
-	private Map<String, Integer> assignCodes(DRGroupData dr, Period period) {
-		Map<String, Integer> stationsOf = new HashMap<>();
-		for (LinkedHashMap<String, DRIndividualData> m : dr.data.values())
-			for (String n : m.keySet()) stationsOf.merge(n, 1, Integer::sum);
-
-		Map<String, Map<Integer, Long>> evidence = new LinkedHashMap<>();
-		for (Map.Entry<String, LinkedHashMap<String, DRIndividualData>> st : dr.data.entrySet()) {
-			Map<Integer, Long> ev = new HashMap<>();
-			for (String n : st.getValue().keySet()) {
-				PirateState p = pirates.get(n);
-				if (p == null || stationsOf.get(n) > 1) continue;
-				for (Map.Entry<Integer, Long> e : p.times(period.start, period.end).entrySet()) ev.merge(e.getKey(), e.getValue(), Long::sum);
-			}
-			evidence.put(st.getKey(), ev);
-		}
-
+	/** Each station on the report and its symbol code (0 for a station without one). */
+	private Map<String, Integer> assignCodes(DRGroupData dr) {
 		Map<String, Integer> out = new HashMap<>();
-		Set<Integer> taken = new HashSet<>();
-		// Strongest evidence first, so a clear station claims its code before a doubtful one.
-		List<String> order = new ArrayList<>(evidence.keySet());
-		order.sort((x, y) -> Long.compare(max(evidence.get(y)), max(evidence.get(x))));
-		for (String station : order) {
-			String prefKey = "activitycode." + station;
-			int remembered = prefs == null ? 0 : prefs.getInt(prefKey, 0);
-			int best = 0;
-			long bestT = 0;
-			for (Map.Entry<Integer, Long> e : evidence.get(station).entrySet())
-				if (!taken.contains(e.getKey()) && e.getValue() > bestT) { best = e.getKey(); bestT = e.getValue(); }
-			int code;
-			if (best != 0 && (bestT >= 60_000 || remembered == 0)) {
-				code = best;
-				if (prefs != null) prefs.putInt(prefKey, code);
-			} else {
-				code = taken.contains(remembered) ? 0 : remembered;
-			}
-			if (code != 0) taken.add(code);
-			out.put(station, code);
-		}
+		for (String station : dr.data.keySet()) out.put(station, knownCode(station));
 		return out;
 	}
 
-	private static long max(Map<Integer, Long> m) {
-		long b = 0;
-		for (long v : m.values()) b = Math.max(b, v);
-		return b;
+	/**
+	 * The client's activity codes for the Woodhallow stations, as seen in game (Nov 2026): the
+	 * symbol over a pirate's head on Duty Navigation is 10, on foraging 56. Fixed, not learned.
+	 */
+	static final Map<String, Integer> BUILT_IN_CODES = Map.of("Navigating", 10, "Foraging", 56);
+
+	static int knownCode(String station) {
+		return BUILT_IN_CODES.getOrDefault(station, 0);
 	}
 
 	/** When the latest station period ended, for auto scan; 0 if none. */
