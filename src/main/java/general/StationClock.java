@@ -29,7 +29,7 @@ public final class StationClock {
 
 	public static final class Period {
 		public long start;
-		public long end;          // 0 while open
+		public volatile long end;          // 0 while open
 		public int survivors, crew;
 		public boolean lair;
 
@@ -48,13 +48,13 @@ public final class StationClock {
 	private int lastClock = -1;
 
 	/** Follows this chat log; reading it from the start rebuilds the current run's periods. */
-	public void follow(Path chatLog) {
+	public synchronized void follow(Path chatLog) {
 		if (chatLog == null || chatLog.equals(file)) return;
 		file = chatLog;
 		offset = 0;
 		date = null;
 		lastClock = -1;
-		periods.clear();
+		resetRun();
 	}
 
 	public Path file() { return file; }
@@ -64,7 +64,7 @@ public final class StationClock {
 		if (file == null) return;
 		try {
 			long size = Files.size(file);
-			if (size < offset) { offset = 0; date = null; lastClock = -1; periods.clear(); } // truncated: start over
+			if (size < offset) { offset = 0; date = null; lastClock = -1; resetRun(); } // truncated: start over
 			if (size == offset) return;
 			byte[] buf;
 			try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
@@ -83,7 +83,7 @@ public final class StationClock {
 	}
 
 	/** One raw chat log line. */
-	void feed(String raw) {
+	synchronized void feed(String raw) {
 		String line = raw.trim();
 		Matcher m = DATE.matcher(line);
 		if (m.matches()) {
@@ -102,12 +102,105 @@ public final class StationClock {
 		message(m.group(4), now);
 	}
 
-	void message(String msg, long now) {
-		if (msg.equals(ARRIVAL)) { periods.clear(); return; }
+	private synchronized void resetRun() {
+		periods.clear();
+		inDen = false;
+		crew = fraysDone = frayDeaths = 0;
+		wolvesAtHalf = elitesLeft = wolvesLeft = -1;
+		wolvesChangedAt = lastWolfClearedAt = thirtySecondsAt = 0;
+	}
+
+	private int crew;
+	/** Pirates eliminated in the current fray (reset when stations open). */
+	private int frayDeaths;
+
+	public synchronized int crew() { return crew; }
+	public synchronized int frayDeaths() { return frayDeaths; }
+
+	// "Name is eliminated!" - pirate names are one word; the wolves' names have two ("Sly Moe").
+	private static final Pattern ELIMINATED = Pattern.compile("^([A-Z][A-Za-z]*) is eliminated!$");
+
+	/**
+	 * Elite werewolves (the ones that transform; they deal no damage) still up in the current fray:
+	 * "Transformation! N werewolves have transformed!" minus elites eliminated since. -1 if unknown.
+	 */
+	private int elitesLeft = -1;
+	public synchronized int elitesLeft() { return elitesLeft; }
+
+	private static final Pattern TRANSFORMED = Pattern.compile("^Transformation! (\\d+) werewolves have transformed!$");
+	private static final Pattern WOLF_ELIMINATED = Pattern.compile("^(\\S+) [A-Z][A-Za-z'-]* is eliminated!$");
+	/** Name prefixes of transformed (elite) werewolves; the wolf-kin use a different set (Sly, Lean, ...). */
+	static final java.util.Set<String> ELITE_PREFIXES = java.util.Set.of(
+			"Accursed", "Blood-moon", "Bone-cracking", "Dread", "Fell", "Flesh-rending", "Frenzied", "Ghastly",
+			"Gore-jawed", "Grave-howling", "Hulking", "Iron-clawed", "Marrow-hungry", "Merciless", "Monstrous",
+			"Moon-cursed", "Murderous", "Night-stalking", "Nightmarish", "Rabid", "Red-eyed", "Shadow-born",
+			"Silver-scarred", "Skull-splitting", "Unholy");
+
+	/** In a den: from "Hark the dread howlin'!" until the den ends (lair plundered, overrun, retreat). */
+	private boolean inDen;
+	/** Frays finished in this den (each ends with "N o' M still standin'!"). */
+	private int fraysDone;
+	/** Werewolves left for the next wave as the chat last said; -1 until "turned back half". */
+	private int wolvesLeft = -1;
+	private int wolvesAtHalf = -1;
+	/** When the chat last changed wolvesLeft, and when stations opened (for the pace). */
+	private long wolvesChangedAt;
+	/** Times of the last "turned back the last werewolf" and "30 seconds" messages (for the sounds). */
+	private long lastWolfClearedAt, thirtySecondsAt;
+
+	public synchronized boolean inDen() { return inDen; }
+	/** The fray being fought or next: frays finished + 1. */
+	public synchronized int frayNumber() { return fraysDone + 1; }
+	public synchronized int wolvesAtHalf() { return wolvesAtHalf; }
+	public synchronized int wolvesLeft() { return wolvesLeft; }
+	public synchronized long wolvesChangedAt() { return wolvesChangedAt; }
+	public synchronized long lastWolfClearedAt() { return lastWolfClearedAt; }
+	public synchronized long thirtySecondsAt() { return thirtySecondsAt; }
+
+	private static final Pattern HALF = Pattern.compile("charting has turned back half the werewolves! (\\d+) still to come");
+	private static final Pattern ONLY = Pattern.compile("charting has turned back more o' the werewolves! Only (\\d+) left");
+
+	synchronized void message(String msg, long now) {
+		if (msg.equals(ARRIVAL)) {
+			resetRun();
+			inDen = true;
+			return;
+		}
 		Matcher sv = SURVIVORS.matcher(msg);
+		if (!inDen && !sv.matches()) return;
+		Matcher hw = HALF.matcher(msg);
+		if (hw.find()) {
+			wolvesAtHalf = wolvesLeft = Integer.parseInt(hw.group(1));
+			wolvesChangedAt = now;
+			return;
+		}
+		Matcher on = ONLY.matcher(msg);
+		if (on.find()) { wolvesLeft = Integer.parseInt(on.group(1)); wolvesChangedAt = now; return; }
+		if (msg.contains("charting has turned back the last werewolf!")) {
+			wolvesLeft = 0; wolvesChangedAt = now; lastWolfClearedAt = now; return;
+		}
+		if (msg.startsWith("The lair be plundered!") || msg.equals("The pack has overrun the crew! Ye flee back to the ship.")
+				|| msg.startsWith("The crew falls back") || msg.startsWith("Ye retreat")) inDen = false;
+		Matcher el = ELIMINATED.matcher(msg);
+		if (el.matches()) { frayDeaths++; return; }
+		Matcher tr = TRANSFORMED.matcher(msg);
+		if (tr.matches()) { elitesLeft = Integer.parseInt(tr.group(1)); return; }
+		Matcher we = WOLF_ELIMINATED.matcher(msg);
+		if (we.matches()) {
+			if (elitesLeft > 0 && ELITE_PREFIXES.contains(we.group(1))) elitesLeft--;
+			return;
+		}
 		if (sv.matches()) {
-			Period last = periods.isEmpty() ? null : periods.get(periods.size() - 1);
-			if (last != null && !last.closed()) return;   // same period announced twice
+			inDen = true;
+			Period last = current();
+			if (last != null && (!last.closed() || now < last.end)) return;
+			// Pirates who leave still count for the next pack.
+			crew = Math.max(crew, Integer.parseInt(sv.group(2)));
+			frayDeaths = 0;
+			elitesLeft = -1;
+			fraysDone++;
+			wolvesAtHalf = wolvesLeft = -1;
+			wolvesChangedAt = 0;
 			Period p = new Period();
 			p.start = now;
 			p.survivors = Integer.parseInt(sv.group(1));
@@ -119,7 +212,10 @@ public final class StationClock {
 		if (periods.isEmpty()) return;
 		Period last = periods.get(periods.size() - 1);
 		if (msg.equals("The wolf-kin gather! 30 seconds!") || msg.equals("The lair stirs! 30 seconds left to forage!")) {
-			if (!last.closed()) last.end = now + 30_000;
+			if (!last.closed()) {
+				last.end = now + 30_000;
+				thirtySecondsAt = now;
+			}
 		} else if (msg.equals("Wolf-kin approach!") || msg.equals("Beware! More wolf-kin approach!")
 				|| msg.equals("We've reached their lair! Almost done!")
 				|| msg.startsWith("The lair be plundered!") || msg.equals("The pack has overrun the crew! Ye flee back to the ship.")
@@ -129,7 +225,7 @@ public final class StationClock {
 	}
 
 	/** Latest station period that has ended by now (allowing for a report arriving a little early). */
-	public Period lastEnded(long now) {
+	public synchronized Period lastEnded(long now) {
 		for (int i = periods.size() - 1; i >= 0; i--) {
 			Period p = periods.get(i);
 			if (p.closed() && p.end <= now + 5000) return p;
@@ -137,7 +233,28 @@ public final class StationClock {
 		return null;
 	}
 
-	public Period current() {
+	/**
+	 * When the given period's stations close: the "30 seconds" warning's time if seen, otherwise
+	 * the expected end from the survivors and crew counts.
+	 */
+	public synchronized long expectedEnd(Period p) {
+		if (p == null) return 0;
+		if (p.closed()) return p.end;
+		return p.start + duration(p);
+	}
+
+	/**
+	 * How long stations last, from Thalassa's duty_seconds: 2:00 for the first wave, otherwise
+	 * 2:00 + 3:00 x survivors / crew ("N o' M still standin'!"). So 5:00 with everyone standing,
+	 * and e.g. 3:07.5 with 3 of 8.
+	 */
+	public synchronized long duration(Period p) {
+		boolean first = !periods.isEmpty() && periods.get(0) == p;
+		if (first || p.crew <= 0) return 120_000L;
+		return 120_000L + Math.round(180_000.0 * Math.min(p.survivors, p.crew) / p.crew);
+	}
+
+	public synchronized Period current() {
 		return periods.isEmpty() ? null : periods.get(periods.size() - 1);
 	}
 }

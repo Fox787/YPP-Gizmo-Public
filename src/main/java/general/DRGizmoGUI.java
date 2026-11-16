@@ -166,7 +166,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	public static final String BOOTYEXPORT = "bootyexport", CHATLOGFOLDER = "chatlogfolder", BOOTYTEXTFOLDER = "bootytextfolder";
 
-	private JLabel labelWolvesLeft;
+	private WoodhallowTools woodhallowTools;
 	private ActivityTracker activityTracker;
 	private JLabel labelSymbols;
 	private RunLog runLog;
@@ -572,8 +572,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			printStatus("Export failed: " + ex.getMessage(), false);
 		}
 	}
-
-	private WolfWatch wolfWatch;
 
 	/** Label, text field and browse button on one line. */
 	private JComponent folderRow(String label, JTextField field, JButton browse) {
@@ -1813,13 +1811,14 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			checkBoxBrokenRecordAlert = new JCheckBox("Broken Record Alert");
 			panelQuickOptions.add(checkBoxBrokenRecordAlert);
 
-			// Read-only: shown here in Gizmo's window, never added to the client.
-			labelWolvesLeft = new JLabel(" ");
-			panelQuickOptions.add(labelWolvesLeft);
-
-			wolfWatch = new WolfWatch(window, r -> labelWolvesLeft.setText(r == null ? " " : r.text()));
 			stationClock = new StationClock();
-			activityTracker = new ActivityTracker(window, globalPrefs, stationClock);
+			activityTracker = new ActivityTracker(window, stationClock);
+			woodhallowTools = new WoodhallowTools(window, tabbedPane, globalPrefs, stationClock, activityTracker, panelOptions_2);
+			woodhallowTools.start();
+			addWindowListener(new java.awt.event.WindowAdapter() {
+				@Override public void windowClosing(java.awt.event.WindowEvent ev) { woodhallowTools.stop(); }
+				@Override public void windowClosed(java.awt.event.WindowEvent ev) { woodhallowTools.stop(); }
+			});
 			// Follow the logged-in pirate's chat log for station start/end messages.
 			new javax.swing.Timer(1000, ev -> {
 				long now = System.currentTimeMillis();
@@ -1851,13 +1850,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			new javax.swing.Timer(2000, ev -> autoScanTick()).start();
 
 			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
-			labelSymbols = new JLabel("Symbols: not found yet");
+			labelSymbols = new JLabel("Symbols: waiting");
 			panelQuickOptions.add(labelSymbols);
 			new javax.swing.Timer(2000, ev -> {
 				java.util.List<String> seen = activityTracker.snapshot();
 				int withSymbol = 0;
 				for (String s : seen) if (!s.contains("[0]")) withSymbol++;
-				labelSymbols.setText(seen.isEmpty() ? "Symbols: not found yet"
+				labelSymbols.setText(seen.isEmpty() ? (activityTracker.lastSymbolAt() == 0 ? "Symbols: waiting" : "Symbols: detected")
 						: "Symbols: " + seen.size() + " pirates, " + withSymbol + " with a symbol");
 				labelSymbols.setToolTipText(seen.isEmpty() ? null : "<html>" + String.join("<br>", seen) + "</html>");
 			}).start();
@@ -2011,9 +2010,12 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					try {
 						perMinute = activityTracker.report(data);
 						ActivityTracker.Period fresh = activityTracker.takeNewPeriod();
-						if (fresh != null) printStatus("Saved to " + runLog.record(fresh), true);
 						timed = activityTracker.lastPeriod();
 						rates = ActivityTracker.rates(timed);
+						woodhallowTools.scanned(data, timed);
+						if (fresh != null) {
+							printStatus("Saved to " + runLog.record(fresh), true);
+						}
 					} catch (IOException | RuntimeException ex) {
 						printStatus("Score per minute failed: " + ex, false);
 					}
@@ -2027,6 +2029,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected(),
 						inline ? rates : null);
 				printStatus(dataString, false);
+				if (checkBoxDebug.isSelected() && timed != null) printStatus(ActivityTracker.describeTimes(timed), true);
 				// Without the Score/min option, the per-minute lists still print separately.
 				if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(perMinute, false);
 				//check for broken records, against the records for the activity this report is from
@@ -2472,7 +2475,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		if (text.isEmpty() && !chat.isEmpty()) text = Paths.get(chat, "booty_division").toString();
 		textFieldBootyTextFolder.setText(text);
 
-		wolfWatch.start();
 		activityTracker.start();
 
 		checkBoxShowExtraButtons.setSelected(globalPrefs.getBoolean(SHOWEXTRABUTTONS, true));
