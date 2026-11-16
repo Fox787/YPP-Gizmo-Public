@@ -243,7 +243,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	/**
 	 * Auto scan looks for a new duty report while either
-	 *  - a Den station period ended in the last 2 minutes (chat log), or
+	 *  - a Den station period ended in the last five seconds (chat log), or
 	 *  - a station symbol was over someone's head in a Den, Cursed Isles or Vampire Lair scene in the
 	 *    last few minutes (foraging, carpentry, treasure haul...),
 	 * and auto scan is ticked. A report that is new is scanned once, like the Scan button.
@@ -251,7 +251,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private void autoScanTick() {
 		long now = System.currentTimeMillis();
 		long d = checkBoxAutoScan.isSelected() ? activityTracker.lastStationEnd(now) : 0;
-		boolean byClock = d != 0 && d != autoScannedDeadline && now - d <= 120_000;
+		boolean byClock = d != 0 && d != autoScannedDeadline && now - d <= 5_000;
 		long seen = activityTracker.lastSymbolAt();
 		boolean bySymbol = seen != 0 && now - seen <= AUTOSCAN_SYMBOL_WINDOW_MS && autoScanWanted(activityTracker.lastSymbolKind());
 		boolean wasArmed = autoScanArmed;
