@@ -29,6 +29,8 @@ public final class GameLog {
 	private static final Pattern VESSEL_CHANGE = Pattern.compile("Vessel change \\[ovid=(-?\\d+), nvid=(-?\\d+)\\]");
 	private static final Pattern VESSEL_NAME = Pattern.compile("vessel=([^(\\[\\]]+)\\((\\d+) ");
 
+	private static final Pattern LOG_NAME = Pattern.compile("yohoho_(\\d+)\\.log");
+
 	private GameLog() { }
 
 	/** The folder the client runs from: Gizmo is loaded with -javaagent:Gizmo.jar, so it's the working directory. */
@@ -51,8 +53,34 @@ public final class GameLog {
 		return best;
 	}
 
+	static Path clientLog() {
+		long start = 0;
+		try {
+			start = ProcessHandle.current().info().startInstant().map(java.time.Instant::toEpochMilli).orElse(0L);
+		} catch (SecurityException | UnsupportedOperationException ignored) { }
+		return ownLog(clientFolder(), start);
+	}
+
 	public static Info read() {
-		return read(newestLog(clientFolder()));
+		return read(clientLog());
+	}
+
+	static Path ownLog(Path folder, long processStart) {
+		Path best = null;
+		long bestGap = 120_001;
+		if (processStart > 0) {
+			try (DirectoryStream<Path> ds = Files.newDirectoryStream(folder, "yohoho_*.log")) {
+				for (Path path : ds) {
+					Matcher name = LOG_NAME.matcher(path.getFileName().toString());
+					if (!name.matches() || !Files.isRegularFile(path)) continue;
+					try {
+						long gap = Math.abs(Long.parseLong(name.group(1)) - processStart);
+						if (gap < bestGap) { best = path; bestGap = gap; }
+					} catch (NumberFormatException ignored) { }
+				}
+			} catch (IOException ignored) { }
+		}
+		return best != null ? best : newestLog(folder);
 	}
 
 	/** Reads the whole log; the latest value of each field wins. Returns null if the file can't be read. */
