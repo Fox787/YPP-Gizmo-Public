@@ -4,7 +4,6 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
@@ -17,10 +16,10 @@ final class WoodhallowTools {
 	private final StationClock stationClock;
 	private final ActivityTracker activityTracker;
 	private final RumbleClock rumbleClock = new RumbleClock();
-	private final WolfCount wolfCount = new WolfCount();
+	private WolfCount wolfCount = new WolfCount();
 	private final JCheckBox chatOnly, checkBoxClearSound, checkBoxWarningSound;
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
-	private JPanel panelDnav, panelRumble, ahoyButtons;
+	private JPanel panelDnav, panelRumble, ahoyRow, ahoyButtons;
 	private JLabel labelWolvesLeft, labelRumble, labelRumbleShorthand;
 	private JTextArea labelStrategy;
 	private Color labelWolvesLeftColor;
@@ -34,7 +33,7 @@ final class WoodhallowTools {
 	private String rumbleGroups;
 	private Timer timer;
 	private java.util.concurrent.ScheduledExecutorService files;
-	private int startingWolves = -1;
+	private int manualStartingWolves = -1;
 	private List<Integer> ahoyChoices = List.of();
 	private DRGroupData lastReport;
 	private ActivityTracker.Period reportedPeriod;
@@ -57,7 +56,7 @@ final class WoodhallowTools {
 		tracker.setSceneTrackingEnabled(sceneTiming.isSelected());
 		chatOnly = option(section, prefs, "Wolf count from chat only", "chatonlywolfcount", false);
 		chatOnly.setToolTipText("Use the chat log for the remaining wolf count. Untick to use the selected, visible Ahoy tab.");
-		chatOnly.addItemListener(ev -> wolfCount.reset());
+		chatOnly.addItemListener(ev -> wolfCount.clearRemaining());
 		checkBoxRumbleBoard = option(section, prefs, "Rumble board", "rumbleboard", true);
 		checkBoxRumbleShorthand = option(section, prefs, "Rumble shorthand", "rumbleshorthand", true);
 		checkBoxClearSound = option(section, prefs, "Last wolf sound", "clearsound", true);
@@ -165,7 +164,7 @@ final class WoodhallowTools {
 
 		labelWolvesLeftColor = labelWolvesLeft.getForeground();
 		// The starting count can be confirmed independently of the number remaining.
-		JPanel ahoyRow = new JPanel();
+		ahoyRow = new JPanel();
 		ahoyRow.setLayout(new BoxLayout(ahoyRow, BoxLayout.X_AXIS));
 		ahoyRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel ahoyLabel = new JLabel("Starting wolves: ");
@@ -186,23 +185,29 @@ final class WoodhallowTools {
 		if (!inStations) return;
 		if (dnavPeriodStart != period.start) {
 			dnavPeriodStart = period.start;
-			startingWolves = -1;
+			manualStartingWolves = -1;
 			ahoyChoices = List.of();
-			wolfCount.reset();
+			wolfCount = new WolfCount();
 		}
-		int half = stationClock.wolvesAtHalf();
-		Map<Integer, Double> odds = DnavForecast.werewolfOdds(Math.max(1, stationClock.crew()), stationClock.frayNumber());
-		List<Integer> choices = half < 0 ? new ArrayList<>(new TreeSet<>(odds.keySet())) : List.of(2 * half, 2 * half + 1);
-		updateStartingChoices(choices);
+		StationClock.WolfProgress chat = stationClock.wolfProgress(period);
+		if (chat == null) return;
+		int half = chat.atHalf();
+		Map<Integer, Double> odds = half < 0
+				? DnavForecast.werewolfOdds(Math.max(1, stationClock.crew()), stationClock.frayNumber()) : Map.of();
+		List<Integer> choices = half < 0 ? odds.keySet().stream().sorted().toList() : List.of(2 * half, 2 * half + 1);
+		WolfCount.Reading reading = wolfCount.read(chatOnly.isSelected(), () -> AhoyWolfCount.read(game),
+				chat, period.start, now, choices);
+
+		ahoyRow.setVisible(reading.starting() < 0);
+		if (ahoyRow.isVisible()) updateStartingChoices(choices);
+		int startingWolves = reading.starting() >= 0 ? reading.starting() : manualStartingWolves;
 		String strategy = startingWolves >= 0 ? nz(SoloNavStrategy.forWerewolves(startingWolves))
 				: half >= 0 ? twoStrategies(2 * half, 2 * half + 1) : strategiesWithOdds(odds);
 		if (!("Solo: " + strategy).equals(labelStrategy.getText())) {
 			labelStrategy.setText("Solo: " + strategy);
 			panelDnav.revalidate();
 		}
-		int left = wolfCount.read(chatOnly.isSelected(), () -> AhoyWolfCount.read(game),
-				stationClock.wolvesLeft(), stationClock.wolvesChangedAt(), now);
-		showPace(left, half, period.start, ends);
+		showPace(reading, startingWolves, half, period.start, ends);
 	}
 
 	private void updateStartingChoices(List<Integer> choices) {
@@ -211,10 +216,10 @@ final class WoodhallowTools {
 		ahoyButtons.removeAll();
 		ButtonGroup group = new ButtonGroup();
 		for (int count : choices) {
-			JToggleButton button = new JToggleButton(String.valueOf(count), count == startingWolves);
+			JToggleButton button = new JToggleButton(String.valueOf(count), count == manualStartingWolves);
 			button.setMargin(new Insets(1, 8, 1, 8));
 			button.setToolTipText("Confirm the starting count for the solo strategy and pace");
-			button.addActionListener(ev -> startingWolves = count);
+			button.addActionListener(ev -> manualStartingWolves = count);
 			group.add(button);
 			ahoyButtons.add(button);
 			ahoyButtons.add(Box.createHorizontalStrut(4));
@@ -223,7 +228,8 @@ final class WoodhallowTools {
 		ahoyButtons.repaint();
 	}
 
-	private void showPace(int left, int half, long start, long ends) {
+	private void showPace(WolfCount.Reading reading, int startingWolves, int half, long start, long ends) {
+		int left = reading.remaining();
 		String text;
 		boolean late = false;
 		if (left < 0) {
@@ -233,9 +239,9 @@ final class WoodhallowTools {
 		} else {
 			text = "Wolves " + left;
 			int initial = startingWolves >= 0 ? startingWolves : 2 * half;
-			long since = wolfCount.changedAt() - start;
+			long since = reading.changedAt() - start;
 			if (initial > left && since > 0) {
-				long clearAt = wolfCount.changedAt() + Math.round(left * (double) since / (initial - left));
+				long clearAt = reading.changedAt() + Math.round(left * (double) since / (initial - left));
 				long margin = ends - clearAt;
 				long seconds = Math.abs(margin) / 1000;
 				late = margin < 0;

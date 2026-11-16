@@ -151,9 +151,11 @@ public final class StationClock {
 	public synchronized boolean inDen() { return inDen; }
 	/** The fray being fought or next: frays finished + 1. */
 	public synchronized int frayNumber() { return fraysDone + 1; }
-	public synchronized int wolvesAtHalf() { return wolvesAtHalf; }
-	public synchronized int wolvesLeft() { return wolvesLeft; }
-	public synchronized long wolvesChangedAt() { return wolvesChangedAt; }
+	record WolfProgress(int remaining, int atHalf, long changedAt) { }
+
+	synchronized WolfProgress wolfProgress(Period period) {
+		return current() == period ? new WolfProgress(wolvesLeft, wolvesAtHalf, wolvesChangedAt) : null;
+	}
 	public synchronized long lastWolfClearedAt() { return lastWolfClearedAt; }
 	public synchronized long thirtySecondsAt() { return thirtySecondsAt; }
 

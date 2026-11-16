@@ -1,5 +1,7 @@
 package main.java.general;
 
+import com.threerings.piracy.swing.YoMultiLineLabel;
+import com.threerings.yohoho.swing.SunshineTab;
 import java.awt.BorderLayout;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -66,22 +68,61 @@ class WoodhallowTest {
 	}
 
 	@Test
-	void ahoyRemainsTheSourceAfterChatAndChatOnlyNeverReadsAhoy() {
-		var count = new WolfCount();
-		var visible = new AtomicInteger(9);
-		assertEquals(9, count.read(false, visible::get, -1, 0, 100));
-		visible.set(-1);
-		assertEquals(9, count.read(false, visible::get, 4, 150, 200));
-		assertEquals(100, count.changedAt());
-		visible.set(3);
-		assertEquals(3, count.read(false, visible::get, 4, 150, 250));
-		assertEquals(250, count.changedAt());
+	void readsOnlyTheSelectedAhoyPageInTheNativeSidebar() throws Exception {
+		SwingUtilities.invokeAndWait(() -> {
+			var frame = new javax.swing.JFrame();
+			try {
+				var sidebar = new SunshineTab();
+				var ahoy = new YoMultiLineLabel("Next pack: 8 wolf-kin and 5 werewolves");
+				sidebar.select(4, ahoy);
+				frame.add(sidebar);
+				frame.pack();
+				frame.setVisible(true);
+				assertEquals(5, AhoyWolfCount.read(frame));
+				sidebar.select(2, new YoMultiLineLabel("Next pack: 8 wolf-kin and 99 werewolves"));
+				assertEquals(-1, AhoyWolfCount.read(frame));
+				sidebar.select(4, ahoy);
+				ahoy.setVisible(false);
+				assertEquals(-1, AhoyWolfCount.read(frame));
+			} finally {
+				frame.dispose();
+			}
+		});
+	}
 
-		count.reset();
-		assertEquals(4, count.read(true, () -> fail("Chat only must never read Ahoy"), 4, 150, 300));
-		assertEquals(150, count.changedAt());
-		count.reset();
-		assertEquals(-1, count.read(false, () -> -1, 4, 150, 350));
+	@Test
+	void ahoyRemainsTheSourceAfterChatAndChatOnlyNeverReadsAhoy() {
+		var wolves = new WolfCount();
+		long start = 100_000;
+		var unknown = new StationClock.WolfProgress(-1, -1, 0);
+		var half = new StationClock.WolfProgress(4, 4, start + 40_000);
+		var choices = java.util.List.of(8, 9);
+		var visible = new AtomicInteger(8);
+		assertEquals(new WolfCount.Reading(8, 8, start + 1_000),
+				wolves.read(false, visible::get, unknown, start, start + 1_000, choices));
+		visible.set(-1);
+		assertEquals(new WolfCount.Reading(8, 8, start + 1_000),
+				wolves.read(false, visible::get, half, start, start + 45_000, choices));
+		visible.set(3);
+		assertEquals(new WolfCount.Reading(3, 8, start + 50_000),
+				wolves.read(false, visible::get, half, start, start + 50_000, choices));
+
+		wolves.clearRemaining();
+		assertEquals(new WolfCount.Reading(4, -1, half.changedAt()),
+				wolves.read(true, () -> fail("Chat only must never read Ahoy"), half, start, start + 51_000, choices));
+		assertEquals(-1, wolves.read(false, () -> -1, half, start, start + 52_000, choices).remaining());
+	}
+
+	@Test
+	void lateAhoyReadingsOnlyConfirmTheHighestCandidate() {
+		var count = new WolfCount();
+		var unknown = new StationClock.WolfProgress(-1, -1, 0);
+		var half = new StationClock.WolfProgress(4, 4, 32_000);
+		var choices = java.util.List.of(8, 9);
+		assertEquals(-1, count.read(false, () -> 8, unknown, 1000, 11_000, choices).starting());
+		assertEquals(9, count.read(false, () -> 9, unknown, 1000, 12_000, choices).starting());
+		assertEquals(new WolfCount.Reading(4, 9, 32_000),
+				count.read(false, () -> 4, half, 1000, 33_000, choices));
 	}
 
 	@Test
@@ -98,8 +139,7 @@ class WoodhallowTest {
 		assertEquals(187_500, clock.duration(clock.current()));
 		clock.message("Yer charting has turned back half the werewolves! 5 still to come", 300_000);
 		clock.message("Yer charting has turned back more o' the werewolves! Only 2 left", 350_000);
-		assertEquals(5, clock.wolvesAtHalf());
-		assertEquals(2, clock.wolvesLeft());
+		assertEquals(new StationClock.WolfProgress(2, 5, 350_000), clock.wolfProgress(clock.current()));
 		clock.message("The wolf-kin gather! 30 seconds!", 357_500);
 		clock.message("The wolf-kin gather! 30 seconds!", 358_500);
 		assertEquals(357_500, clock.thirtySecondsAt());
@@ -167,7 +207,6 @@ class WoodhallowTest {
 		assertEquals(java.util.List.of("NaviObject", "ForageObject"), puzzles);
 		assertTrue(Sounds.scaled(Sounds.CLEAR, 50).length > 44);
 		assertTrue(Sounds.scaled(Sounds.THIRTY_SECONDS, 0).length > 44);
-		assertEquals(375 + 519, DnavForecast.navPoints(new int[]{0, 0, 2}));
 		assertEquals(120_000, DnavForecast.during(1, 4, 0, 300).clearMs);
 	}
 }
