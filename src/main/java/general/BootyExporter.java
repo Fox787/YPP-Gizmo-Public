@@ -34,17 +34,19 @@ public final class BootyExporter {
 				.append(" (").append(b.game.pirate).append(", ").append(b.game.ocean)
 				.append(b.game.vesselName == null ? "" : ", " + b.game.vesselName).append(")\n");
 
-		Path log = ChatLog.findLog(chatFolder, b.pirate(), b.ocean());
-		if (log == null) {
+		List<Path> logs = ChatLog.findLogs(chatFolder, b.pirate(), b.ocean());
+		if (logs.isEmpty()) {
 			notes.append("chat log: none found for ").append(b.pirate()).append(" in ").append(chatFolder).append('\n');
 			return;
 		}
 		try {
-			b.chat = ChatLog.latestBooty(log);
-			notes.append("chat log: ").append(log.getFileName()).append(", ").append(b.chat.lines.size()).append(" booty lines")
+			b.chat = ChatLog.latestBooty(logs);
+			notes.append("chat log: ").append(b.chat.file.getFileName());
+			if (logs.size() > 1) notes.append(" and ").append(logs.size() - 1).append(" tab logs");
+			notes.append(", ").append(b.chat.lines.size()).append(" booty lines")
 					.append(b.chat.openedAt == null ? " (no chests opened yet)" : " up to " + b.chat.openedAt).append('\n');
 		} catch (IOException e) {
-			notes.append("chat log: couldn't read ").append(log).append(": ").append(e.getMessage()).append('\n');
+			notes.append("chat log: couldn't read ").append(logs).append(": ").append(e.getMessage()).append('\n');
 		}
 	}
 

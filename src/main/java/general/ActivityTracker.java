@@ -368,6 +368,55 @@ public final class ActivityTracker {
 		return out;
 	}
 
+	/** Packs scored Woodhallow rows into whole vessel-chat messages in duty report order. */
+	static List<String> chatMessages(Period period, boolean ignoreNpc) {
+		if (period == null) return List.of();
+		Map<String, List<String>> byStation = new LinkedHashMap<>();
+		boolean timed = false;
+		for (Row row : period.rows) {
+			if (ignoreNpc && row.pirate.contains(" ")) continue;
+			timed |= row.ms > 0;
+			String rate = row.ms > 0 ? String.format("%.2f", rate(row)) : "-";
+			byStation.computeIfAbsent(row.station, station -> new ArrayList<>())
+					.add(row.pirate + " " + row.score + " (" + rate + ")");
+		}
+		if (!timed) return List.of();
+
+		List<String> stations = new ArrayList<>(byStation.keySet());
+		stations.sort(Comparator.comparingInt(ActivityTracker::stationOrder));
+		List<String> blocks = new ArrayList<>();
+		for (String station : stations)
+			blocks.add(chatStation(station) + "\n" + String.join("\n", byStation.get(station)));
+		String combined = ReportClipboard.VESSEL_COMMAND + String.join("\n\n", blocks);
+		if (combined.length() <= ReportClipboard.CHAT_LIMIT) return List.of(combined);
+		combined = ReportClipboard.VESSEL_COMMAND + String.join("\n", blocks);
+		if (combined.length() <= ReportClipboard.CHAT_LIMIT) return List.of(combined);
+
+		List<String> messages = new ArrayList<>();
+		for (String station : stations) {
+			String header = ReportClipboard.VESSEL_COMMAND + chatStation(station);
+			StringBuilder message = new StringBuilder(header);
+			for (String row : byStation.get(station)) {
+				if (header.length() + 1 + row.length() > ReportClipboard.CHAT_LIMIT) return List.of();
+				if (message.length() + 1 + row.length() > ReportClipboard.CHAT_LIMIT) {
+					messages.add(message.toString());
+					message.setLength(header.length());
+				}
+				message.append('\n').append(row);
+			}
+			messages.add(message.toString());
+		}
+		return messages;
+	}
+
+	private static String chatStation(String station) {
+		return switch (station) {
+			case "Navigating" -> "Nav";
+			case "Foraging" -> "Forage";
+			default -> station;
+		};
+	}
+
 	/** station -> pirate -> score per minute, for rows with a known time; empty if period is null. */
 	public static Map<String, Map<String, Double>> rates(Period period) {
 		Map<String, Map<String, Double>> out = new HashMap<>();
