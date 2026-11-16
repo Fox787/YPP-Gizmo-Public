@@ -5,12 +5,13 @@ import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,77 +39,127 @@ public final class StationClock {
 
 	static final String ARRIVAL = "Hark the dread howlin'! 'Tis Woodhallow Isle, realm o' the wolf-folk!";
 	static final Pattern SURVIVORS = Pattern.compile("^(\\d+) o' (\\d+) still standin'! (To yer stations!|Plunder the lair!)$");
-	private static final Pattern DATE = Pattern.compile("^=+ (\\d{4})/(\\d{1,2})/(\\d{1,2}) =+$");
-	private static final Pattern LINE = Pattern.compile("^\\[(\\d{2}):(\\d{2}):(\\d{2})\\] (.*)$");
-
 	private final List<Period> periods = new ArrayList<>();
 	private String arrivalVoyage;
 	private long arrivalAt;
-	private Path file;
-	private long offset;
-	private LocalDate date;
-	private int lastClock = -1;
+	private final Map<Path, Tail> tails = new LinkedHashMap<>();
+	private final ArrayDeque<ChatLog.Line> ownChat = new ArrayDeque<>();
+	private Path mainLog;
+	private String pirate;
+	private ChatLog.Merge merge = new ChatLog.Merge();
+	private LocalDateTime latest;
 
-	/** Follows this chat log; reading it from the start rebuilds the current run's periods. */
-	public void follow(Path chatLog) {
-		if (chatLog == null || chatLog.equals(file)) return;
-		file = chatLog;
-		offset = 0;
-		date = null;
-		lastClock = -1;
-		periods.clear();
-		clearArrival();
-	}
-
-	public Path file() { return file; }
-
-	/** Reads whatever the client has appended since the last call. */
-	public void poll() {
-		if (file == null) return;
-		try {
-			long size = Files.size(file);
-			if (size < offset) {
-				offset = 0;
-				date = null;
-				lastClock = -1;
+	/** Tails the matched log family on the file thread and publishes small batches to the UI. */
+	void poll(List<Path> logs, String self) {
+		Path main = logs.isEmpty() ? null : logs.get(0);
+		Map<Path, Long> sizes = new LinkedHashMap<>();
+		boolean changed = !java.util.Objects.equals(main, mainLog) || !self.equals(pirate);
+		for (Path log : logs) {
+			try {
+				long size = Files.size(log);
+				sizes.put(log, size);
+				Tail existing = tails.get(log);
+				if (existing != null && size < existing.offset) changed = true;
+			} catch (IOException ignored) {
+				// Retry the missing or locked file on the next poll.
+			}
+		}
+		if (changed) {
+			mainLog = main;
+			pirate = self;
+			tails.clear();
+			merge = new ChatLog.Merge();
+			latest = null;
+			synchronized (this) {
 				periods.clear();
+				ownChat.clear();
 				clearArrival();
 			}
-			if (size == offset) return;
+		}
+
+		String ownPrefix = self + " says, \"";
+		LocalDateTime cutoff = latest == null ? null : latest.minusMinutes(1);
+		Map<Path, List<ChatLog.Line>> batches = new LinkedHashMap<>();
+		for (var log : sizes.entrySet()) {
+			try {
+				Tail tail = tails.computeIfAbsent(log.getKey(), file -> new Tail());
+				batches.put(log.getKey(), tail.read(log.getKey(), log.getValue(), ownPrefix, cutoff));
+			} catch (IOException ignored) { }
+		}
+		List<ChatLog.Line> lines = merge.accept(batches);
+		if (lines.isEmpty()) return;
+		LocalDateTime newest = lines.get(lines.size() - 1).time;
+		if (latest == null || newest.isAfter(latest)) latest = newest;
+
+		ZoneId zone = ZoneId.systemDefault();
+		for (int i = 0; i < lines.size(); i += 1000) {
+			synchronized (this) {
+				for (int j = i; j < Math.min(lines.size(), i + 1000); j++) {
+					ChatLog.Line line = lines.get(j);
+					if (line.text.startsWith(ownPrefix) && line.text.endsWith("\"")
+							&& line.text.length() > ownPrefix.length()) {
+						String sent = line.text.substring(ownPrefix.length(), line.text.length() - 1);
+						ownChat.add(new ChatLog.Line(line.time, sent, line.raw));
+						while (ownChat.size() > 20) ownChat.remove();
+					} else {
+						message(line.text, line.time.atZone(zone).toInstant().toEpochMilli());
+					}
+				}
+			}
+		}
+	}
+
+	synchronized List<ChatLog.Line> drainOwnChat() {
+		List<ChatLog.Line> lines = new ArrayList<>(ownChat);
+		ownChat.clear();
+		return lines;
+	}
+
+	private static final class Tail {
+		private long offset;
+		private final ChatLog.Parser parser = new ChatLog.Parser();
+		private ChatLog.Line pendingOwn;
+		private final StringBuilder ownText = new StringBuilder();
+
+		List<ChatLog.Line> read(Path file, long size, String ownPrefix, LocalDateTime cutoff) throws IOException {
+			if (size == offset) return List.of();
 			byte[] buf;
 			try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
 				raf.seek(offset);
-				buf = new byte[(int) Math.min(size - offset, 64L * 1024 * 1024)];
+				buf = new byte[(int) Math.min(size - offset, 8L * 1024 * 1024)];
 				raf.readFully(buf);
 			}
 			int end = buf.length;
 			while (end > 0 && buf[end - 1] != '\n') end--;   // leave a half-written line for next time
-			if (end == 0) return;
+			if (end == 0) return List.of();
+			List<ChatLog.Line> lines = new ArrayList<>();
+			for (String raw : new String(buf, 0, end - 1, StandardCharsets.UTF_8).split("\\r?\\n", -1)) {
+				String text = raw.trim();
+				ChatLog.Line line = parser.readLine(text);
+				if (line != null) {
+					pendingOwn = null;
+					if (cutoff != null && line.time.isBefore(cutoff)) continue;
+					if (line.text.startsWith(ownPrefix)
+							&& (line.text.length() == ownPrefix.length() || !line.text.endsWith("\""))) {
+						pendingOwn = line;
+						ownText.setLength(0);
+						ownText.append(line.text);
+					} else {
+						lines.add(line);
+					}
+				} else if (text.startsWith("====== ")) {
+					pendingOwn = null;
+				} else if (pendingOwn != null) {
+					ownText.append('\n').append(text);
+					if (text.endsWith("\"")) {
+						lines.add(new ChatLog.Line(pendingOwn.time, ownText.toString(), pendingOwn.raw));
+						pendingOwn = null;
+					}
+				}
+			}
 			offset += end;
-			for (String raw : new String(buf, 0, end, StandardCharsets.UTF_8).split("\r?\n")) feed(raw);
-		} catch (IOException | RuntimeException ignored) {
-			// Try again next poll.
+			return lines;
 		}
-	}
-
-	/** One raw chat log line. */
-	void feed(String raw) {
-		String line = raw.trim();
-		Matcher m = DATE.matcher(line);
-		if (m.matches()) {
-			date = LocalDate.of(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
-			lastClock = -1;
-			return;
-		}
-		m = LINE.matcher(line);
-		if (!m.matches() || date == null) return;
-		int h = Integer.parseInt(m.group(1)), mi = Integer.parseInt(m.group(2)), s = Integer.parseInt(m.group(3));
-		if (h > 23 || mi > 59 || s > 59) return;
-		int clock = h * 3600 + mi * 60 + s;
-		if (lastClock >= 0 && lastClock - clock > 43200) date = date.plusDays(1);   // past midnight
-		lastClock = clock;
-		long now = LocalDateTime.of(date, LocalTime.of(h, mi, s)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-		message(m.group(4), now);
 	}
 
 	void message(String msg, long now) {
@@ -143,7 +194,7 @@ public final class StationClock {
 		}
 	}
 
-	long lastArrival(String voyage) {
+	synchronized long lastArrival(String voyage) {
 		return voyage != null && voyage.equals(arrivalVoyage) ? arrivalAt : 0;
 	}
 
@@ -153,15 +204,24 @@ public final class StationClock {
 	}
 
 	/** Latest station period that has ended by now (allowing for a report arriving a little early). */
-	public Period lastEnded(long now) {
+	public synchronized Period lastEnded(long now) {
 		for (int i = periods.size() - 1; i >= 0; i--) {
 			Period p = periods.get(i);
-			if (p.closed() && p.end <= now + 5000) return p;
+			if (p.closed() && p.end <= now + 5000) return copyOf(p);
 		}
 		return null;
 	}
 
-	public Period current() {
-		return periods.isEmpty() ? null : periods.get(periods.size() - 1);
+	public synchronized Period current() {
+		return periods.isEmpty() ? null : copyOf(periods.get(periods.size() - 1));
+	}
+	private static Period copyOf(Period p) {
+		Period copy = new Period();
+		copy.start = p.start;
+		copy.end = p.end;
+		copy.survivors = p.survivors;
+		copy.crew = p.crew;
+		copy.lair = p.lair;
+		return copy;
 	}
 }

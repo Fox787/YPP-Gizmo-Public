@@ -368,6 +368,62 @@ public final class ActivityTracker {
 		return out;
 	}
 
+	/** Packs timed or untimed duty reports into whole vessel-chat messages. */
+	static List<String> chatMessages(DRGroupData report, Period period, boolean ignoreNpc) {
+		Map<String, List<String>> byStation = new LinkedHashMap<>();
+		if (period == null) {
+			for (var station : report.data.entrySet())
+				for (DRIndividualData row : station.getValue().values())
+					addChatRow(byStation, station.getKey(), row.getName(), row.getTokenScore(), "-", ignoreNpc);
+		} else {
+			for (Row row : period.rows) {
+				String rate = row.ms > 0 ? String.format("%.2f", rate(row)) : "-";
+				addChatRow(byStation, row.station, row.pirate, row.score, rate, ignoreNpc);
+			}
+		}
+		if (byStation.isEmpty()) return List.of();
+
+		List<String> stations = new ArrayList<>(byStation.keySet());
+		stations.sort(Comparator.comparingInt(ActivityTracker::stationOrder));
+		List<String> blocks = new ArrayList<>();
+		for (String station : stations)
+			blocks.add(chatStation(station) + "\n" + String.join("\n", byStation.get(station)));
+		String combined = ReportClipboard.VESSEL_COMMAND + String.join("\n\n", blocks);
+		if (combined.length() <= ReportClipboard.CHAT_LIMIT) return List.of(combined);
+		combined = ReportClipboard.VESSEL_COMMAND + String.join("\n", blocks);
+		if (combined.length() <= ReportClipboard.CHAT_LIMIT) return List.of(combined);
+
+		List<String> messages = new ArrayList<>();
+		for (String station : stations) {
+			String header = ReportClipboard.VESSEL_COMMAND + chatStation(station);
+			StringBuilder message = new StringBuilder(header);
+			for (String row : byStation.get(station)) {
+				if (header.length() + 1 + row.length() > ReportClipboard.CHAT_LIMIT) return List.of();
+				if (message.length() + 1 + row.length() > ReportClipboard.CHAT_LIMIT) {
+					messages.add(message.toString());
+					message.setLength(header.length());
+				}
+				message.append('\n').append(row);
+			}
+			messages.add(message.toString());
+		}
+		return messages;
+	}
+
+	private static void addChatRow(Map<String, List<String>> byStation, String station, String pirate,
+								   int score, String rate, boolean ignoreNpc) {
+		if (ignoreNpc && pirate.contains(" ")) return;
+		byStation.computeIfAbsent(station, unused -> new ArrayList<>()).add(pirate + " " + score + " (" + rate + ")");
+	}
+
+	private static String chatStation(String station) {
+		return switch (station) {
+			case "Navigating" -> "Nav";
+			case "Foraging" -> "Forage";
+			default -> station;
+		};
+	}
+
 	/** station -> pirate -> score per minute, for rows with a known time; empty if period is null. */
 	public static Map<String, Map<String, Double>> rates(Period period) {
 		Map<String, Map<String, Double>> out = new HashMap<>();
