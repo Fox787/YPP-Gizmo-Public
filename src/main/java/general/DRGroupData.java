@@ -20,10 +20,19 @@ public class DRGroupData implements Serializable {
      * werewolf counters; RecordChecker.activityOf falls back to the stations when it's null.
      */
     private String activity;
+    private long lairArrival, lairRoundEnd;
 
     public DRGroupData() {
         data = new LinkedHashMap<String, LinkedHashMap<String, DRIndividualData>>();
     }
+
+    void setLairRound(long arrival, long roundEnd) {
+        lairArrival = arrival;
+        lairRoundEnd = roundEnd;
+    }
+
+    long lairArrival() { return lairArrival; }
+    long lairRoundEnd() { return lairRoundEnd; }
 
     public String getActivity() {
         return activity;
@@ -292,6 +301,7 @@ public class DRGroupData implements Serializable {
     public DRGroupData copy() {
         DRGroupData result = new DRGroupData();
         result.activity = activity;
+        result.setLairRound(lairArrival, lairRoundEnd);
         for (String station : data.keySet()) {
             for (String pirate : data.get(station).keySet()) {
                 result.put(new DRIndividualData(data.get(station).get(pirate)));

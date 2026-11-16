@@ -23,6 +23,9 @@ import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.TreeMap;
 import java.util.Map;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
@@ -98,7 +101,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				TREEDATA
 			};
 
-
 	private static JTextArea textAreaOutput, textAreaTests;
 	private JButton buttonOutputClear;
 	public JButton buttonDRTreeRemove;
@@ -172,6 +174,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	private JLabel labelWolvesLeft;
 	private ActivityTracker activityTracker;
+	private VoyageRecords voyageRecords;
+	private JButton buttonGetRecords;
+	private JLabel labelRecordStatus;
+	private final Map<String, JPanel> recordPanels = new LinkedHashMap<>();
+	private String loggedInOcean;
 	private JLabel labelSymbols;
 	private RunLog runLog;
 	private StationClock stationClock;
@@ -401,11 +408,85 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		printStatus(sb.toString().trim(), false);
 	}
 
+	private String recordsOcean() {
+		if (loggedInOcean != null && !loggedInOcean.isBlank()) return loggedInOcean;
+		String selected = (String) comboBoxScanOcean.getSelectedItem();
+		return "No Ocean".equals(selected) ? null : selected;
+	}
+
+	private void checkDrRecords(DRGroupData data) {
+		String voyage = RecordChecker.voyageOf(data);
+		String ocean = recordsOcean();
+		if (voyage == null || ocean == null || voyageRecords.size() == 0) return;
+		String time = java.time.LocalDateTime.now().withNano(0).toString();
+		if (LairRecordChecks.VOYAGE.equals(voyage)) {
+			printRecordLines(LairRecordChecks.fray(voyageRecords, data, ocean, time));
+			return;
+		}
+		if (!data.data.containsKey(RecordChecker.FORAGE)) return;
+		int[] loot = new int[3];   // tier 3, 2, 1
+		List<String> lines = new ArrayList<>();
+		Map<String, int[]> pirateLoot = new LinkedHashMap<>();
+		for (DRIndividualData d : data.data.get(RecordChecker.FORAGE).values()) {
+			int[] t = d.getTokens();
+			if (t == null || t.length != 3) continue;
+			loot[0] += t[2]; loot[1] += t[1]; loot[2] += t[0];
+			// One pirate's forage in this DR.
+			int[] own = {t[2], t[1], t[0]};
+			pirateLoot.put(d.getName(), own);
+			List<String> me = List.of(d.getName());
+			lines.add(voyageRecords.compare(voyage, ocean, 0, VoyageRecords.DR_CHESTS, own[0], time, me, own));
+			lines.add(voyageRecords.compare(voyage, ocean, 0, VoyageRecords.DR_SCORE, VoyageRecords.lootScore(voyage, own), time, me, own));
+		}
+		List<String> pirates = data.data.values().stream().flatMap(m -> m.keySet().stream()).distinct().sorted().toList();
+		int crew = pirates.size();
+		lines.add(voyageRecords.compare(voyage, ocean, crew, VoyageRecords.DR_CHESTS, loot[0], time, pirates, loot, pirateLoot));
+		lines.add(voyageRecords.compare(voyage, ocean, crew, VoyageRecords.DR_SCORE,
+				VoyageRecords.lootScore(voyage, loot), time, pirates, loot, pirateLoot));
+		printRecordLines(lines);
+	}
+
+	private void printRecordLines(List<String> lines) {
+		for (String line : lines) if (!line.isEmpty()) printStatus(line, false);
+	}
+
+	/** A small window listing every record Gizmo has from Puzzle Practice, one voyage at a time. */
+	private void showRecordsWindow() {
+		String[][] voyages = {{"Woodhallow", "woodhallow"}, {"Cursed Isles", "cursedIsles"}, {"Vampire Lairs", "vampireLairs"}};
+		JDialog d = new JDialog(this, "Voyage records", false);
+		JComboBox<String> pick = new JComboBox<>(new String[]{voyages[0][0], voyages[1][0], voyages[2][0]});
+		String[] cols = {"Record", "Crew", "Value", "Date", "Pirates"};
+		javax.swing.table.DefaultTableModel model = new javax.swing.table.DefaultTableModel(cols, 0) {
+			@Override public boolean isCellEditable(int r, int c) { return false; }
+		};
+		Runnable fill = () -> {
+			model.setRowCount(0);
+			for (VoyageRecords.Record r : voyageRecords.forVoyage(voyages[pick.getSelectedIndex()][1]))
+				model.addRow(new Object[]{r.category != null ? r.category : VoyageRecords.describe(r.voyage, r.kind),
+						r.crewSize > 0 ? String.valueOf(r.crewSize) : "one pirate", r.valueText != null ? r.valueText : String.valueOf(r.value), r.date, String.join(", ", r.pirates)});
+		};
+		pick.addActionListener(ev -> fill.run());
+		JTable table = new JTable(model);
+		table.setAutoCreateRowSorter(true);
+		table.getColumnModel().getColumn(0).setPreferredWidth(220);
+		table.getColumnModel().getColumn(4).setPreferredWidth(260);
+		JPanel top = new JPanel(new BorderLayout());
+		top.add(pick, BorderLayout.WEST);
+		d.getContentPane().add(top, BorderLayout.NORTH);
+		d.getContentPane().add(new JScrollPane(table), BorderLayout.CENTER);
+		fill.run();
+		d.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+		d.setSize(640, 420);
+		d.setLocationRelativeTo(this);
+		d.setVisible(true);
+	}
+
 	/** Scan: checks one duty report against the records for the activity it came from. */
 	private void checkScanRecords(DRGroupData data) {
+		checkDrRecords(data);
 		String activity = RecordChecker.activityOf(data);
 		if (RecordChecker.CI.equals(activity)) {
-			announceRecords("CI",
+			announceRecords("manual CI",
 				data.getBrokenRecords(intOf(formattedTextFieldForageIndividual, 0),
 					intOf(formattedTextFieldForage1, 0), intOf(formattedTextFieldForage2, 0),
 					intOf(formattedTextFieldForage3, 0), intOf(formattedTextFieldForage4, 0),
@@ -417,10 +498,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					doubleOf(formattedTextFieldSingleDR5, 0), doubleOf(formattedTextFieldSingleDR6, 0),
 					doubleOf(formattedTextFieldSingleDR7, 0)));
 		} else if (RecordChecker.LAIR.equals(activity)) {
-			announceRecords("Lair", RecordChecker.lairFray(data, lairRecords()));
-		} else if (RecordChecker.DEN.equals(activity)) {
-			printStatus("Broken Record Alert: Wolves records aren't checked yet", true);
-		} else {
+			announceRecords("manual Lair", RecordChecker.lairFray(data, lairRecords()));
+		} else if (activity == null) {
 			printStatus("Broken Record Alert: couldn't tell if this report is CI, Lair or Den", true);
 		}
 	}
@@ -429,14 +508,14 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private void checkEntryRecords(DRPersistantData all) {
 		DRPersistantData ci = RecordChecker.only(all, RecordChecker.CI);
 		DRPersistantData lair = RecordChecker.only(all, RecordChecker.LAIR);
-		DRPersistantData den = RecordChecker.only(all, RecordChecker.DEN);
-		int kinds = (ci.isEmpty() ? 0 : 1) + (lair.isEmpty() ? 0 : 1) + (den.isEmpty() ? 0 : 1);
-		if (kinds > 1)
-			printStatus("Broken Record Alert: the DR Tree mixes CI, Lair and Den reports; each is checked on its own", false);
+		boolean onlyCiForage = !ci.isEmpty() && all.groups().stream().allMatch(report ->
+				RecordChecker.CI.equals(RecordChecker.activityOf(report)) && report.data.containsKey(RecordChecker.FORAGE));
+		if (!ci.isEmpty() && !onlyCiForage)
+			printStatus("CI entry checks need a tree containing only Cursed Isles forage reports.", false);
 
-		if (!ci.isEmpty()) {
+		if (onlyCiForage) {
 			// getBrokenRecords works on copies, so the scores printed above aren't changed.
-						announceRecords("CI",
+			announceRecords("manual CI",
 				ci.getBrokenRecords(intOf(formattedTextFieldEntryIndividual, 0),
 					intOf(formattedTextFieldEntry1, 0), intOf(formattedTextFieldEntry2, 0),
 					intOf(formattedTextFieldEntry3, 0), intOf(formattedTextFieldEntry4, 0),
@@ -448,8 +527,29 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					doubleOf(formattedTextFieldFullEntry5, 0), doubleOf(formattedTextFieldFullEntry6, 0),
 					doubleOf(formattedTextFieldFullEntry7, 0)));
 		}
-		if (!lair.isEmpty()) announceRecords("Lair", RecordChecker.lairEntry(lair, lairRecords()));
-		if (!den.isEmpty()) printStatus("Broken Record Alert: Wolves records aren't checked yet", true);
+		if (!lair.isEmpty()) checkLairEntries(lair);
+	}
+
+	private void checkLairEntries(DRPersistantData lair) {
+		Map<Long, List<DRGroupData>> byArrival = new LinkedHashMap<>();
+		for (DRGroupData report : lair.groups())
+			byArrival.computeIfAbsent(report.lairArrival(), unused -> new ArrayList<>()).add(report);
+
+		boolean missingEvidence = false;
+		for (var group : byArrival.entrySet()) {
+			var evidence = stationClock.lairEntry(group.getKey());
+			List<DRGroupData> rounds = LairRecordChecks.verifiedRounds(group.getValue(), evidence);
+			if (rounds.isEmpty()) {
+				missingEvidence = true;
+				continue;
+			}
+			printRecordLines(LairRecordChecks.entry(voyageRecords, rounds, evidence, recordsOcean()));
+			DRPersistantData verified = new DRPersistantData();
+			for (DRGroupData report : rounds) verified.add(report);
+			announceRecords("manual Lair", RecordChecker.lairEntry(verified, lairRecords()));
+		}
+		if (missingEvidence)
+			printStatus("Lair entry checks need a scan of every fray and matching loot in the chat log.", false);
 	}
 
 	/** Score records hold decimals; every other record is a whole number. */
@@ -528,8 +628,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		java.util.List<String> unknown = new ArrayList<>();
 		int known = 0;
 		for (String key : read.keySet()) {
-			if (fields.containsKey(key)) known++;
-			else unknown.add(key);
+			if (!fields.containsKey(key)) {
+				unknown.add(key);
+				continue;
+			}
+			double value = Double.parseDouble(read.get(key));
+			if (value < 0 || (!isDecimalRecord(key) && value > Integer.MAX_VALUE)) {
+				JOptionPane.showMessageDialog(this, "Out-of-range record: " + key, "Import Records", JOptionPane.ERROR_MESSAGE);
+				return;
+			}
+			known++;
 		}
 		if (known == 0) {
 			JOptionPane.showMessageDialog(this, file.getName() + " has no records Gizmo knows.",
@@ -537,7 +645,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			return;
 		}
 		int ok = JOptionPane.showConfirmDialog(this, "Import " + known + " records from " + file.getName()
-				+ "?\nThis replaces those records on the Records tab.", "Import Records", JOptionPane.OK_CANCEL_OPTION);
+				+ "?\nThis replaces those thresholds on the Manual records tab.", "Import Records", JOptionPane.OK_CANCEL_OPTION);
 		if (ok != JOptionPane.OK_OPTION) return;
 
 		for (java.util.Map.Entry<String, String> e : read.entrySet()) {
@@ -622,7 +730,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxAutoScan = liveOption("Auto-scan", AUTOSCAN);
 		checkBoxAutoScan.setToolTipText("Scan the duty report automatically after a Den, Cursed Isles or Vampire Lair round.");
 		checkBoxAutoCopy = new JCheckBox("Auto-copy");
-		checkBoxBrokenRecordAlert = new JCheckBox("Record alerts");
 		checkBoxIgnoreAI = new JCheckBox("Hide NPCs");
 		checkBoxIgnoreAI.addActionListener(ev -> updateOutputPreviews());
 		checkBoxShowExtraButtons = liveOption("Extra output buttons", SHOWEXTRABUTTONS);
@@ -632,13 +739,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxDebug.setToolTipText("Show debug messages in the Output tab");
 		scanning.add(checkBoxAutoScan);
 		scanning.add(checkBoxAutoCopy);
-		scanning.add(checkBoxBrokenRecordAlert);
 		scanning.add(checkBoxIgnoreAI);
 		scanning.add(checkBoxShowExtraButtons);
 		scanning.add(checkBoxDebug);
 
 		createOutputOptions(options);
 		createScoringOptions(options, integerFormatter);
+		createRecordOptions(options);
 		createFileOptions(options);
 
 		return options;
@@ -843,6 +950,149 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		buttonBootyTextBrowse = new JButton("Browse…");
 		files.add(folderRow("Text copies", textFieldBootyTextFolder, buttonBootyTextBrowse));
 		files.add(Box.createVerticalStrut(6));
+	}
+
+
+	private void createRecordOptions(OptionsPanel options) {
+		JPanel records = options.section("Voyage records", "records", false);
+		checkBoxBrokenRecordAlert = new JCheckBox("Record alerts");
+		records.add(checkBoxBrokenRecordAlert);
+		records.add(Box.createVerticalStrut(3));
+
+		buttonGetRecords = new JButton("Refresh");
+		buttonGetRecords.setToolTipText("Download the latest records from Puzzle Practice");
+		buttonGetRecords.addActionListener(ev -> refreshRecords());
+		JButton show = new JButton("All records");
+		show.addActionListener(ev -> showRecordsWindow());
+		JButton copy = new JButton("Copy claims");
+		copy.setToolTipText("Copy record claims in Puzzle Practice's format");
+		copy.addActionListener(ev -> {
+			String message = voyageRecords.claimMessage();
+			if (message == null) {
+				printStatus("No records to send.", false);
+				return;
+			}
+			copyToClipboard(message);
+			printStatus("Copied record claims.", false);
+		});
+		JPanel actions = new JPanel(new GridLayout(0, 2, 4, 3));
+		actions.setAlignmentX(LEFT_ALIGNMENT);
+		for (JButton button : new JButton[]{buttonGetRecords, show, copy}) {
+			button.setMargin(new Insets(3, 5, 3, 5));
+			actions.add(button);
+		}
+		records.add(actions);
+		records.add(Box.createVerticalStrut(4));
+		labelRecordStatus = new JLabel();
+		records.add(labelRecordStatus);
+		records.add(Box.createVerticalStrut(6));
+
+		recordPanels.put("cursedIsles", options.section(records, "Cursed Isles", "recordboxesshown", false));
+		recordPanels.put("woodhallow", options.section(records, "Dens", "options.denRecords.expanded", false));
+		recordPanels.put("vampireLairs", options.section(records, "Lairs", "options.lairRecords.expanded", false));
+	}
+
+	private void updateRecordPanels() {
+		int saved = voyageRecords.size();
+		labelRecordStatus.setText(saved == 0 ? "No records saved" : saved + " records saved");
+		labelRecordStatus.setToolTipText(saved == 0 ? null
+				: String.format("Downloaded %tF %<tR", voyageRecords.loadedAt()));
+
+		for (var section : recordPanels.entrySet()) {
+			String voyage = section.getKey();
+			JPanel panel = section.getValue();
+			panel.removeAll();
+			List<VoyageRecords.Record> records = voyageRecords.forVoyage(voyage);
+			String chests = VoyageRecords.topChests(voyage);
+			String chestTitle = Character.toUpperCase(chests.charAt(0)) + chests.substring(1);
+			addRecordTable(panel, chestTitle, records, VoyageRecords.CHESTS, VoyageRecords.DR_CHESTS);
+			addRecordTable(panel, "Score", records, VoyageRecords.SCORE, VoyageRecords.DR_SCORE);
+			if (panel.getComponentCount() == 0) panel.add(new JLabel(records.isEmpty() ? "No records saved" : "See All records"));
+			panel.revalidate();
+			panel.repaint();
+		}
+	}
+
+	private static void addRecordTable(JPanel parent, String title, List<VoyageRecords.Record> records,
+									   String entryKind, String reportKind) {
+		Map<Integer, VoyageRecords.Record[]> byCrew = new TreeMap<>();
+		for (VoyageRecords.Record record : records) {
+			int column;
+			if (entryKind.equals(record.kind)) column = 0;
+			else if (reportKind.equals(record.kind)) column = 1;
+			else continue;
+			VoyageRecords.Record[] pair = byCrew.computeIfAbsent(record.crewSize, size -> new VoyageRecords.Record[2]);
+			if (pair[column] == null || record.value > pair[column].value) pair[column] = record;
+		}
+		if (byCrew.isEmpty()) return;
+
+		if (parent.getComponentCount() > 0) parent.add(Box.createVerticalStrut(7));
+		JLabel heading = new JLabel(title);
+		heading.setFont(heading.getFont().deriveFont(Font.BOLD));
+		parent.add(heading);
+		JPanel table = new JPanel(new GridBagLayout());
+		table.setAlignmentX(LEFT_ALIGNMENT);
+		addRecordRow(table, 0, new JLabel("Crew"), new JLabel("Entry", SwingConstants.TRAILING),
+				new JLabel("DR", SwingConstants.TRAILING));
+		int row = 1;
+		for (var crew : byCrew.entrySet()) {
+			String size = crew.getKey() == 0 ? "Individual" : crew.getKey().toString();
+			addRecordRow(table, row++, new JLabel(size), recordValue(crew.getValue()[0]), recordValue(crew.getValue()[1]));
+		}
+		parent.add(table);
+	}
+
+	private static JLabel recordValue(VoyageRecords.Record record) {
+		if (record == null) return new JLabel("—", SwingConstants.TRAILING);
+		String value = record.valueText != null ? record.valueText : NumberFormat.getIntegerInstance().format(record.value);
+		JLabel label = new JLabel(value, SwingConstants.TRAILING);
+		String holders = String.join(", ", record.pirates);
+		String date = record.date == null ? "" : record.date;
+		String detail = holders.isEmpty() || date.isEmpty() ? holders + date : holders + " · " + date;
+		if (!detail.isEmpty()) label.setToolTipText(detail);
+		return label;
+	}
+
+	private static void addRecordRow(JPanel table, int row, JLabel crew, JLabel entry, JLabel report) {
+		GridBagConstraints cell = new GridBagConstraints();
+		cell.gridy = row;
+		cell.fill = GridBagConstraints.HORIZONTAL;
+		cell.insets = new Insets(1, 0, 1, 5);
+		cell.gridx = 0;
+		table.add(crew, cell);
+		cell.weightx = 1;
+		cell.gridx = 1;
+		table.add(entry, cell);
+		cell.insets.right = 0;
+		cell.gridx = 2;
+		table.add(report, cell);
+	}
+
+	private void refreshRecords() {
+		buttonGetRecords.setEnabled(false);
+		labelRecordStatus.setText("Refreshing…");
+		labelRecordStatus.setToolTipText(null);
+		Thread worker = new Thread(() -> {
+			String error = null;
+			try {
+				voyageRecords.download();
+			} catch (IOException | RuntimeException e) {
+				error = e.getMessage();
+				if (error == null) error = e.getClass().getSimpleName();
+			}
+			String failure = error;
+			SwingUtilities.invokeLater(() -> {
+				buttonGetRecords.setEnabled(true);
+				if (failure == null) {
+					updateRecordPanels();
+				} else {
+					labelRecordStatus.setText("Refresh failed");
+					labelRecordStatus.setToolTipText(failure);
+				}
+			});
+		}, "Gizmo records");
+		worker.setDaemon(true);
+		worker.start();
 	}
 
 	public void printStatus(String text, boolean isDebug) {
@@ -1076,7 +1326,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 			// Records tab: one box per activity. Broken Record Alert checks the box for the activity scanned.
 			JPanel panelRecords = new JPanel();
-			tabbedPane.addTab("Records", null, panelRecords, null);
+			tabbedPane.addTab("Manual records", null, panelRecords, null);
 			panelRecords.setLayout(new BorderLayout(0, 0));
 
 				JScrollPane scrollPaneRecords = new JScrollPane();
@@ -1742,6 +1992,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					GameLog.Info g = GameLog.read();
 					Path folder = textFieldChatLogFolder.getText().trim().isEmpty() ? null : Paths.get(textFieldChatLogFolder.getText().trim());
 					if (g != null) {
+						loggedInOcean = g.ocean;
 						stationClock.follow(ChatLog.findLog(folder, g.pirate, g.ocean));
 						activityTracker.setSelf(g.pirate);
 					}
@@ -1799,7 +2050,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			Component rigidArea = Box.createRigidArea(new Dimension(20, 20));
 			panelScore.add(rigidArea);
 
+		voyageRecords = new VoyageRecords();
+		updateRecordPanels();
 		loadSettings();
+		refreshRecords();
 
 		// Diagnosis for blurry text until clicked: is the client's repaint manager (and its 2x scaling)
 		// drawing Gizmo's window too? Printed once, after the window is up.
@@ -1885,6 +2139,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			DRGroupData data = gizmo.scanDutyReport();
 			if (data != null && !data.isEmpty()) {
 				lastScannedReport = data.toString();
+				if (RecordChecker.LAIR.equals(RecordChecker.activityOf(data))) {
+					var round = stationClock.lairRound(System.currentTimeMillis());
+					if (round != null) data.setLairRound(round.arrival(), round.end());
+				}
 
 				//add to drTree with the default tokenScore
 				addDRToTree(data);
@@ -2222,14 +2480,17 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	/** A DR's node in the tree (shown as its number); remembers whether the DR was CI, Lair or Den. */
 	static final class DRGroupNode extends DefaultMutableTreeNode {
 		final String activity;
+		final long lairArrival, lairRoundEnd;
 
-		DRGroupNode(String activity) {
-			this.activity = activity;
+		DRGroupNode(DRGroupData report) {
+			this.activity = RecordChecker.activityOf(report);
+			this.lairArrival = report.lairArrival();
+			this.lairRoundEnd = report.lairRoundEnd();
 		}
 	}
 
 	public void addDRToTree(DRGroupData dr) {
-		DefaultMutableTreeNode nodeNumber = new DRGroupNode(RecordChecker.activityOf(dr));
+		DefaultMutableTreeNode nodeNumber = new DRGroupNode(dr);
 		//DefaultMutableTreeNode parent = new DefaultMutableTreeNode(userObject)
 
 		//make a node (1, 2, 3, ...) for this dr and decend into it
@@ -2264,7 +2525,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		for (int groupIndex = 0; groupIndex < drTreeRootNode.getChildCount(); groupIndex++) {
 			TreeNode groupNodes = drTreeRootNode.getChildAt(groupIndex);
 			DRGroupData groupData = new DRGroupData();
-			if (groupNodes instanceof DRGroupNode) groupData.setActivity(((DRGroupNode) groupNodes).activity);
+			if (groupNodes instanceof DRGroupNode report) {
+				groupData.setActivity(report.activity);
+				groupData.setLairRound(report.lairArrival, report.lairRoundEnd);
+			}
 
 			for (int stationIndex = 0; stationIndex < groupNodes.getChildCount(); stationIndex++) {
 				TreeNode stationNodes = groupNodes.getChildAt(stationIndex);
@@ -2304,6 +2568,15 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			printStatus("Voyage: " + c.battlesWon + " won, " + c.battlesLost + " lost, "
 					+ (c.chestsOpened == null ? "?" : c.chestsOpened) + " chests opened"
 					+ (c.myCut == null ? "" : ", your cut " + c.myCut + " PoE"), false);
+			if (checkBoxBrokenRecordAlert.isSelected() && booty.ocean() != null) {
+				List<String> pirates = booty.pirates.stream().map(pirate -> pirate.name).distinct().sorted().toList();
+				if (!pirates.isEmpty()) {
+					for (ChatLog.Run run : c.runs) {
+						String result = voyageRecords.check(run, pirates.size(), booty.ocean(), pirates);
+						if (!result.isEmpty()) printStatus(result, false);
+					}
+				}
+			}
 		}
 
 		booty.runFiles.addAll(runLog.pending());
@@ -2375,7 +2648,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxDebug.setSelected(currentPrefs.getBoolean(DEBUG, false));
 		checkBoxIgnoreAI.setSelected(currentPrefs.getBoolean(IGNOREAI, false));
 		checkBoxAutoCopy.setSelected(currentPrefs.getBoolean(AUTOCOPY, false));
-		checkBoxBrokenRecordAlert.setSelected(currentPrefs.getBoolean(BROKENRECORDALERT, false));
+		checkBoxBrokenRecordAlert.setSelected(currentPrefs.getBoolean(BROKENRECORDALERT, true));
 
 		// Scan options
 		checkBoxScanWriteDate.setSelected(currentPrefs.getBoolean(SCANWRITEDATE, false));

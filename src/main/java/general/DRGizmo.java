@@ -169,7 +169,7 @@ public class DRGizmo {
 	private boolean isWolfStation(Container station) {
 		for (int j = 1; j < station.getComponentCount(); j++) {
 			Component tp = tokenPanelOf(station.getComponent(j));
-			if (tp != null && wolfCounterType(tp) != null) return true;
+			if (tp != null && counterType(tp).startsWith("WEREWOLF_")) return true;
 		}
 		return false;
 	}
@@ -189,7 +189,7 @@ public class DRGizmo {
 
 
 				Component tp = tokenPanelOf(row);
-				String type = tp == null ? null : wolfCounterType(tp);
+				String type = tp == null ? null : counterType(tp);
 				int[] tokens = tp == null ? null : readTokens(tp);
 
 				printStatus(name + " " + type + " " + Arrays.toString(tokens), true);
@@ -209,19 +209,22 @@ public class DRGizmo {
 		return pd.getComponentCount() > 2 ? pd.getComponent(2) : null;
 	}
 
-	/** Returns e.g. "WEREWOLF_MOONS" / "WEREWOLF_CHESTS" if the panel carries a werewolf counter enum, else null. */
-	private String wolfCounterType(Component panel) {
+	/** Reads the chest or puzzle counter enum without depending on its obfuscated field name. */
+	private String counterType(Component panel) {
 		for (Class<?> k = panel.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
 			for (java.lang.reflect.Field f : k.getDeclaredFields()) {
 				if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !f.getType().isEnum()) continue;
 				try {
 					f.setAccessible(true);
-					Object v = f.get(panel);
-					if (v != null && v.toString().startsWith("WEREWOLF")) return v.toString();
+					Enum<?> counter = (Enum<?>) f.get(panel);
+					if (counter == null) continue;
+					String name = counter.name();
+					if (name.endsWith("_CHESTS") || name.equals("WEREWOLF_MOONS")
+							|| name.equals("VAMPIRATE_PATCHES")) return name;
 				} catch (Exception ignored) { }
 			}
 		}
-		return null;
+		return "";
 	}
 
 	private static final int[] WOLF_MOON_WEIGHTS  = {1, 2, 3};
@@ -356,6 +359,11 @@ public class DRGizmo {
 		int[] tokens = null;
 		if (pirateData.getComponentCount() > 2) {
 			Component tokenPanel = pirateData.getComponent(2);
+			switch (counterType(tokenPanel)) {
+				case "CURSED_CHESTS" -> data.setActivity(RecordChecker.CI);
+				case "VAMPIRATE_CHESTS", "VAMPIRATE_PATCHES" -> data.setActivity(RecordChecker.LAIR);
+				case "WEREWOLF_CHESTS", "WEREWOLF_MOONS" -> data.setActivity(RecordChecker.DEN);
+			}
 			tokens = readTokens(tokenPanel);
 			printStatus(Arrays.toString(tokens), true);
 		}

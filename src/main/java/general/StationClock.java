@@ -10,7 +10,11 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,6 +45,12 @@ public final class StationClock {
 	private static final Pattern DATE = Pattern.compile("^=+ (\\d{4})/(\\d{1,2})/(\\d{1,2}) =+$");
 	private static final Pattern LINE = Pattern.compile("^\\[(\\d{2}):(\\d{2}):(\\d{2})\\] (.*)$");
 
+	private static final String LAIR_WARNING = "Ye hear the sound of rustling in coffins.";
+	record LairRound(long arrival, long end) { }
+	record LairEntry(Set<Long> rounds, int[] haul) { }
+
+	private final Map<Long, LairEntry> lairEntries = new LinkedHashMap<>();
+	private long lairArrival, lairRoundEnd;
 	private final List<Period> periods = new ArrayList<>();
 	private Path file;
 	private long offset;
@@ -54,7 +64,7 @@ public final class StationClock {
 		offset = 0;
 		date = null;
 		lastClock = -1;
-		periods.clear();
+		resetFileState();
 	}
 
 	public Path file() { return file; }
@@ -64,7 +74,7 @@ public final class StationClock {
 		if (file == null) return;
 		try {
 			long size = Files.size(file);
-			if (size < offset) { offset = 0; date = null; lastClock = -1; periods.clear(); } // truncated: start over
+			if (size < offset) { offset = 0; date = null; lastClock = -1; resetFileState(); } // truncated: start over
 			if (size == offset) return;
 			byte[] buf;
 			try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
@@ -102,7 +112,44 @@ public final class StationClock {
 		message(m.group(4), now);
 	}
 
-	void message(String msg, long now) {
+	private synchronized void resetFileState() {
+		periods.clear();
+		lairEntries.clear();
+		lairArrival = lairRoundEnd = 0;
+	}
+
+	private void trackLair(String message, long now) {
+		String arrival = ChatLog.arrivalVoyage(message);
+		if (arrival != null) {
+			lairArrival = "vampireLairs".equals(arrival) ? now : 0;
+			lairRoundEnd = 0;
+			if (lairArrival != 0) lairEntries.computeIfAbsent(now, unused -> new LairEntry(new LinkedHashSet<>(), new int[3]));
+			return;
+		}
+		if (lairArrival == 0) return;
+		LairEntry entry = lairEntries.get(lairArrival);
+		if (LAIR_WARNING.equals(message)) {
+			lairRoundEnd = now + 15_000;
+			entry.rounds().add(lairRoundEnd);
+		} else if (message.startsWith("Ye have taken aboard ")) {
+			int[] haul = ChatLog.lairHaul(message);
+			if (haul != null)
+				for (int i = 0; i < haul.length; i++) entry.haul()[i] += haul[i];
+		}
+	}
+
+	synchronized LairRound lairRound(long now) {
+		return lairArrival == 0 || lairRoundEnd == 0 || now < lairRoundEnd - 2000
+				? null : new LairRound(lairArrival, lairRoundEnd);
+	}
+
+	synchronized LairEntry lairEntry(long arrival) {
+		LairEntry entry = lairEntries.get(arrival);
+		return entry == null ? null : new LairEntry(Set.copyOf(entry.rounds()), entry.haul().clone());
+	}
+
+	synchronized void message(String msg, long now) {
+		trackLair(msg, now);
 		if (msg.equals(ARRIVAL)) { periods.clear(); return; }
 		Matcher sv = SURVIVORS.matcher(msg);
 		if (sv.matches()) {

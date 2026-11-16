@@ -43,9 +43,18 @@ public final class RecordChecker {
         if (dr.data.containsKey(HAUL)) return LAIR;
         if (dr.data.containsKey(CARPENTRY)) {
             for (DRIndividualData d : dr.data.get(CARPENTRY).values())
-                if (d.getTokens() != null && d.getTokens().length == 3) return LAIR;
+                if (hasThreeCounters(d)) return LAIR;
         }
-        if (dr.data.containsKey(FORAGE)) return CI;
+        var navigators = dr.data.get("Navigating");
+        if (navigators != null && navigators.values().stream().anyMatch(RecordChecker::hasThreeCounters)) return DEN;
+        return null;
+    }
+
+    static String voyageOf(DRGroupData report) {
+        String activity = activityOf(report);
+        if (CI.equals(activity)) return "cursedIsles";
+        if (LAIR.equals(activity)) return "vampireLairs";
+        if (DEN.equals(activity)) return "woodhallow";
         return null;
     }
 
@@ -72,7 +81,7 @@ public final class RecordChecker {
         return n;
     }
 
-    static boolean isLairCarp(DRIndividualData d) {
+    static boolean hasThreeCounters(DRIndividualData d) {
         return d.getTokens() != null && d.getTokens().length == 3;
     }
 
@@ -107,7 +116,7 @@ public final class RecordChecker {
         }
         if (dr.data.containsKey(CARPENTRY)) {
             for (DRIndividualData d : dr.data.get(CARPENTRY).values()) {
-                if (!isLairCarp(d)) continue;
+                if (!hasThreeCounters(d)) continue;
                 compare(sb, d.getName() + " got", carpScore(d), "carp score in one fray", r.carpScore);
                 compare(sb, d.getName() + " got", carpHoles(d), "carp holes in one fray", r.carpHoles);
                 compare(sb, d.getName() + " got", vampireProof(d), "vampire proof in one fray", r.vampireProof);

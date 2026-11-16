@@ -15,6 +15,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,12 +45,26 @@ public final class ChatLog {
 		public LocalDateTime openedAt;
 		public final List<Line> lines = new ArrayList<>();
 		public final Map<String, Integer> takenAboard = new LinkedHashMap<>();
+		public final List<Run> runs = new ArrayList<>();
 		public Integer chestsOpened, chestItems;
 		public Long chestPoe;
 		public int battlesWon, battlesLost;
 		public long plunderedPoe;
 		public Long myCut;
 	}
+
+	/** A voyage within the division. Tiers are ordered from largest chest to smallest. */
+	static final class Run {
+		String voyage;
+		LocalDateTime arrivedAt;
+		final int[] tiers = new int[3];
+	}
+
+	private static final String[][] CHESTS = {
+			{"woodhallow", "dire chest", "lunar locker", "wolf box"},
+			{"woodhallow", "pack chest", "moonlit locker", "wolf box"},
+			{"cursedIsles", "cursed chest", "fetish jar", "bone box"},
+			{"vampireLairs", "immortal chest", "nocturnal locker", "blood box"}};
 
 	private static final Pattern DATE = Pattern.compile("^=+ (\\d{4})/(\\d{1,2})/(\\d{1,2}) =+$");
 	private static final Pattern LINE = Pattern.compile("^\\[(\\d{1,2}):(\\d{2}):(\\d{2})\\] (.*)$");
@@ -67,6 +82,57 @@ public final class ChatLog {
 			+ "|The defeat cost ye |The mercenaries have taken |.* is dividing the booty\\.$|The booty has been divided!)");
 
 	private ChatLog() { }
+
+	static String arrivalVoyage(String message) {
+		return switch (message.stripTrailing()) {
+			case StationClock.ARRIVAL -> "woodhallow";
+			case "Ye land on the island, but an angry mob of its inhabitants stands between ye and yer rightful plunderin'!" -> "cursedIsles";
+			case "Welcome to the vampire sanctum." -> "vampireLairs";
+			default -> null;
+		};
+	}
+
+	private record Cargo(String voyage, int tier) { }
+
+	private static Cargo namedCargo(String item) {
+		String name = item.toLowerCase(Locale.ROOT);
+		for (String[] group : CHESTS) {
+			for (int tier = 0; tier < 3; tier++) {
+				String chest = group[tier + 1];
+				if (name.equals(chest) || name.equals(chest + (chest.endsWith("box") ? "es" : "s")))
+					return new Cargo(group[0], tier);
+			}
+		}
+		return null;
+	}
+
+	static int[] lairHaul(String message) {
+		Matcher match = TAKEN_ABOARD.matcher(message);
+		if (!match.matches()) return null;
+		Cargo cargo = namedCargo(match.group(2));
+		if (cargo == null || !"vampireLairs".equals(cargo.voyage())) return null;
+		int[] tiers = new int[3];
+		tiers[cargo.tier()] = parseInt(match.group(1));
+		return tiers;
+	}
+
+	private static Run recordCargo(Segment segment, Run run, String item, int count) {
+		Cargo cargo = namedCargo(item);
+		if (cargo != null) {
+			if (run == null || !cargo.voyage().equals(run.voyage)) {
+				run = new Run();
+				run.voyage = cargo.voyage();
+				segment.runs.add(run);
+			}
+			run.tiers[cargo.tier()] += count;
+		} else if (run != null) {
+			String name = item.toLowerCase(Locale.ROOT);
+			if (name.contains("_large_")) run.tiers[0] += count;
+			else if (name.contains("_medium_")) run.tiers[1] += count;
+			else if (name.contains("_small_")) run.tiers[2] += count;
+		}
+		return run;
+	}
 
 	/** Usual chat log folders, first that exists wins. */
 	public static Path guessFolder() {
@@ -163,15 +229,23 @@ public final class ChatLog {
 		}
 		int end = closingEnd(lines, anchor);
 
+		Run run = null;
 		for (int i = start; i <= end; i++) {
 			Line l = lines.get(i);
+			String voyage = arrivalVoyage(l.text);
+			if (voyage != null) {
+				run = new Run();
+				run.voyage = voyage;
+				run.arrivedAt = l.time;
+				s.runs.add(run);
+			}
 			if (!BOOTY_LINE.matcher(l.text).find()) continue;
 			s.lines.add(l);
 			Matcher m;
 			if ((m = TAKEN_ABOARD.matcher(l.text)).matches()) {
-				Integer prev = s.takenAboard.get(m.group(2));
 				int n = parseInt(m.group(1));
-				s.takenAboard.put(m.group(2), prev == null ? n : prev + n);
+				s.takenAboard.merge(m.group(2), n, Integer::sum);
+				run = recordCargo(s, run, m.group(2), n);
 			} else if (i == anchor && (m = CREW_OPENS.matcher(l.text)).find()) {
 				s.chestsOpened = parseInt(m.group(1));
 				s.chestItems = m.group(2).equals("no") ? 0 : parseInt(m.group(2));
