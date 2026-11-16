@@ -259,6 +259,7 @@ public final class ActivityTracker {
 		public String station, pirate, rating;
 		public int[] tokens;
 		public int score;
+		boolean woodhallowNav;
 		public boolean exact;
 		/** Time on the station; 0 if unknown. */
 		public long ms;
@@ -322,6 +323,7 @@ public final class ActivityTracker {
 		periods.add(period);
 		fresh = period;
 
+		boolean woodhallow = RecordChecker.DEN.equals(RecordChecker.activityOf(dr));
 		Map<String, Integer> stationsOf = new HashMap<>();
 		for (Map<String, DRIndividualData> rows : dr.data.values())
 			for (String name : rows.keySet()) stationsOf.merge(name, 1, Integer::sum);
@@ -347,6 +349,7 @@ public final class ActivityTracker {
 				row.rating = d.getRating();
 				row.tokens = d.getTokens();
 				row.score = d.getTokenScore();
+				row.woodhallowNav = woodhallow && code == NAV;
 				row.ms = time < 5_000 ? 0 : time;
 				row.exact = row.ms > 0 && (singleStation || local);
 				period.rows.add(row);
@@ -420,7 +423,11 @@ public final class ActivityTracker {
 		return out;
 	}
 
-	static double rate(Row r) { return r.ms > 0 ? r.score / (r.ms / 60000.0) : -1; }
+	static double rate(Row r) {
+		if (r.ms <= 0) return -1;
+		double score = r.woodhallowNav ? DnavForecast.navPoints(r.tokens) / DnavForecast.POINTS_PER_SCORE : r.score;
+		return score / (r.ms / 60_000.0);
+	}
 
 	private static int stationOrder(String s) {
 		String l = s.toLowerCase();

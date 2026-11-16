@@ -149,7 +149,7 @@ public final class RunLog {
 			if (r.tokens != null) for (int t : r.tokens) j.value(t);
 			j.closeArray();
 			j.field("seconds", r.ms > 0 ? r.ms / 1000.0 : null);
-			j.field("score_per_minute", r.ms > 0 ? Math.round(r.score / (r.ms / 60000.0) * 100) / 100.0 : null);
+			j.field("score_per_minute", r.ms > 0 ? Math.round(ActivityTracker.rate(r) * 100) / 100.0 : null);
 			j.close();
 		}
 		j.closeArray();

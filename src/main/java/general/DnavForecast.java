@@ -6,7 +6,6 @@ package main.java.general;
  *   wolves(people, fray)  = max(people, 4) x 1.3^(fray - 1)
  *   werewolves            = rounded pack x share (0.4 + 0.1 x fray), rounded half up
  *   Dnav score needed     = werewolves x 200 points / 125 points per score = 1.6 per werewolf
- *   (a navigator's triples after their first are worth 173 points per score point, not 125)
  *   stations after fray n = 2:00 if n = 1, else 2:00 + 3:00 x survivors / people
  * The stations after fray n prepare fray n + 1. The team's pace is the navigators' score per
  * minute from the last duty report.
@@ -62,7 +61,9 @@ public final class DnavForecast {
 	}
 
 	/** Each werewolf takes 200 points to turn back; a Dnav score point is worth 125, so 1.6 per werewolf. */
-	static final double POINTS_PER_WEREWOLF = 200, POINTS_PER_SCORE = 125, LATER_TRIPLE_POINTS = 173;
+	static final double POINTS_PER_WEREWOLF = 200, POINTS_PER_SCORE = 125;
+	private static final double TRIPLE_STRATEGY_POINTS_PER_SCORE = 176;
+	private static final double STARTING_BOARD_POINTS_PER_SCORE = 71;
 
 	public static int dnavNeeded(int werewolves) {
 		return (int) Math.ceil(werewolves * POINTS_PER_WEREWOLF / POINTS_PER_SCORE - 1e-9);
@@ -70,20 +71,22 @@ public final class DnavForecast {
 
 	/**
 	 * Werewolf points from one navigator's moons [singles, doubles, triples] (score 1, 2, 3 each).
-	 * Every score point is worth 125, except that a navigator breaking mostly triples (at most one
-	 * single, no doubles) gets 173 per score point for each triple after their first.
+	 * With at least one triple and at most one other combo, the first triple uses 125 points per
+	 * score and every other combo uses 176. Otherwise, one highest combo uses the starting
+	 * board's rate of 71 points per score and the rest use 125.
 	 */
 	public static double navPoints(int[] moons) {
 		if (moons == null) return 0;
-		int singles = moons.length > 0 ? moons[0] : 0, doubles = moons.length > 1 ? moons[1] : 0, triples = moons.length > 2 ? moons[2] : 0;
-		double pts = (singles + 2.0 * doubles) * POINTS_PER_SCORE;
-		// The 173 rate only for a navigator breaking (almost) only triples: at most one single and no
-		// doubles. Anyone breaking more singles or any doubles gets 125 for everything.
-		boolean triplesPlayer = singles <= 1 && doubles == 0;
-		if (triples > 0) pts += triplesPlayer
-				? 3 * POINTS_PER_SCORE + (triples - 1) * 3 * LATER_TRIPLE_POINTS
-				: triples * 3 * POINTS_PER_SCORE;
-		return pts;
+		int singles = moons.length > 0 ? moons[0] : 0;
+		int doubles = moons.length > 1 ? moons[1] : 0;
+		int triples = moons.length > 2 ? moons[2] : 0;
+		double score = singles + 2.0 * doubles + 3.0 * triples;
+		if (triples > 0 && (long) singles + doubles <= 1) {
+			return 3 * POINTS_PER_SCORE + (score - 3) * TRIPLE_STRATEGY_POINTS_PER_SCORE;
+		}
+
+		int highestCombo = triples > 0 ? 3 : doubles > 0 ? 2 : singles > 0 ? 1 : 0;
+		return (score - highestCombo) * POINTS_PER_SCORE + highestCombo * STARTING_BOARD_POINTS_PER_SCORE;
 	}
 
 	public static long stationsMs(int people, int deaths, int fray) {
