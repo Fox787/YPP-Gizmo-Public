@@ -10,7 +10,8 @@ final class SpecialDrops {
 	static final String TITLE = "Booty Alerts";
 	private static final String KEY = "specialDrops";
 	static final List<Rule> DEFAULTS = List.of("Ippolito", "Serpent", "Lobster", "Krakling", "Ghostling", "Bat",
-			"Squirrel", "Karkinos", "Gator", "Ghost rat").stream()
+			"Squirrel", "Karkinos", "Gator", "Ghost rat",
+			"Ghost cat", "Ghost small dog", "Ghost hedgehog", "Octopus").stream()
 			.map(item -> new Rule(item, Scope.SHIPWIDE)).toList();
 
 	enum Scope {

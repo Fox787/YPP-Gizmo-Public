@@ -25,6 +25,8 @@ class SpecialDropsTest {
 		Preferences prefs = Preferences.userRoot().node(path);
 		try {
 			assertEquals(SHIPWIDE, SpecialDrops.scopeOf(SpecialDrops.load(prefs), "Serpent (green)"));
+			for (String item : List.of("Ghost cat", "Ghost small dog", "Ghost hedgehog", "Octopus"))
+				assertEquals(SHIPWIDE, SpecialDrops.scopeOf(SpecialDrops.load(prefs), item + " (black)"));
 			var rules = List.of(new SpecialDrops.Rule("Paint Brush (blue)", OWN), new SpecialDrops.Rule("Rat", SHIPWIDE));
 			SpecialDrops.save(prefs, rules);
 			prefs.flush();
