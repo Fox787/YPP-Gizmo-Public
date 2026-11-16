@@ -911,6 +911,19 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				buttonDataBrowse = new JButton("...");
 				panelBootyExport.add(folderRow("Data folder", textFieldDataFolder, buttonDataBrowse));
 
+				JToggleButton bootyAlerts = new JToggleButton(SpecialDrops.TITLE,
+						globalPrefs.getBoolean("options.specialDrops.expanded", false));
+				bootyAlerts.setAlignmentX(Component.LEFT_ALIGNMENT);
+				SpecialDropsPanel alerts = new SpecialDropsPanel(globalPrefs);
+				alerts.setVisible(bootyAlerts.isSelected());
+				bootyAlerts.addActionListener(ev -> {
+					alerts.setVisible(bootyAlerts.isSelected());
+					globalPrefs.putBoolean("options.specialDrops.expanded", bootyAlerts.isSelected());
+					panelBootyExport.revalidate();
+				});
+				panelBootyExport.add(bootyAlerts);
+				panelBootyExport.add(alerts);
+
 			JPanel panelOptionsPrintOptions = new JPanel();
 			panelOptionsPrintOptions.setAlignmentX(Component.LEFT_ALIGNMENT);
 			panelOptions_2.add(panelOptionsPrintOptions);
@@ -1980,7 +1993,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 		if (e.getSource().equals(buttonScan)) {
 			DRGizmo gizmo = new DRGizmo(window, textAreaOutput, checkBoxDebug.isSelected());
-			DRGroupData data = gizmo.scanDutyReport();
+			DRGroupData data = gizmo.scanDutyReport(SpecialDrops.load(globalPrefs));
 			if (data != null && !data.isEmpty()) {
 				lastScannedReport = data.toString();
 

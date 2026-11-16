@@ -44,7 +44,7 @@ public class BootyDivision {
 	/** When Gizmo read the screen. */
 	public final LocalDateTime scannedAt = LocalDateTime.now();
 	public final List<PirateLoot> pirates = new ArrayList<>();
-	/** pirate -> (flagged item -> count): the "Special Drops" list. */
+	/** pirate -> (flagged item -> count): tracked wins, including wins filtered out of the output alerts. */
 	public final Map<String, Map<String, Integer>> specialDrops = new LinkedHashMap<>();
 
 	// Filled in from the logs; any of these may be null when a log isn't found.
@@ -93,7 +93,7 @@ public class BootyDivision {
 			}
 		}
 		if (!specialDrops.isEmpty()) {
-			sb.append(nl).append("== Special Drops ==").append(nl);
+			sb.append(nl).append("== ").append(SpecialDrops.TITLE).append(" ==").append(nl);
 			for (Map.Entry<String, Map<String, Integer>> e : specialDrops.entrySet()) {
 				sb.append(e.getKey()).append(": ");
 				boolean first = true;

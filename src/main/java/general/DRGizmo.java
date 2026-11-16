@@ -98,6 +98,11 @@ public class DRGizmo {
 	}
 
 	public DRGroupData scanDutyReport() {
+		return scanDutyReport(SpecialDrops.DEFAULTS);
+	}
+
+	DRGroupData scanDutyReport(List<SpecialDrops.Rule> specialDrops) {
+		booty = null;
 		try {
 			// findDutyReport2 includes Steam client compatibility fixes and should always be used.
 			if (findWolves())
@@ -106,8 +111,7 @@ public class DRGizmo {
 				return data;
 
 			// No duty report open: treat the window as a booty division screen instead.
-			System.out.println("\n\n");
-			printLootReport(null);
+			printLootReport(specialDrops);
 
 			return null;
 		} catch (Exception e) {
@@ -540,62 +544,17 @@ public class DRGizmo {
 	}
 
 	private static final String POT_LABEL = "Divided treasure";
-	private static final long SHOUT_TOTAL_VALUE = 500_000_000L;
-	private static final long SHOUT_SHARE = 500_000L;
 
-	/** An item worth calling out. min > 0 means group(1) of the regex must be at least min. */
-	private static final class Shout {
-		final Pattern pattern;
-		final long min;
-
-		Shout(String regex, long min) {
-			this.pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
-			this.min = min;
-		}
-
-		boolean hits(String tip) {
-			Matcher m = pattern.matcher(tip);
-			if (!m.find()) return false;
-			if (min <= 0) return true;
-			try { return Long.parseLong(m.group(1)) >= min; } catch (Exception e) { return false; }
-		}
+	private void shout(String pirate, String text, int quantity) {
+		booty.specialDrops.computeIfAbsent(pirate, name -> new LinkedHashMap<>()).merge(text, quantity, Integer::sum);
 	}
 
-	private static final List<Shout> SHOUTS = new ArrayList<>();
-	static {
-		SHOUTS.add(new Shout("Ippolito \\(", 0));
-		SHOUTS.add(new Shout("Serpent \\(", 0));
-		SHOUTS.add(new Shout("Lobster \\(", 0));
-		SHOUTS.add(new Shout("Krakling \\(", 0));
-		SHOUTS.add(new Shout("Ghostling \\(", 0));
-		SHOUTS.add(new Shout("Bat \\(", 0));
-		SHOUTS.add(new Shout("Squirrel \\(", 0));
-		SHOUTS.add(new Shout("Karkinos \\(", 0));
-		SHOUTS.add(new Shout("Gator \\(", 0));
-		SHOUTS.add(new Shout("Ghost rat \\(", 0));
-	}
-
-	/** pirate -> (item -> count), in the order found. */
-	private final Map<String, Map<String, Integer>> shouts = new LinkedHashMap<>();
-
-	private void shout(String pirate, String text) {
-		Map<String, Integer> m = shouts.get(pirate);
-		if (m == null) { m = new LinkedHashMap<>(); shouts.put(pirate, m); }
-		bump(m, text, 1);
-	}
-
-	/** Prints every pirate's loot (or only who's, if not null) followed by the special drops. */
-	private void printLootReport(String who) {
+	/** Prints the loot followed by the configured booty alerts. */
+	private void printLootReport(List<SpecialDrops.Rule> specialDrops) {
 		emitted = 0;
-		shouts.clear();
 		booty = new BootyDivision();
-		// printBootyTips() and printShares() were present but not called in the jar build.
-		printStatus("\n\n", false);
-		printPirateTips(who);
-
-		printStatus("\n\n", false);
-		printShoutouts();
-		booty.specialDrops.putAll(shouts);
+		printPirateTips(specialDrops);
+		printShoutouts(specialDrops);
 	}
 
 	/** What the last scan read from the booty screen, or null if no booty screen was found. */
@@ -605,53 +564,12 @@ public class DRGizmo {
 		return booty == null || booty.isEmpty() ? null : booty;
 	}
 
-	private Container bootyContent() {
-		List<Container> contents = new ArrayList<>();
-		collectByChildLabel(window, contents);
-		return contents.isEmpty() ? null : contents.get(0);
-	}
-
-	/** Money row: each child with a tooltip and a numeric value, e.g. "Total value: 123456". */
-	private void printBootyTips() {
-		Container content = bootyContent();
-		Container money = content == null ? null : findMoneyPanel(content);
-		if (money == null) { emit("booty: money row not found"); return; }
-
-		for (int i = 0; i < money.getComponentCount(); i++) {
-			Component c = money.getComponent(i);
-			long v = parseAmount(textOf(c));
-			String tip = tipOf(c);
-			if (v < 0 || tip.length() == 0) continue;
-			emit(tip + ": " + v);
-			if (tip.toLowerCase().contains("total value") && v >= SHOUT_TOTAL_VALUE)
-				shout("Voyage", "total value " + v);
-		}
-	}
-
-	/** Shares list: "shares: name=amount name=amount ...". */
-	private void printShares() {
-		Container content = bootyContent();
-		if (content == null) return;
-		Container pairs = findPairsPanel(content, findMoneyPanel(content));
-		if (pairs == null) return;
-
-		StringBuilder sb = new StringBuilder("shares: ");
-		for (int i = 0; i + 1 < pairs.getComponentCount(); i += 2) {
-			String name = textOf(pairs.getComponent(i));
-			long v = parseAmount(textOf(pairs.getComponent(i + 1)));
-			sb.append(name).append('=').append(v).append(' ');
-			if (v >= SHOUT_SHARE) shout(name, v + " Eights share");
-		}
-		emit(sb.toString());
-	}
-
-	private void printPirateTips(String who) {
+	private void printPirateTips(List<SpecialDrops.Rule> specialDrops) {
 		List<Container> panels = new ArrayList<>();
 		collectLootPanels(window, panels);
 
 		for (Container p : panels) {
 			String name = buttonNameOf(p.getComponent(0));
-			if (who != null && !who.equalsIgnoreCase(name)) continue;
 
 			Container slots = (Container) p.getComponent(1);
 			BootyDivision.PirateLoot loot = new BootyDivision.PirateLoot(name);
@@ -668,7 +586,7 @@ public class DRGizmo {
 				bump(counts, tip, qty);
 				boolean pot = isPot(slot);
 				if (pot) bump(loot.potItems, tip, qty);
-				else checkShouts(name, tip);
+				else if (SpecialDrops.scopeOf(specialDrops, tip) != null) shout(name, tip, qty);
 			}
 			int hidden = hiddenCount(slots);
 			loot.slots = shown;
@@ -678,12 +596,6 @@ public class DRGizmo {
 			emit("== " + name + " (" + shown + " slots" + (hidden > 0 ? ", " + hidden + " HIDDEN by filter" : "") + ") ==");
 			for (Map.Entry<String, Integer> e : counts.entrySet())
 				emit((e.getValue() > 1 ? e.getValue() + "x " : "") + e.getKey());
-		}
-	}
-
-	private void checkShouts(String pirate, String tip) {
-		for (Shout s : SHOUTS) {
-			if (s.hits(tip)) { shout(pirate, tip); return; }
 		}
 	}
 
@@ -751,19 +663,30 @@ public class DRGizmo {
 		m.put(k, v == null ? n : v + n);
 	}
 
-	private void printShoutouts() {
-		printStatus("== Special Drops ==", false);
-		if (shouts.isEmpty()) { printStatus("(nothing flagged)", false); return; }
-		for (Map.Entry<String, Map<String, Integer>> e : shouts.entrySet()) {
-			StringBuilder sb = new StringBuilder(e.getKey()).append(": ");
-			boolean first = true;
+	private String loggedInPirate() {
+		if (window == null) return null;
+		String pirate = window instanceof Frame frame ? DRGizmoMain.pirateInTitle(frame.getTitle()) : null;
+		if (pirate != null || window.getAccessibleContext() == null) return pirate;
+		return DRGizmoMain.pirateInTitle(window.getAccessibleContext().getAccessibleName());
+	}
+
+	private void printShoutouts(List<SpecialDrops.Rule> rules) {
+		if (booty.specialDrops.isEmpty()) return;
+		String ownPirate = rules.stream().anyMatch(rule -> rule.scope() == SpecialDrops.Scope.OWN) ? loggedInPirate() : null;
+		boolean headingPrinted = false;
+		for (Map.Entry<String, Map<String, Integer>> e : booty.specialDrops.entrySet()) {
+			StringJoiner wins = new StringJoiner(", ");
 			for (Map.Entry<String, Integer> it : e.getValue().entrySet()) {
-				if (!first) sb.append(", ");
-				first = false;
-				if (it.getValue() > 1) sb.append(it.getValue()).append("x ");
-				sb.append(it.getKey());
+				if (SpecialDrops.scopeOf(rules, it.getKey()) == SpecialDrops.Scope.OWN
+						&& !e.getKey().equalsIgnoreCase(ownPirate)) continue;
+				wins.add((it.getValue() > 1 ? it.getValue() + "x " : "") + it.getKey());
 			}
-			printStatus(sb.toString(), false);
+			if (wins.length() == 0) continue;
+			if (!headingPrinted) {
+				printStatus("== " + SpecialDrops.TITLE + " ==", false);
+				headingPrinted = true;
+			}
+			printStatus(e.getKey() + ": " + wins, false);
 		}
 	}
 
