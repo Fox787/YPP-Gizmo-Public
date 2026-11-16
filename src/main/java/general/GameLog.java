@@ -31,6 +31,14 @@ public final class GameLog {
 
 	private GameLog() { }
 
+	private static Path outputFolder;
+
+	static void setDataFolder(Path folder) { outputFolder = folder; }
+
+	static Path dataFolder() {
+		return outputFolder == null ? clientFolder().resolve("exported_data") : outputFolder;
+	}
+
 	/** The folder the client runs from: Gizmo is loaded with -javaagent:Gizmo.jar, so it's the working directory. */
 	public static Path clientFolder() {
 		return Paths.get(System.getProperty("user.dir")).toAbsolutePath();

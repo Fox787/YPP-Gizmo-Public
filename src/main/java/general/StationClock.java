@@ -42,6 +42,8 @@ public final class StationClock {
 	private static final Pattern LINE = Pattern.compile("^\\[(\\d{2}):(\\d{2}):(\\d{2})\\] (.*)$");
 
 	private final List<Period> periods = new ArrayList<>();
+	private String arrivalVoyage;
+	private long arrivalAt;
 	private Path file;
 	private long offset;
 	private LocalDate date;
@@ -55,6 +57,7 @@ public final class StationClock {
 		date = null;
 		lastClock = -1;
 		periods.clear();
+		clearArrival();
 	}
 
 	public Path file() { return file; }
@@ -64,7 +67,13 @@ public final class StationClock {
 		if (file == null) return;
 		try {
 			long size = Files.size(file);
-			if (size < offset) { offset = 0; date = null; lastClock = -1; periods.clear(); } // truncated: start over
+			if (size < offset) {
+				offset = 0;
+				date = null;
+				lastClock = -1;
+				periods.clear();
+				clearArrival();
+			}
 			if (size == offset) return;
 			byte[] buf;
 			try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
@@ -103,7 +112,13 @@ public final class StationClock {
 	}
 
 	void message(String msg, long now) {
-		if (msg.equals(ARRIVAL)) { periods.clear(); return; }
+		String voyage = ChatLog.arrivalVoyage(msg);
+		if (voyage != null) {
+			arrivalVoyage = voyage;
+			arrivalAt = now;
+			periods.clear();
+			return;
+		}
 		Matcher sv = SURVIVORS.matcher(msg);
 		if (sv.matches()) {
 			Period last = periods.isEmpty() ? null : periods.get(periods.size() - 1);
@@ -126,6 +141,15 @@ public final class StationClock {
 				|| msg.startsWith("The crew falls back") || msg.startsWith("Ye retreat")) {
 			if (!last.closed() || now < last.end) last.end = now;
 		}
+	}
+
+	long lastArrival(String voyage) {
+		return voyage != null && voyage.equals(arrivalVoyage) ? arrivalAt : 0;
+	}
+
+	private void clearArrival() {
+		arrivalAt = 0;
+		arrivalVoyage = null;
 	}
 
 	/** Latest station period that has ended by now (allowing for a report arriving a little early). */

@@ -161,10 +161,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private final String GLOBAL_ROOT = "global";
 
 	private JCheckBox checkBoxBootyExport;
-	private JTextField textFieldChatLogFolder, textFieldBootyTextFolder;
-	private JButton buttonChatLogBrowse, buttonBootyTextBrowse;
+	private JTextField textFieldChatLogFolder, textFieldBootyTextFolder, textFieldDataFolder;
+	private JButton buttonChatLogBrowse, buttonBootyTextBrowse, buttonDataBrowse;
 
 	public static final String BOOTYEXPORT = "bootyexport", CHATLOGFOLDER = "chatlogfolder", BOOTYTEXTFOLDER = "bootytextfolder";
+	private static final String DATAFOLDER = "datafolder";
 
 	private JLabel labelWolvesLeft;
 	private ActivityTracker activityTracker;
@@ -891,7 +892,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelOptions_2.add(panelBootyExport);
 
 				checkBoxBootyExport = new JCheckBox("Export booty division when scanned");
-				checkBoxBootyExport.setToolTipText("Writes exported_data/<ocean>/booty_divisions_<pirate>.jsonl beside the client, plus N.txt in the text folder");
+				checkBoxBootyExport.setToolTipText("Writes booty divisions in the data folder and an optional N.txt in the text folder");
 				checkBoxBootyExport.setAlignmentX(Component.LEFT_ALIGNMENT);
 				checkBoxBootyExport.addActionListener(ev -> saveLogSettings());
 				panelBootyExport.add(checkBoxBootyExport);
@@ -904,6 +905,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				textFieldBootyTextFolder.setToolTipText("Leave empty to only write the .jsonl");
 				buttonBootyTextBrowse = new JButton("...");
 				panelBootyExport.add(folderRow("Text copies", textFieldBootyTextFolder, buttonBootyTextBrowse));
+
+				textFieldDataFolder = new JTextField();
+				textFieldDataFolder.setToolTipText("Leave empty to use a Gizmo folder inside your chat log folder");
+				buttonDataBrowse = new JButton("...");
+				panelBootyExport.add(folderRow("Data folder", textFieldDataFolder, buttonDataBrowse));
 
 			JPanel panelOptionsPrintOptions = new JPanel();
 			panelOptionsPrintOptions.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1836,6 +1842,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			}).start();
 			runLog = new RunLog(globalPrefs);
 			activityTracker.setOnArrival(firstSinceStart -> {
+				if (stationClock.lastArrival("woodhallow") != 0) return;
 				if (firstSinceStart) runLog.startNewRunUnlessRecent();
 				else runLog.startNewRun();
 			});
@@ -2004,6 +2011,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				// Score per minute first, so it can go on the same lines as the report. Only Wolves Den
 				// reports are timed; CI and Lair reports print just the options the player ticked.
 				boolean isDen = RecordChecker.DEN.equals(RecordChecker.activityOf(data));
+				String voyage = RunLog.voyageOf(data);
+				long arrival = stationClock.lastArrival(voyage);
 				String perMinute = null;
 				java.util.Map<String, java.util.Map<String, Double>> rates = null;
 				ActivityTracker.Period timed = null;
@@ -2011,11 +2020,18 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					try {
 						perMinute = activityTracker.report(data);
 						ActivityTracker.Period fresh = activityTracker.takeNewPeriod();
-						if (fresh != null) printStatus("Saved to " + runLog.record(fresh), true);
+						if (fresh != null) printStatus("Saved to " + runLog.record(fresh, voyage, arrival), true);
 						timed = activityTracker.lastPeriod();
 						rates = ActivityTracker.rates(timed);
 					} catch (IOException | RuntimeException ex) {
 						printStatus("Score per minute failed: " + ex, false);
+					}
+				} else if (voyage != null) {
+					try {
+						Path receipt = runLog.recordUntimed(data, voyage, arrival);
+						if (receipt != null) printStatus("Saved to " + receipt, true);
+					} catch (IOException | RuntimeException ex) {
+						printStatus("Duty report export failed: " + ex, false);
 					}
 				}
 				boolean inline = isDen && checkBoxScan2ScorePerMinute.isSelected();
@@ -2074,8 +2090,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			return;
 		}
 
-		if (e.getSource().equals(buttonChatLogBrowse) || e.getSource().equals(buttonBootyTextBrowse)) {
-			JTextField field = e.getSource().equals(buttonChatLogBrowse) ? textFieldChatLogFolder : textFieldBootyTextFolder;
+		if (e.getSource().equals(buttonChatLogBrowse) || e.getSource().equals(buttonBootyTextBrowse)
+				|| e.getSource().equals(buttonDataBrowse)) {
+			JTextField field = e.getSource().equals(buttonChatLogBrowse) ? textFieldChatLogFolder
+					: e.getSource().equals(buttonDataBrowse) ? textFieldDataFolder : textFieldBootyTextFolder;
 			JFileChooser chooser = new JFileChooser(field.getText().isEmpty() ? null : field.getText());
 			chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
 			if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -2429,21 +2447,22 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					+ (c.myCut == null ? "" : ", your cut " + c.myCut + " PoE"), false);
 		}
 
-		booty.runFiles.addAll(runLog.pending());
+		booty.runFiles.addAll(runLog.pending(booty.pirate(), booty.ocean()));
 
 		Path textFolder = textFieldBootyTextFolder.getText().trim().isEmpty() ? null : Paths.get(textFieldBootyTextFolder.getText().trim());
 		try {
 			BootyExporter.Result r = BootyExporter.export(booty, textFolder);
-			if (!r.duplicate) {   // the next voyage starts afresh
-				activityTracker.clearPeriods();
-				runLog.clearPending();
-				runLog.startNewRun();
-			}
+			runLog.clearPending(booty.runFiles);
+			if (!r.duplicate && !r.replaced) activityTracker.clearPeriods();
 			if (r.duplicate) {
 				printStatus("Booty division already exported to " + r.jsonl.getFileName(), false);
+			} else if (r.replaced) {
+				printStatus("Updated booty division in " + r.jsonl
+						+ (r.text == null ? "" : " and " + r.text.getFileName()), false);
 			} else {
 				printStatus("Booty exported: " + r.jsonl + (r.text == null ? "" : " and " + r.text.getFileName()), false);
 			}
+			if (r.textError != null) printStatus("Text copy failed: " + r.textError, false);
 			if (checkBoxAutoCopy.isSelected()) {
 				StringSelection selection = new StringSelection(booty.toText());
 				Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, selection);
@@ -2458,6 +2477,14 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		globalPrefs.putBoolean(BOOTYEXPORT, checkBoxBootyExport.isSelected());
 		globalPrefs.put(CHATLOGFOLDER, textFieldChatLogFolder.getText().trim());
 		globalPrefs.put(BOOTYTEXTFOLDER, textFieldBootyTextFolder.getText().trim());
+		globalPrefs.put(DATAFOLDER, textFieldDataFolder.getText().trim());
+		applyDataFolder();
+	}
+
+	private void applyDataFolder() {
+		String data = textFieldDataFolder.getText().trim();
+		String chat = textFieldChatLogFolder.getText().trim();
+		GameLog.setDataFolder(!data.isEmpty() ? Paths.get(data) : chat.isEmpty() ? null : Paths.get(chat, "Gizmo"));
 	}
 
 	private void loadLogSettings() {
@@ -2471,6 +2498,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		String text = globalPrefs.get(BOOTYTEXTFOLDER, "");
 		if (text.isEmpty() && !chat.isEmpty()) text = Paths.get(chat, "booty_division").toString();
 		textFieldBootyTextFolder.setText(text);
+		textFieldDataFolder.setText(globalPrefs.get(DATAFOLDER, ""));
+		applyDataFolder();
 
 		wolfWatch.start();
 		activityTracker.start();

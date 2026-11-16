@@ -1,5 +1,6 @@
 package main.java.general;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -51,6 +52,7 @@ public class BootyDivision {
 	public ChatLog.Segment chat;
 	/** Run files (RunLog) written since the last booty export: this voyage's duty reports and timings. */
 	public final List<java.nio.file.Path> runFiles = new ArrayList<>();
+	Path textFile;
 
 	public boolean isEmpty() { return pirates.isEmpty(); }
 
@@ -77,7 +79,8 @@ public class BootyDivision {
 		StringBuilder sb = new StringBuilder();
 		if (chat != null) {
 			for (ChatLog.Line l : chat.lines) {
-				if (l.text.startsWith("Ye have taken aboard")) sb.append(l.text).append(nl);
+				if (l.text.startsWith("Ye have taken aboard") || l.text.startsWith("Ye abandoned "))
+					sb.append(l.text).append(nl);
 			}
 		}
 		for (PirateLoot p : pirates) {
@@ -116,6 +119,10 @@ public class BootyDivision {
 
 	/** One JSON object on a single line, for booty_divisions_<pirate>.jsonl. */
 	public String toJson() {
+		return toJson(null);
+	}
+
+	String toJson(Path folder) {
 		Json j = new Json();
 		j.open();
 		j.field("key", key());
@@ -123,6 +130,8 @@ public class BootyDivision {
 		j.field("scanned_at", scannedAt.toString());
 		j.field("pirate", pirate());
 		j.field("ocean", ocean());
+		j.field("text_file", textFile == null ? null : textFile.getFileName().toString());
+		j.field("text_file_path", textFile);
 		if (game != null) {
 			j.field("vessel", game.vesselName);
 			j.field("vessel_id", game.vesselId);
@@ -141,6 +150,10 @@ public class BootyDivision {
 			j.key("taken_aboard").open();
 			for (Map.Entry<String, Integer> e : chat.takenAboard.entrySet()) j.field(e.getKey(), e.getValue());
 			j.close();
+			j.key("abandoned_hold_full").open();
+			for (Map.Entry<String, Integer> e : chat.abandoned.entrySet()) j.field(e.getKey(), e.getValue());
+			j.close();
+			writeRunEvidence(j);
 			j.key("chat").openArray();
 			for (ChatLog.Line l : chat.lines) j.value(l.raw);
 			j.closeArray();
@@ -163,8 +176,11 @@ public class BootyDivision {
 		j.closeArray();
 		// Links to the run files; paths relative to this .jsonl's folder (exported_data/<ocean>).
 		j.key("run_files").openArray();
-		for (java.nio.file.Path f : runFiles) j.value(f.getParent() != null && f.getParent().getFileName() != null
-				? f.getParent().getFileName() + "/" + f.getFileName() : f.toString());
+		for (Path file : runFiles) {
+			Path absolute = file.toAbsolutePath().normalize();
+			Path reference = folder != null && absolute.startsWith(folder) ? folder.relativize(absolute) : absolute;
+			j.value(reference.toString().replace('\\', '/'));
+		}
 		j.closeArray();
 		j.key("special_drops").open();
 		for (Map.Entry<String, Map<String, Integer>> e : specialDrops.entrySet()) {
@@ -175,6 +191,32 @@ public class BootyDivision {
 		j.close();
 		j.close();
 		return j.toString();
+	}
+
+	private void writeRunEvidence(Json j) {
+		j.key("voyage_runs").openArray();
+		for (int i = 0; i < chat.runs.size(); i++) {
+			ChatLog.Run run = chat.runs.get(i);
+			LocalDateTime end = i + 1 < chat.runs.size() ? chat.runs.get(i + 1).arrivedAt : chat.openedAt;
+			j.open();
+			j.field("voyage", run.voyage);
+			j.field("arrived_at", run.arrivedAt);
+			writeChestTiers(j, "chests_taken_aboard", run.tiers);
+			Map<String, int[]> evidence = RunLog.pirateLoot(runFiles, run, end);
+			if (!evidence.isEmpty()) {
+				j.key("pirate_chest_counts").open();
+				evidence.forEach((pirate, tiers) -> writeChestTiers(j, pirate, tiers));
+				j.close();
+			}
+			j.close();
+		}
+		j.closeArray();
+	}
+
+	private static void writeChestTiers(Json j, String key, int[] tiers) {
+		j.key(key).openArray();
+		for (int count : tiers) j.value(count);
+		j.closeArray();
 	}
 
 	/** Minimal JSON writer; Gizmo has no libraries on the client's classpath. */
