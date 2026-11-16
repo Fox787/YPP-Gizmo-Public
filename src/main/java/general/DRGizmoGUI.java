@@ -32,7 +32,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	public static final String[] OCEANS = new String[] {"Cerulean", "Emerald", "Meridian", "Obsidian", "No Ocean"};
 
-	public static final String AUTOCOPY = "autocopy", AUTOREAD = "autoread", BROKENRECORDALERT = "brokenrecordalert",
+	public static final String AUTOCOPY = "autocopy", COPYSCANTOVESSEL = "copyscantovessel", AUTOREAD = "autoread", BROKENRECORDALERT = "brokenrecordalert",
 			DEBUG = "debug", IGNOREAI = "ignoreai",
 
 			SCANWRITEDATE = "scanwritedate", SCANUSETABS = "scanusetabs", SCANOCEAN = "scanocean",
@@ -113,7 +113,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JButton buttonOutputChest;
 	private JButton buttonOutputCombined;
 	private JButton buttonOutputCarpAvg;
-	private JCheckBox checkBoxAutoCopy, checkBoxBrokenRecordAlert;
+	private JCheckBox checkBoxAutoCopy, checkBoxCopyScanToVessel, checkBoxBrokenRecordAlert;
 	private JCheckBox checkBoxDebug, checkBoxIgnoreAI;
 	private JLabel labelDRCount;
 
@@ -344,7 +344,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 
 		if (checkBoxAutoCopy.isSelected()) {
-			java.util.List<String> pieces = ActivityTracker.chatMessages(timed, checkBoxIgnoreAI.isSelected());
+			java.util.List<String> pieces = checkBoxCopyScanToVessel.isSelected()
+					? ActivityTracker.chatMessages(data, timed, checkBoxIgnoreAI.isSelected()) : java.util.List.of();
 			if (pieces.isEmpty()) {
 				pieces = new java.util.ArrayList<>();
 				if (dataString.length() <= ReportClipboard.CHAT_LIMIT) {
@@ -1902,6 +1903,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				if (!checkBoxAutoCopy.isSelected()) reportClipboard.replace(java.util.List.of());
 			});
 			panelQuickOptions.add(checkBoxAutoCopy);
+			checkBoxCopyScanToVessel = new JCheckBox("Copy scans as /ve");
+			checkBoxCopyScanToVessel.setToolTipText("With Auto-copy enabled, format duty reports for vessel chat.");
+			checkBoxCopyScanToVessel.addItemListener(event -> reportClipboard.replace(java.util.List.of()));
+			panelQuickOptions.add(checkBoxCopyScanToVessel);
 
 			checkBoxBrokenRecordAlert = new JCheckBox("Broken Record Alert");
 			panelQuickOptions.add(checkBoxBrokenRecordAlert);
@@ -2489,6 +2494,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxDebug.setSelected(currentPrefs.getBoolean(DEBUG, false));
 		checkBoxIgnoreAI.setSelected(currentPrefs.getBoolean(IGNOREAI, false));
 		checkBoxAutoCopy.setSelected(currentPrefs.getBoolean(AUTOCOPY, false));
+		checkBoxCopyScanToVessel.setSelected(currentPrefs.getBoolean(COPYSCANTOVESSEL, true));
 		checkBoxBrokenRecordAlert.setSelected(currentPrefs.getBoolean(BROKENRECORDALERT, false));
 
 		// Scan options
@@ -2594,6 +2600,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		try {
 			// Save all settings (same as buttonSavePrefs but to currentPrefs)
 			currentPrefs.putBoolean(AUTOCOPY, checkBoxAutoCopy.isSelected());
+			currentPrefs.putBoolean(COPYSCANTOVESSEL, checkBoxCopyScanToVessel.isSelected());
 			currentPrefs.putBoolean(BROKENRECORDALERT, checkBoxBrokenRecordAlert.isSelected());
 			currentPrefs.putBoolean(DEBUG, checkBoxDebug.isSelected());
 			currentPrefs.putBoolean(IGNOREAI, checkBoxIgnoreAI.isSelected());

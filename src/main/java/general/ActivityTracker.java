@@ -368,19 +368,20 @@ public final class ActivityTracker {
 		return out;
 	}
 
-	/** Packs scored Woodhallow rows into whole vessel-chat messages in duty report order. */
-	static List<String> chatMessages(Period period, boolean ignoreNpc) {
-		if (period == null) return List.of();
+	/** Packs timed or untimed duty reports into whole vessel-chat messages. */
+	static List<String> chatMessages(DRGroupData report, Period period, boolean ignoreNpc) {
 		Map<String, List<String>> byStation = new LinkedHashMap<>();
-		boolean timed = false;
-		for (Row row : period.rows) {
-			if (ignoreNpc && row.pirate.contains(" ")) continue;
-			timed |= row.ms > 0;
-			String rate = row.ms > 0 ? String.format("%.2f", rate(row)) : "-";
-			byStation.computeIfAbsent(row.station, station -> new ArrayList<>())
-					.add(row.pirate + " " + row.score + " (" + rate + ")");
+		if (period == null) {
+			for (var station : report.data.entrySet())
+				for (DRIndividualData row : station.getValue().values())
+					addChatRow(byStation, station.getKey(), row.getName(), row.getTokenScore(), "-", ignoreNpc);
+		} else {
+			for (Row row : period.rows) {
+				String rate = row.ms > 0 ? String.format("%.2f", rate(row)) : "-";
+				addChatRow(byStation, row.station, row.pirate, row.score, rate, ignoreNpc);
+			}
 		}
-		if (!timed) return List.of();
+		if (byStation.isEmpty()) return List.of();
 
 		List<String> stations = new ArrayList<>(byStation.keySet());
 		stations.sort(Comparator.comparingInt(ActivityTracker::stationOrder));
@@ -407,6 +408,12 @@ public final class ActivityTracker {
 			messages.add(message.toString());
 		}
 		return messages;
+	}
+
+	private static void addChatRow(Map<String, List<String>> byStation, String station, String pirate,
+								   int score, String rate, boolean ignoreNpc) {
+		if (ignoreNpc && pirate.contains(" ")) return;
+		byStation.computeIfAbsent(station, unused -> new ArrayList<>()).add(pirate + " " + score + " (" + rate + ")");
 	}
 
 	private static String chatStation(String station) {

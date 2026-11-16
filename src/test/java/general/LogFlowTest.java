@@ -105,11 +105,21 @@ class LogFlowTest {
 		period.rows.add(row("Navigating", "Navigator"));
 		period.rows.add(row("Foraging", "NPC Mate"));
 		assertEquals(List.of("/ve Nav\nNavigator 24 (" + String.format("%.2f", 12.0) + ")\n\nForage\nForager 24 ("
-				+ String.format("%.2f", 12.0) + ")"), ActivityTracker.chatMessages(period, true));
+				+ String.format("%.2f", 12.0) + ")"), ActivityTracker.chatMessages(new DRGroupData(), period, true));
 		for (int i = 0; i < 30; i++) period.rows.add(row("Foraging", "AdditionalPirate" + i));
-		List<String> messages = ActivityTracker.chatMessages(period, true);
+		List<String> messages = ActivityTracker.chatMessages(new DRGroupData(), period, true);
 		assertTrue(messages.size() > 1);
 		assertTrue(messages.stream().allMatch(message -> message.startsWith("/ve ") && message.length() <= 240));
+	}
+
+	@Test
+	void copiesUntimedReportsAsVesselMessages() {
+		var report = new DRGroupData();
+		report.put("Carpentry", "Carpenter", "Fine", new int[]{1, 2, 3}, 7);
+		report.put("Treasure Haul", "Hauler", "Excellent", new int[]{1, 2, 3}, 6);
+		report.put("Treasure Haul", "NPC Mate", "Fine", new int[]{0, 0, 1}, 1);
+		assertEquals(List.of("/ve Carpentry\nCarpenter 7 (-)\n\nTreasure Haul\nHauler 6 (-)"),
+				ActivityTracker.chatMessages(report, null, true));
 	}
 
 	private static ActivityTracker.Row row(String station, String pirate) {
