@@ -50,6 +50,8 @@ public final class ActivityTracker {
 	private static final long SNAP_MS = 15_000;
 	private static final int NAV = 10, FORAGE = 56;
 	static final int POLL_MS = 250;
+	private static final long SCENE_SEARCH_MS = 5_000;
+	private static final long ACTIVE_DEN_SEARCH_MS = 60_000;
 
 	private String self = "";
 	private final PirateState ownStations = new PirateState();
@@ -104,7 +106,10 @@ public final class ActivityTracker {
 			if (now >= nextSceneSearch) {
 				Object found = findScene(window, 0);
 				if (found != null) scene = found; // The view can be hidden during a puzzle.
-				nextSceneSearch = now + 5_000;
+				SceneFields cached = scene == null ? null : SCENE_FIELDS.get(scene.getClass());
+				// An active Woodhallow scene remains valid even when a puzzle hides its view.
+				boolean verifiedDen = cached != null && cached.active() != null && RecordChecker.DEN.equals(cached.kind());
+				nextSceneSearch = now + (verifiedDen ? ACTIVE_DEN_SEARCH_MS : SCENE_SEARCH_MS);
 			}
 			if (scene == null) return;
 			SceneFields fields = SCENE_FIELDS.get(scene.getClass());
@@ -120,6 +125,7 @@ public final class ActivityTracker {
 				}
 			}
 			if (!(fields.occupants().get(scene) instanceof Iterable<?> occupants)) return;
+			boolean trackSceneTimes = den && now >= sceneTrackingSince;
 			for (Object info : occupants) {
 				if (info == null) continue;
 				OccupantFields occupant = OCCUPANT_FIELDS.get(info.getClass());
@@ -128,8 +134,9 @@ public final class ActivityTracker {
 				if (code != 0) {
 					lastSymbolAt = now;
 					lastSymbolKind = fields.kind();
+					if (!trackSceneTimes) break; // Auto-scan only needs to know that a symbol is showing.
 				}
-				if (!den || now < sceneTrackingSince || occupant.username() == null) continue;
+				if (!trackSceneTimes || occupant.username() == null) continue;
 				Object name = occupant.username().get(info);
 				if (name != null) observeSceneActivity(name.toString(), code, now);
 			}
