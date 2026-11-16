@@ -7,6 +7,8 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.text.NumberFormatter;
 import javax.swing.tree.*;
 import java.awt.*;
@@ -21,6 +23,7 @@ import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
@@ -123,10 +126,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JCheckBox checkBoxShowExtraButtons;
 	private JCheckBox checkBoxScan2ScorePerMinute;
 	private JCheckBox checkBoxScanWriteDate, checkBoxScanUseTabs, checkBoxScanStationHeaders, checkBoxScan2Station, checkBoxScan2Pirate, checkBoxScan2Rating, checkBoxScan2TokenScore, checkBoxScan2TokenArray, checkBoxScan2SheetCombo;
-	private JComboBox comboBoxScanOcean;
+	private JComboBox<String> comboBoxScanOcean;
+	private JTextArea scanPreview, scorePreview;
 
 	private JCheckBox checkBoxScoreWriteDate, checkBoxScoreUseTabs, checkBoxScoreStationHeaders, checkBoxScore2Station, checkBoxScore2Pirate, checkBoxScore2Rating, checkBoxScore2TokenScore, checkBoxScore2TokenArray, checkBoxScore2SheetCombo;
-	private JComboBox comboBoxScoreOcean;
+	private JComboBox<String> comboBoxScoreOcean;
 
 	public JTree drTree;
 	public DefaultMutableTreeNode drTreeRootNode;
@@ -575,20 +579,270 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	private WolfWatch wolfWatch;
 
-	/** Label, text field and browse button on one line. */
-	private JComponent folderRow(String label, JTextField field, JButton browse) {
-		Box row = Box.createHorizontalBox();
-		row.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel l = new JLabel(label + " ");
-		l.setPreferredSize(new Dimension(70, 20));
-		row.add(l);
-		field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
+	private JComponent folderRow(String name, JTextField field, JButton browse) {
+		JPanel row = new JPanel(new BorderLayout(0, 3));
+		row.setAlignmentX(LEFT_ALIGNMENT);
+		JLabel label = new JLabel(name);
+		label.setLabelFor(field);
+		row.add(label, BorderLayout.NORTH);
+		JPanel input = new JPanel(new BorderLayout(5, 0));
 		field.addActionListener(ev -> saveLogSettings());
-		row.add(field);
+		input.add(field, BorderLayout.CENTER);
 		browse.setMargin(new Insets(0, 4, 0, 4));
 		browse.addActionListener(this);
-		row.add(browse);
+		browse.getAccessibleContext().setAccessibleName("Browse for " + name);
+		input.add(browse, BorderLayout.EAST);
+		row.add(input, BorderLayout.CENTER);
 		return row;
+	}
+
+	private OptionsPanel createOptions(NumberFormatter integerFormatter) {
+		buttonSavePrefs = new JButton("Save settings");
+		buttonSavePrefs.setToolTipText("Save the active profile, folders and window size");
+		buttonSavePrefs.addActionListener(this);
+		OptionsPanel options = new OptionsPanel(globalPrefs, buttonSavePrefs);
+
+		JPanel profiles = options.section("Profiles", "profiles", false);
+		profileSelector = new RadioButtonProfileSelector(globalPrefs);
+		profileSelector.setAlignmentX(LEFT_ALIGNMENT);
+		profileSelector.setProfileChangeListener(new RadioButtonProfileSelector.ProfileChangeListener() {
+			@Override
+			public void onProfileChanged(String profileName) { switchToProfile(profileName); }
+
+			@Override
+			public void onProfileDeleted(String profileName) {
+				printStatus("Profile '" + profileName + "' deleted", false);
+			}
+		});
+		profiles.add(profileSelector);
+		currentPrefs = profileSelector.getCurrentProfilePrefs();
+		if (currentPrefs == null) currentPrefs = globalPrefs.node(PROFILE_ROOT).node(currentProfile);
+
+		JPanel scanning = options.section("Scan & output", "scanning", true);
+		checkBoxAutoScan = liveOption("Auto-scan", AUTOSCAN);
+		checkBoxAutoScan.setToolTipText("Scan the duty report automatically after a Den, Cursed Isles or Vampire Lair round.");
+		checkBoxAutoCopy = new JCheckBox("Auto-copy");
+		checkBoxBrokenRecordAlert = new JCheckBox("Record alerts");
+		checkBoxIgnoreAI = new JCheckBox("Hide NPCs");
+		checkBoxIgnoreAI.addActionListener(ev -> updateOutputPreviews());
+		checkBoxShowExtraButtons = liveOption("Extra output buttons", SHOWEXTRABUTTONS);
+		checkBoxShowExtraButtons.setToolTipText("Box, Jar, Chest, Averages, Avg/CC's and Carp Avg on the Output tab");
+		checkBoxShowExtraButtons.addActionListener(ev -> applyExtraButtons());
+		checkBoxDebug = new JCheckBox("Debug");
+		checkBoxDebug.setToolTipText("Show debug messages in the Output tab");
+		scanning.add(checkBoxAutoScan);
+		scanning.add(checkBoxAutoCopy);
+		scanning.add(checkBoxBrokenRecordAlert);
+		scanning.add(checkBoxIgnoreAI);
+		scanning.add(checkBoxShowExtraButtons);
+		scanning.add(checkBoxDebug);
+
+		createOutputOptions(options);
+		createScoringOptions(options, integerFormatter);
+		createFileOptions(options);
+
+		return options;
+	}
+
+	private JCheckBox liveOption(String label, String preference) {
+		JCheckBox option = new JCheckBox(label, globalPrefs.getBoolean(preference, true));
+		option.addActionListener(ev -> globalPrefs.putBoolean(preference, option.isSelected()));
+		return option;
+	}
+
+	private void createOutputOptions(OptionsPanel options) {
+		JPanel scan = options.section("Scan format", "scanFormat", false);
+		scanPreview = addOutputPreview(scan);
+		comboBoxScanOcean = new JComboBox<>(OCEANS);
+		checkBoxScanWriteDate = new JCheckBox("Date");
+		checkBoxScanUseTabs = new JCheckBox("Tabs");
+		checkBoxScanUseTabs.setToolTipText("Separate fields with tabs");
+		checkBoxScanStationHeaders = new JCheckBox("Headers");
+		checkBoxScanStationHeaders.setToolTipText("Show a heading for each station");
+		checkBoxScan2Station = new JCheckBox("Station");
+		checkBoxScan2Pirate = new JCheckBox("Pirate");
+		checkBoxScan2Rating = new JCheckBox("Rating");
+		checkBoxScan2TokenScore = new JCheckBox("Score");
+		checkBoxScan2TokenArray = new JCheckBox("Counts");
+		checkBoxScan2SheetCombo = new JCheckBox("Score + counts (one cell)");
+		checkBoxScan2ScorePerMinute = new JCheckBox("Score per minute");
+		checkBoxScan2ScorePerMinute.setToolTipText("Include score per minute on each pirate's line");
+		addOutputFormat(scan, comboBoxScanOcean, new JCheckBox[]{checkBoxScanWriteDate, checkBoxScanUseTabs,
+				checkBoxScan2Station, checkBoxScan2Pirate, checkBoxScan2Rating, checkBoxScan2TokenScore,
+				checkBoxScanStationHeaders, checkBoxScan2TokenArray}, checkBoxScan2SheetCombo, checkBoxScan2ScorePerMinute);
+
+		JPanel score = options.section("Score All format", "scoreFormat", false);
+		scorePreview = addOutputPreview(score);
+		comboBoxScoreOcean = new JComboBox<>(OCEANS);
+		checkBoxScoreWriteDate = new JCheckBox("Date");
+		checkBoxScoreUseTabs = new JCheckBox("Tabs");
+		checkBoxScoreUseTabs.setToolTipText("Separate fields with tabs");
+		checkBoxScoreStationHeaders = new JCheckBox("Headers");
+		checkBoxScoreStationHeaders.setToolTipText("Show a heading for each station");
+		checkBoxScore2Station = new JCheckBox("Station");
+		checkBoxScore2Pirate = new JCheckBox("Pirate");
+		checkBoxScore2Rating = new JCheckBox("Rating");
+		checkBoxScore2TokenScore = new JCheckBox("Score");
+		checkBoxScore2TokenArray = new JCheckBox("Counts");
+		checkBoxScore2SheetCombo = new JCheckBox("Score + counts (one cell)");
+		addOutputFormat(score, comboBoxScoreOcean, new JCheckBox[]{checkBoxScoreWriteDate, checkBoxScoreUseTabs,
+				checkBoxScore2Station, checkBoxScore2Pirate, checkBoxScore2Rating, checkBoxScore2TokenScore,
+				checkBoxScoreStationHeaders, checkBoxScore2TokenArray}, checkBoxScore2SheetCombo);
+	}
+
+	private static JTextArea addOutputPreview(JPanel panel) {
+		JTextArea preview = new JTextArea(4, 0);
+		preview.setEditable(false);
+		preview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, preview.getFont().getSize()));
+		preview.setMargin(new Insets(4, 5, 4, 5));
+		preview.setLineWrap(true);
+		preview.setWrapStyleWord(true);
+		preview.setToolTipText("Sample duty report with the current format");
+
+		JLabel label = new JLabel("Example");
+		label.setLabelFor(preview);
+		panel.add(label);
+		panel.add(Box.createVerticalStrut(3));
+		JScrollPane scroll = new JScrollPane(preview, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		scroll.setAlignmentX(LEFT_ALIGNMENT);
+		scroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, scroll.getPreferredSize().height));
+		panel.add(scroll);
+		panel.add(Box.createVerticalStrut(5));
+		return preview;
+	}
+
+	private void addOutputFormat(JPanel panel, JComboBox<String> ocean, JCheckBox[] paired, JCheckBox... fullWidth) {
+		JPanel oceanRow = new JPanel(new BorderLayout(8, 0));
+		oceanRow.setAlignmentX(LEFT_ALIGNMENT);
+		JLabel label = new JLabel("Ocean");
+		label.setLabelFor(ocean);
+		oceanRow.add(label, BorderLayout.WEST);
+		oceanRow.add(ocean, BorderLayout.CENTER);
+		panel.add(oceanRow);
+		panel.add(Box.createVerticalStrut(5));
+		ocean.addActionListener(ev -> updateOutputPreviews());
+
+		JPanel columns = new JPanel(new GridLayout(0, 2, 4, 0));
+		columns.setAlignmentX(LEFT_ALIGNMENT);
+		panel.add(columns);
+		for (JCheckBox field : paired) {
+			columns.add(field);
+			field.addActionListener(ev -> updateOutputPreviews());
+		}
+		for (JCheckBox field : fullWidth) {
+			panel.add(field);
+			field.addActionListener(ev -> updateOutputPreviews());
+		}
+	}
+
+	private void calculateReportScore(DRGroupData report) {
+		report.calculateCustomTokenScore(intOf(formattedTextFieldTokenCircle, 1),
+				intOf(formattedTextFieldTokenDiamond, 1), intOf(formattedTextFieldTokenPlus, 1),
+				intOf(formattedTextFieldTokenCross, 1), intOf(formattedTextFieldTokenThrall, 1),
+				intOf(formattedTextFieldCannonball, 1), intOf(formattedTextFieldSmallChest, 1),
+				intOf(formattedTextFieldMediumChest, 2), intOf(formattedTextFieldLargeChest, 3));
+	}
+
+	private String formatScanOutput(DRGroupData data, Map<String, Map<String, Double>> rates) {
+		return data.toString(checkBoxIgnoreAI.isSelected(), checkBoxScanWriteDate.isSelected(),
+				checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
+				checkBoxScanStationHeaders.isSelected(), checkBoxScan2Station.isSelected(), checkBoxScan2Pirate.isSelected(),
+				checkBoxScan2Rating.isSelected(), checkBoxScan2TokenScore.isSelected(),
+				checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected(),
+				checkBoxScan2ScorePerMinute.isSelected() ? rates : null);
+	}
+
+	private String formatScoreOutput(DRPersistantData data) {
+		return data.toString(checkBoxIgnoreAI.isSelected(), checkBoxScoreWriteDate.isSelected(),
+				checkBoxScoreUseTabs.isSelected(), comboBoxScoreOcean.getSelectedItem().toString(),
+				checkBoxScoreStationHeaders.isSelected(), checkBoxScore2Station.isSelected(), checkBoxScore2Pirate.isSelected(),
+				checkBoxScore2Rating.isSelected(), checkBoxScore2TokenScore.isSelected(),
+				checkBoxScore2TokenArray.isSelected(), checkBoxScore2SheetCombo.isSelected());
+	}
+
+	private void updateOutputPreviews() {
+		if (formattedTextFieldLargeChest == null || currentPrefs == null) return;
+		String station = "Foraging";
+		String pirate = "Seabrook";
+		String npc = "Able Deckhand";
+		DRGroupData first = new DRGroupData();
+		first.put(station, pirate, "Swift", new int[]{2, 1, 3}, 0);
+		first.put(station, npc, "Steady", new int[]{1, 0, 1}, 0);
+		DRGroupData second = new DRGroupData();
+		second.put(station, pirate, "Brisk", new int[]{1, 3, 1}, 0);
+		calculateReportScore(first);
+		calculateReportScore(second);
+
+		// Example times of two minutes and one minute for the two pirates.
+		Map<String, Map<String, Double>> rates = Map.of(station, Map.of(
+				pirate, first.get(station, pirate).getTokenScore() / 2.0,
+				npc, (double) first.get(station, npc).getTokenScore()));
+		updatePreview(scanPreview, formatScanOutput(first, rates));
+
+		DRPersistantData reports = new DRPersistantData();
+		reports.add(first);
+		reports.add(second);
+		updatePreview(scorePreview, formatScoreOutput(reports));
+	}
+
+	private static void updatePreview(JTextArea preview, String text) {
+		String example = text.isBlank() ? "No output fields selected" : text.stripTrailing();
+		if (example.equals(preview.getText())) return;
+		preview.setText(example);
+		preview.setCaretPosition(0);
+	}
+
+	private void createScoringOptions(OptionsPanel options, NumberFormatter formatter) {
+		JPanel section = options.section("Scoring values", "scoringValues", false);
+		JPanel grid = new JPanel(new GridLayout(0, 2, 8, 4));
+		grid.setAlignmentX(LEFT_ALIGNMENT);
+		section.add(grid);
+		formattedTextFieldTokenCircle = addScoringValue(grid, "Circle", formatter);
+		formattedTextFieldTokenDiamond = addScoringValue(grid, "Diamond", formatter);
+		formattedTextFieldTokenPlus = addScoringValue(grid, "Plus", formatter);
+		formattedTextFieldTokenCross = addScoringValue(grid, "Cross", formatter);
+		formattedTextFieldTokenThrall = addScoringValue(grid, "Thrall", formatter);
+		formattedTextFieldCannonball = addScoringValue(grid, "Cannonball", formatter);
+		formattedTextFieldSmallChest = addScoringValue(grid, "Small chest", formatter);
+		formattedTextFieldMediumChest = addScoringValue(grid, "Medium chest", formatter);
+		formattedTextFieldLargeChest = addScoringValue(grid, "Large chest", formatter);
+		DocumentListener weights = new DocumentListener() {
+			@Override public void insertUpdate(DocumentEvent e) { updateOutputPreviews(); }
+			@Override public void removeUpdate(DocumentEvent e) { updateOutputPreviews(); }
+			@Override public void changedUpdate(DocumentEvent e) { updateOutputPreviews(); }
+		};
+		for (JFormattedTextField field : List.of(formattedTextFieldSmallChest, formattedTextFieldMediumChest, formattedTextFieldLargeChest))
+			field.getDocument().addDocumentListener(weights);
+	}
+
+	private static JFormattedTextField addScoringValue(JPanel grid, String name, NumberFormatter formatter) {
+		JFormattedTextField field = new JFormattedTextField(formatter);
+		field.setHorizontalAlignment(JTextField.RIGHT);
+		JLabel label = new JLabel(name);
+		label.setLabelFor(field);
+		grid.add(label);
+		grid.add(field);
+		return field;
+	}
+
+	private void createFileOptions(OptionsPanel options) {
+		JPanel files = options.section("Booty & files", "export", false);
+		checkBoxBootyExport = new JCheckBox("Export on scan");
+		checkBoxBootyExport.setToolTipText("Export the booty division to exported_data beside the game, plus a text copy if configured");
+		checkBoxBootyExport.addActionListener(ev -> saveLogSettings());
+		files.add(checkBoxBootyExport);
+		files.add(Box.createVerticalStrut(5));
+
+		textFieldChatLogFolder = new JTextField();
+		buttonChatLogBrowse = new JButton("Browse…");
+		files.add(folderRow("Chat logs", textFieldChatLogFolder, buttonChatLogBrowse));
+		files.add(Box.createVerticalStrut(6));
+		textFieldBootyTextFolder = new JTextField();
+		textFieldBootyTextFolder.setToolTipText("Leave empty to only write the .jsonl");
+		buttonBootyTextBrowse = new JButton("Browse…");
+		files.add(folderRow("Text copies", textFieldBootyTextFolder, buttonBootyTextBrowse));
+		files.add(Box.createVerticalStrut(6));
 	}
 
 	public void printStatus(String text, boolean isDebug) {
@@ -818,340 +1072,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 
-			JPanel panelOptions = new JPanel();
-			tabbedPane.addTab("Options", null, panelOptions, null);
-			panelOptions.setLayout(new BorderLayout(0, 0));
-
-				JScrollPane scrollPaneOptions = new JScrollPane();
-				panelOptions.add(scrollPaneOptions, BorderLayout.CENTER);
-
-				JPanel panelOptions_2 = new JPanel();
-				scrollPaneOptions.setViewportView(panelOptions_2);
-				panelOptions_2.setLayout(new BoxLayout(panelOptions_2, BoxLayout.Y_AXIS));
-
-			JPanel panelOptionsGeneral = new JPanel();
-			panelOptionsGeneral.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelOptions_2.add(panelOptionsGeneral);
-			panelOptionsGeneral.setLayout(new BorderLayout());
-
-			// LEFT SIDE - Save button and checkboxes
-			JPanel leftPanel = new JPanel();
-			leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
-
-			buttonSavePrefs = new JButton("Save Prefs");
-			buttonSavePrefs.setToolTipText("Also saves window height and width");
-			buttonSavePrefs.addActionListener(this);
-			buttonSavePrefs.setAlignmentX(Component.LEFT_ALIGNMENT); // Align left
-			leftPanel.add(buttonSavePrefs);
-
-			checkBoxDebug = new JCheckBox("Debug");
-			checkBoxDebug.setAlignmentX(Component.LEFT_ALIGNMENT); // Align left
-			leftPanel.add(checkBoxDebug);
-
-			checkBoxIgnoreAI = new JCheckBox("Ignore AI");
-			checkBoxIgnoreAI.setAlignmentX(Component.LEFT_ALIGNMENT); // Align left
-			leftPanel.add(checkBoxIgnoreAI);
-
-			checkBoxShowExtraButtons = new JCheckBox("Show extra buttons");
-			checkBoxShowExtraButtons.setToolTipText("Box, Jar, Chest, Averages, Avg/CC's and Carp Avg on the Output tab");
-			checkBoxShowExtraButtons.setAlignmentX(Component.LEFT_ALIGNMENT);
-			checkBoxShowExtraButtons.addActionListener(ev -> {
-				globalPrefs.putBoolean(SHOWEXTRABUTTONS, checkBoxShowExtraButtons.isSelected());
-				applyExtraButtons();
-			});
-			leftPanel.add(checkBoxShowExtraButtons);
-
-			profileSelector = new RadioButtonProfileSelector(DRGizmoMain.prefs);
-			profileSelector.setProfileChangeListener(new RadioButtonProfileSelector.ProfileChangeListener() {
-				@Override
-				public void onProfileChanged(String profileName) {
-					switchToProfile(profileName);
-				}
-
-				@Override
-				public void onProfileDeleted(String profileName) {
-					printStatus("Profile '" + profileName + "' deleted", false);
-				}
-			});
-			profileSelector.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-			panelOptionsGeneral.add(leftPanel, BorderLayout.WEST);
-			panelOptionsGeneral.add(profileSelector, BorderLayout.CENTER);
-
-			currentPrefs = profileSelector.getCurrentProfilePrefs();
-			// A fresh install has no selected profile yet; without this every field stays empty and Scan
-			// fails parsing the token values.
-			if (currentPrefs == null) currentPrefs = globalPrefs.node(PROFILE_ROOT).node(currentProfile);
-
-			// Booty export: where to find chat logs, and where readable copies go.
-			JPanel panelBootyExport = new JPanel();
-			panelBootyExport.setBorder(new TitledBorder(null, "Booty Export", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelBootyExport.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelBootyExport.setLayout(new BoxLayout(panelBootyExport, BoxLayout.Y_AXIS));
-			panelOptions_2.add(panelBootyExport);
-
-				checkBoxBootyExport = new JCheckBox("Export booty division when scanned");
-				checkBoxBootyExport.setToolTipText("Writes exported_data/<ocean>/booty_divisions_<pirate>.jsonl beside the client, plus N.txt in the text folder");
-				checkBoxBootyExport.setAlignmentX(Component.LEFT_ALIGNMENT);
-				checkBoxBootyExport.addActionListener(ev -> saveLogSettings());
-				panelBootyExport.add(checkBoxBootyExport);
-
-				textFieldChatLogFolder = new JTextField();
-				buttonChatLogBrowse = new JButton("...");
-				panelBootyExport.add(folderRow("Chat logs", textFieldChatLogFolder, buttonChatLogBrowse));
-
-				textFieldBootyTextFolder = new JTextField();
-				textFieldBootyTextFolder.setToolTipText("Leave empty to only write the .jsonl");
-				buttonBootyTextBrowse = new JButton("...");
-				panelBootyExport.add(folderRow("Text copies", textFieldBootyTextFolder, buttonBootyTextBrowse));
-
-			JPanel panelOptionsPrintOptions = new JPanel();
-			panelOptionsPrintOptions.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelOptions_2.add(panelOptionsPrintOptions);
-			panelOptionsPrintOptions.setLayout(new BoxLayout(panelOptionsPrintOptions, BoxLayout.X_AXIS));
-
-				JPanel panelPrintOptionsScan = new JPanel();
-				panelPrintOptionsScan.setBorder(new TitledBorder(null, "Scanning", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-				panelOptionsPrintOptions.add(panelPrintOptionsScan);
-				panelPrintOptionsScan.setLayout(new BoxLayout(panelPrintOptionsScan, BoxLayout.Y_AXIS));
-
-					checkBoxScanWriteDate = new JCheckBox("Write Date");
-					panelPrintOptionsScan.add(checkBoxScanWriteDate);
-
-					checkBoxScanUseTabs = new JCheckBox("Use Tabs");
-					panelPrintOptionsScan.add(checkBoxScanUseTabs);
-
-					comboBoxScanOcean = new JComboBox();
-					comboBoxScanOcean.setAlignmentX(Component.LEFT_ALIGNMENT);
-					panelPrintOptionsScan.add(comboBoxScanOcean);
-					comboBoxScanOcean.setModel(new DefaultComboBoxModel(OCEANS));
-					comboBoxScanOcean.setMaximumSize(new Dimension(120, 23));
-
-					checkBoxScanStationHeaders = new JCheckBox("Station Headers");
-					panelPrintOptionsScan.add(checkBoxScanStationHeaders);
-
-					JPanel panelPrintOptionsScan_2 = new JPanel();
-					panelPrintOptionsScan_2.setBorder(new TitledBorder(null, "IDK What to", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-					panelPrintOptionsScan.add(panelPrintOptionsScan_2);
-					panelPrintOptionsScan_2.setLayout(new BoxLayout(panelPrintOptionsScan_2, BoxLayout.Y_AXIS));
-
-					checkBoxScan2Station = new JCheckBox("Station");
-					panelPrintOptionsScan_2.add(checkBoxScan2Station);
-
-					checkBoxScan2Pirate = new JCheckBox("Pirate");
-					panelPrintOptionsScan_2.add(checkBoxScan2Pirate);
-
-					checkBoxScan2Rating = new JCheckBox("Rating");
-					panelPrintOptionsScan_2.add(checkBoxScan2Rating);
-
-					checkBoxScan2TokenScore = new JCheckBox("Token Score");
-					panelPrintOptionsScan_2.add(checkBoxScan2TokenScore);
-
-					checkBoxScan2TokenArray = new JCheckBox("Token Array");
-					panelPrintOptionsScan_2.add(checkBoxScan2TokenArray);
-
-					checkBoxScan2SheetCombo = new JCheckBox("Sheet Combo");
-					checkBoxScan2SheetCombo.setToolTipText(" Creates a Score + Array Combo in Single Cell.");
-					panelPrintOptionsScan_2.add(checkBoxScan2SheetCombo);
-
-					checkBoxScan2ScorePerMinute = new JCheckBox("Score/min");
-					checkBoxScan2ScorePerMinute.setToolTipText("Wolves Den only: adds (score per minute) to each pirate's line instead of a separate list.");
-					panelPrintOptionsScan_2.add(checkBoxScan2ScorePerMinute);
-
-				JPanel panelPrintOptionsScore = new JPanel();
-				panelPrintOptionsScore.setBorder(new TitledBorder(null, "Scoring", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-				panelOptionsPrintOptions.add(panelPrintOptionsScore);
-				panelPrintOptionsScore.setLayout(new BoxLayout(panelPrintOptionsScore, BoxLayout.Y_AXIS));
-
-					checkBoxScoreWriteDate = new JCheckBox("Write Date");
-					panelPrintOptionsScore.add(checkBoxScoreWriteDate);
-
-					checkBoxScoreUseTabs = new JCheckBox("Use Tabs");
-					panelPrintOptionsScore.add(checkBoxScoreUseTabs);
-
-					comboBoxScoreOcean = new JComboBox();
-					comboBoxScoreOcean.setAlignmentX(Component.LEFT_ALIGNMENT);
-					comboBoxScoreOcean.setModel(new DefaultComboBoxModel(OCEANS));
-					comboBoxScoreOcean.setMaximumSize(new Dimension(120, 23));
-					panelPrintOptionsScore.add(comboBoxScoreOcean);
-
-					checkBoxScoreStationHeaders = new JCheckBox("Station Headers");
-					panelPrintOptionsScore.add(checkBoxScoreStationHeaders);
-
-					JPanel panePrintOptionsScore_2 = new JPanel();
-					panePrintOptionsScore_2.setBorder(new TitledBorder(null, "Name These", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-					panelPrintOptionsScore.add(panePrintOptionsScore_2);
-					panePrintOptionsScore_2.setLayout(new BoxLayout(panePrintOptionsScore_2, BoxLayout.Y_AXIS));
-
-					checkBoxScore2Station = new JCheckBox("Station");
-					panePrintOptionsScore_2.add(checkBoxScore2Station);
-
-					checkBoxScore2Pirate = new JCheckBox("Pirate");
-					panePrintOptionsScore_2.add(checkBoxScore2Pirate);
-
-					checkBoxScore2Rating = new JCheckBox("Rating");
-					panePrintOptionsScore_2.add(checkBoxScore2Rating);
-
-					checkBoxScore2TokenScore = new JCheckBox("Token Score");
-					panePrintOptionsScore_2.add(checkBoxScore2TokenScore);
-
-					checkBoxScore2TokenArray = new JCheckBox("Token Array");
-					panePrintOptionsScore_2.add(checkBoxScore2TokenArray);
-
-					checkBoxScore2SheetCombo = new JCheckBox("Sheet Combo");
-					checkBoxScore2SheetCombo.setToolTipText(" Creates a Score + Array Combo in Single Cell.");
-					panePrintOptionsScore_2.add(checkBoxScore2SheetCombo);
-
-
-
-			JPanel panelOptionsTokenAndChestValues = new JPanel();
-			panelOptionsTokenAndChestValues.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelOptionsTokenAndChestValues.setBorder(new TitledBorder(null, "Token/Chest Values", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelOptions_2.add(panelOptionsTokenAndChestValues);
-			panelOptionsTokenAndChestValues.setLayout(new BoxLayout(panelOptionsTokenAndChestValues, BoxLayout.X_AXIS));
-
-			JPanel panelTokenValues = new JPanel();
-			panelTokenValues.setBorder(new TitledBorder(null, "Tokens", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelOptionsTokenAndChestValues.add(panelTokenValues);
-			panelTokenValues.setLayout(new BoxLayout(panelTokenValues, BoxLayout.Y_AXIS));
-
-				Box horizontalBoxTokenCircle = Box.createHorizontalBox();
-				horizontalBoxTokenCircle.setAlignmentX(Component.LEFT_ALIGNMENT);
-				panelTokenValues.add(horizontalBoxTokenCircle);
-
-				JLabel labelTokenCircle = new JLabel("Circle");
-				labelTokenCircle.setMinimumSize(new Dimension(60, 23));
-				labelTokenCircle.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxTokenCircle.add(labelTokenCircle);
-
-				formattedTextFieldTokenCircle = new JFormattedTextField(integerFormatter);
-				formattedTextFieldTokenCircle.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldTokenCircle.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldTokenCircle.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxTokenCircle.add(formattedTextFieldTokenCircle);
-
-				Box horizontalBoxTokenDiamond = Box.createHorizontalBox();
-				horizontalBoxTokenDiamond.setAlignmentX(Component.LEFT_ALIGNMENT);
-				panelTokenValues.add(horizontalBoxTokenDiamond);
-
-				JLabel labelTokenDiamond = new JLabel("Diamond");
-				labelTokenDiamond.setMinimumSize(new Dimension(60, 23));
-				labelTokenDiamond.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxTokenDiamond.add(labelTokenDiamond);
-
-				formattedTextFieldTokenDiamond = new JFormattedTextField(integerFormatter);
-				formattedTextFieldTokenDiamond.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldTokenDiamond.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldTokenDiamond.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxTokenDiamond.add(formattedTextFieldTokenDiamond);
-
-				Box horizontalBoxTokenPlus = Box.createHorizontalBox();
-				horizontalBoxTokenPlus.setAlignmentX(Component.LEFT_ALIGNMENT);
-				panelTokenValues.add(horizontalBoxTokenPlus);
-
-				JLabel labelTokenPlus = new JLabel("Plus");
-				labelTokenPlus.setMinimumSize(new Dimension(60, 23));
-				labelTokenPlus.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxTokenPlus.add(labelTokenPlus);
-
-				formattedTextFieldTokenPlus = new JFormattedTextField(integerFormatter);
-				formattedTextFieldTokenPlus.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldTokenPlus.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldTokenPlus.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxTokenPlus.add(formattedTextFieldTokenPlus);
-
-				Box horizontalBoxTokenCross = Box.createHorizontalBox();
-				horizontalBoxTokenCross.setAlignmentX(Component.LEFT_ALIGNMENT);
-				panelTokenValues.add(horizontalBoxTokenCross);
-
-				JLabel labelTokenCross = new JLabel("Cross");
-				labelTokenCross.setMinimumSize(new Dimension(60, 23));
-				labelTokenCross.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxTokenCross.add(labelTokenCross);
-
-				formattedTextFieldTokenCross = new JFormattedTextField(integerFormatter);
-				formattedTextFieldTokenCross.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldTokenCross.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldTokenCross.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxTokenCross.add(formattedTextFieldTokenCross);
-
-				Box horizontalBoxTokenThrall = Box.createHorizontalBox();
-				horizontalBoxTokenThrall.setAlignmentX(Component.LEFT_ALIGNMENT);
-				panelTokenValues.add(horizontalBoxTokenThrall);
-
-				JLabel labelTokenThrall = new JLabel("Thrall");
-				labelTokenThrall.setMinimumSize(new Dimension(60, 23));
-				labelTokenThrall.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxTokenThrall.add(labelTokenThrall);
-
-				formattedTextFieldTokenThrall = new JFormattedTextField(integerFormatter);
-				formattedTextFieldTokenThrall.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldTokenThrall.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldTokenThrall.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxTokenThrall.add(formattedTextFieldTokenThrall);
-
-			JPanel panelCannonballAndChests = new JPanel();
-			panelOptionsTokenAndChestValues.add(panelCannonballAndChests);
-			panelCannonballAndChests.setLayout(new BoxLayout(panelCannonballAndChests, BoxLayout.Y_AXIS));
-
-				Box horizontalBoxCannonball = Box.createHorizontalBox();
-				panelCannonballAndChests.add(horizontalBoxCannonball);
-
-				JLabel labelCannonball = new JLabel("Cannonball");
-				horizontalBoxCannonball.add(labelCannonball);
-
-				formattedTextFieldCannonball = new JFormattedTextField(integerFormatter);
-				formattedTextFieldCannonball.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldCannonball.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldCannonball.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxCannonball.add(formattedTextFieldCannonball);
-
-			JPanel panelChests = new JPanel();
-			panelChests.setBorder(new TitledBorder(null, "Chests", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelCannonballAndChests.add(panelChests);
-			panelChests.setLayout(new BoxLayout(panelChests, BoxLayout.Y_AXIS));
-
-				Box horizontalBoxSmallChest = Box.createHorizontalBox();
-				panelChests.add(horizontalBoxSmallChest);
-
-				JLabel labelSmallChest = new JLabel("Small");
-				labelSmallChest.setMinimumSize(new Dimension(60, 23));
-				labelSmallChest.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxSmallChest.add(labelSmallChest);
-
-				formattedTextFieldSmallChest = new JFormattedTextField(integerFormatter);
-				formattedTextFieldSmallChest.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldSmallChest.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldSmallChest.setMaximumSize(new Dimension(30, 23));
-				horizontalBoxSmallChest.add(formattedTextFieldSmallChest);
-
-				Box horizontalBoxMediumChest = Box.createHorizontalBox();
-				panelChests.add(horizontalBoxMediumChest);
-
-				JLabel labelMediumChest = new JLabel("Medium");
-				labelMediumChest.setMinimumSize(new Dimension(60, 23));
-				labelMediumChest.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxMediumChest.add(labelMediumChest);
-
-				formattedTextFieldMediumChest = new JFormattedTextField(integerFormatter);
-				formattedTextFieldMediumChest.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldMediumChest.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldMediumChest.setMaximumSize(new Dimension(30, 23));
-				horizontalBoxMediumChest.add(formattedTextFieldMediumChest);
-
-				Box horizontalBoxLargeChest = Box.createHorizontalBox();
-				panelChests.add(horizontalBoxLargeChest);
-
-				JLabel labelLargeChest = new JLabel("Large");
-				labelLargeChest.setMinimumSize(new Dimension(60, 23));
-				labelLargeChest.setMaximumSize(new Dimension(60, 23));
-				horizontalBoxLargeChest.add(labelLargeChest);
-
-				formattedTextFieldLargeChest = new JFormattedTextField(integerFormatter);
-				formattedTextFieldLargeChest.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldLargeChest.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldLargeChest.setMaximumSize(new Dimension(30, 23));
-				horizontalBoxLargeChest.add(formattedTextFieldLargeChest);
+			tabbedPane.addTab("Options", createOptions(integerFormatter));
 
 			// Records tab: one box per activity. Broken Record Alert checks the box for the activity scanned.
 			JPanel panelRecords = new JPanel();
@@ -1803,15 +1724,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelScan.add(buttonScan);
 
 		JPanel panelQuickOptions = new JPanel();
-		panelQuickOptions.setBorder(new TitledBorder(null, "Quick Options", TitledBorder.LEADING, TitledBorder.TOP, null, null));
 		panelGeneral.add(panelQuickOptions, BorderLayout.CENTER);
 		panelQuickOptions.setLayout(new BoxLayout(panelQuickOptions, BoxLayout.Y_AXIS));
-
-			checkBoxAutoCopy = new JCheckBox("Auto Copy");
-			panelQuickOptions.add(checkBoxAutoCopy);
-
-			checkBoxBrokenRecordAlert = new JCheckBox("Broken Record Alert");
-			panelQuickOptions.add(checkBoxBrokenRecordAlert);
 
 			// Read-only: shown here in Gizmo's window, never added to the client.
 			labelWolvesLeft = new JLabel(" ");
@@ -1843,11 +1757,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			// Auto scan: while stations are running (or just after), look for a new duty report every
 			// 2 seconds and scan it the same way the Scan button does. One setting for Den, CI and Lair;
 			// untick to scan by hand.
-			checkBoxAutoScan = new JCheckBox("Auto Scan DR");
-			checkBoxAutoScan.setToolTipText("Scan the duty report on its own after each Wolves Den, Cursed Isles or Vampire Lair round. Untick to scan by hand.");
-			checkBoxAutoScan.setSelected(globalPrefs.getBoolean(AUTOSCAN, true));
-			checkBoxAutoScan.addActionListener(ev -> globalPrefs.putBoolean(AUTOSCAN, checkBoxAutoScan.isSelected()));
-			panelQuickOptions.add(checkBoxAutoScan);
 			new javax.swing.Timer(2000, ev -> autoScanTick()).start();
 
 			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
@@ -1992,15 +1901,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
     			}
 
 				//change tokenScore based on the settings
-				data.calculateCustomTokenScore(intOf(formattedTextFieldTokenCircle, 1),
-						intOf(formattedTextFieldTokenDiamond, 1),
-						intOf(formattedTextFieldTokenPlus, 1),
-						intOf(formattedTextFieldTokenCross, 1),
-						intOf(formattedTextFieldTokenThrall, 1),
-						intOf(formattedTextFieldCannonball, 1),
-						intOf(formattedTextFieldSmallChest, 1),
-						intOf(formattedTextFieldMediumChest, 2),
-						intOf(formattedTextFieldLargeChest, 3));
+				calculateReportScore(data);
 				// Score per minute first, so it can go on the same lines as the report. Only Wolves Den
 				// reports are timed; CI and Lair reports print just the options the player ticked.
 				boolean isDen = RecordChecker.DEN.equals(RecordChecker.activityOf(data));
@@ -2019,13 +1920,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					}
 				}
 				boolean inline = isDen && checkBoxScan2ScorePerMinute.isSelected();
-				//print dr to output with print settings
-				String dataString = data.toString(checkBoxIgnoreAI.isSelected(), checkBoxScanWriteDate.isSelected(),
-						checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
-						checkBoxScanStationHeaders.isSelected(), checkBoxScan2Station.isSelected(), checkBoxScan2Pirate.isSelected(),
-						checkBoxScan2Rating.isSelected(), checkBoxScan2TokenScore.isSelected(),
-						checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected(),
-						inline ? rates : null);
+				String dataString = formatScanOutput(data, rates);
 				printStatus(dataString, false);
 				// Without the Score/min option, the per-minute lists still print separately.
 				if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(perMinute, false);
@@ -2044,12 +1939,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						pieces.add(dataString);
 					} else {
 						for (String station : data.data.keySet()) {
-							String part = data.get(station).toString(checkBoxIgnoreAI.isSelected(), checkBoxScanWriteDate.isSelected(),
-									checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
-									checkBoxScanStationHeaders.isSelected(), checkBoxScan2Station.isSelected(), checkBoxScan2Pirate.isSelected(),
-									checkBoxScan2Rating.isSelected(), checkBoxScan2TokenScore.isSelected(),
-									checkBoxScan2TokenArray.isSelected(), checkBoxScan2SheetCombo.isSelected(),
-									inline ? rates : null);
+							String part = formatScanOutput(data.get(station), rates);
 							pieces.addAll(splitForChat(part));
 						}
 					}
@@ -2089,21 +1979,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			DRPersistantData data = drTreeToPersistantData();
 			if (data != null && !data.isEmpty()) {
 				//change tokenScore based on the settings
-				data.calculateCustomTokenScore(intOf(formattedTextFieldTokenCircle, 1),
-						intOf(formattedTextFieldTokenDiamond, 1),
-						intOf(formattedTextFieldTokenPlus, 1),
-						intOf(formattedTextFieldTokenCross, 1),
-						intOf(formattedTextFieldTokenThrall, 1),
-						intOf(formattedTextFieldCannonball, 1),
-						intOf(formattedTextFieldSmallChest, 1),
-						intOf(formattedTextFieldMediumChest, 2),
-						intOf(formattedTextFieldLargeChest, 3));
-				//print dr to output with print settings
-				String dataString = data.toString(checkBoxIgnoreAI.isSelected(), checkBoxScoreWriteDate.isSelected(),
-						checkBoxScoreUseTabs.isSelected(), comboBoxScoreOcean.getSelectedItem().toString(),
-						checkBoxScoreStationHeaders.isSelected(), checkBoxScore2Station.isSelected(), checkBoxScore2Pirate.isSelected(),
-						checkBoxScore2Rating.isSelected(), checkBoxScore2TokenScore.isSelected(),
-						checkBoxScore2TokenArray.isSelected(), checkBoxScore2SheetCombo.isSelected());
+				for (DRGroupData report : data.groups()) calculateReportScore(report);
+				String dataString = formatScoreOutput(data);
 				printStatus(dataString, false);
 
 				//check for broken records: each activity in the tree against its own records
@@ -2414,7 +2291,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	/** Adds chat log and game log context to a scanned booty division and writes it out. */
 	private void exportBooty(BootyDivision booty) {
 		if (!checkBoxBootyExport.isSelected()) {
-			printStatus("Booty export is off (Options > Booty Export)", false);
+			printStatus("Booty export is off (Options > Booty & files)", false);
 			return;
 		}
 		StringBuilder notes = new StringBuilder();
@@ -2590,6 +2467,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		formattedTextFieldLairCarpHoles.setValue(globalPrefs.getInt(LAIRCARPHOLES, 0));
 		formattedTextFieldLairVampireProof.setValue(globalPrefs.getInt(LAIRVAMPIREPROOF, 0));
 		formattedTextFieldWolvesFurrballs4.setValue(globalPrefs.getInt(WOLVESFURRBALLS4, 0));
+		updateOutputPreviews();
 	}
 
 	/**
