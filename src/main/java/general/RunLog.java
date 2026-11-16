@@ -97,6 +97,35 @@ public final class RunLog {
 		prefs.put(PENDING, sb.toString());
 	}
 
+	void recordRatings(ActivityTracker.Period period) throws IOException {
+		Path output = GameLog.clientFolder().resolve("exported_data").resolve("dr_ratings.jsonl");
+		Files.createDirectories(output.getParent());
+		Files.writeString(output, ratingsJsonl(period), StandardCharsets.UTF_8,
+				StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+	}
+
+	static String ratingsJsonl(ActivityTracker.Period period) {
+		StringBuilder lines = new StringBuilder();
+		for (ActivityTracker.Row row : period.rows) {
+			var json = new BootyDivision.Json().open()
+					.field("time", period.end)
+					.field("periodMs", period.end - period.start)
+					.field("station", row.station)
+					.field("pirate", row.pirate)
+					.field("rating", row.rating)
+					.field("score", row.score);
+			json.key("tokens").openArray();
+			if (row.tokens != null) for (int token : row.tokens) json.value(token);
+			json.closeArray()
+					.field("ms", row.ms)
+					.field("exact", row.exact)
+					.field("perMin", row.exact ? Math.round(ActivityTracker.rate(row) * 1000) / 1000.0 : null)
+					.close();
+			lines.append(json).append('\n');
+		}
+		return lines.toString();
+	}
+
 	static String toJson(ActivityTracker.Period p, String pirate, String ocean, Path file) {
 		BootyDivision.Json j = new BootyDivision.Json();
 		String name = file.getFileName().toString();

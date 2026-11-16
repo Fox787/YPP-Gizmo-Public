@@ -2015,6 +2015,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 						woodhallowTools.scanned(data, timed);
 						if (fresh != null) {
 							printStatus("Saved to " + runLog.record(fresh), true);
+							if (fresh.timedToTimer) runLog.recordRatings(fresh);
 						}
 					} catch (IOException | RuntimeException ex) {
 						printStatus("Score per minute failed: " + ex, false);
