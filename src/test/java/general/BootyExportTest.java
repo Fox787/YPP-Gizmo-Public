@@ -203,6 +203,12 @@ class BootyExportTest {
 			assertTrue(updated.contains("\"taken_aboard\":{\"wolf boxes\":1284}"));
 			assertEquals(1, updated.lines().count());
 			assertEquals(run, Files.readString(inferred));
+			// Only the bare text file name is stored (no absolute path with the user name), and a rescan
+			// still finds and reuses that numbered copy in the text folder.
+			assertFalse(updated.contains("text_file_path"));
+			assertFalse(updated.contains(textFolder.toAbsolutePath().toString().replace("\\", "\\\\")));
+			assertTrue(updated.contains("\"text_file\":\"" + saved.text.getFileName() + "\""));
+			try (var copies = Files.list(textFolder)) { assertEquals(1, copies.count()); }
 		} finally {
 			GameLog.setDataFolder(previousFolder);
 		}

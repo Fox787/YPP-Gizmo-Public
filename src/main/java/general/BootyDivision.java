@@ -131,7 +131,6 @@ public class BootyDivision {
 		j.field("pirate", pirate());
 		j.field("ocean", ocean());
 		j.field("text_file", textFile == null ? null : textFile.getFileName().toString());
-		j.field("text_file_path", textFile);
 		if (game != null) {
 			j.field("vessel", game.vesselName);
 			j.field("vessel_id", game.vesselId);

@@ -19,6 +19,10 @@ final class WoodhallowTools {
 	private WolfCount wolfCount = new WolfCount();
 	private final JCheckBox chatOnly, checkBoxClearSound, checkBoxWarningSound;
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
+	private final JCheckBox checkBoxRatingsExport;
+
+	/** Whether timed Woodhallow periods are appended to dr_ratings.jsonl in the data folder. */
+	boolean exportRatings() { return checkBoxRatingsExport.isSelected(); }
 	private JPanel panelDnav, panelRumble, ahoyRow, ahoyButtons;
 	private JLabel labelWolvesLeft, labelRumble, labelRumbleShorthand;
 	private JTextArea labelStrategy;
@@ -56,6 +60,8 @@ final class WoodhallowTools {
 		checkBoxRumbleShorthand = option(section, prefs, "Rumble shorthand", "rumbleshorthand", true);
 		checkBoxClearSound = option(section, prefs, "Last wolf sound", "clearsound", true);
 		checkBoxWarningSound = option(section, prefs, "30-second warning", "warningsound", true);
+		checkBoxRatingsExport = option(section, prefs, "Export dr_ratings.jsonl", "drratingsexport", true);
+		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
 		addVolume(section, prefs);
 		createDnavTab();
 		createRumbleTab();

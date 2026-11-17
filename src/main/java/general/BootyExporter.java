@@ -158,10 +158,10 @@ public final class BootyExporter {
 	private static Path existingTextFile(String json, Path textFolder) {
 		String name = field(json, "text_file");
 		if (name == null || !NUMBERED.matcher(name).matches()) return null;
-		String previous = field(json, "text_file_path");
-		if (textFolder == null) return previous == null ? null : Path.of(previous).normalize();
-		Path path = textFolder.toAbsolutePath().normalize().resolve(name);
-		return previous == null || path.equals(Path.of(previous).normalize()) ? path : null;
+		// Only the bare file name is stored (an absolute path would carry the Windows user name), so the
+		// copy is looked for in the current text folder.
+		if (textFolder == null) return null;
+		return textFolder.toAbsolutePath().normalize().resolve(name);
 	}
 
 	private static Path reserveTextFile(Path folder) throws IOException {

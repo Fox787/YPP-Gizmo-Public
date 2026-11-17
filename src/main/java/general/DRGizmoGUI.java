@@ -246,7 +246,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				GameLog.poll(now);
 				GameLog.Info game = GameLog.read();
 				if (game == null || game.pirate == null) return;
-				String setting = textFieldChatLogFolder.getText().trim();
+				String setting = chatLogFolderSetting;   // the text field belongs to the event thread
 				Path folder = setting.isEmpty() ? null : Paths.get(setting);
 				if (!game.pirate.equals(logPirate)) {
 					logPirate = game.pirate;
@@ -343,7 +343,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				woodhallowTools.scanned(data, timed);
 				if (fresh != null) {
 					printStatus("Saved to " + runLog.record(fresh, voyage, arrival), true);
-					if (fresh.timedToTimer) runLog.recordRatings(fresh);
+					if (fresh.timedToTimer && woodhallowTools.exportRatings()) runLog.recordRatings(fresh);
 				}
 			} catch (IOException | RuntimeException ex) {
 				printStatus("Score per minute failed: " + ex, false);
@@ -2659,9 +2659,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		applyDataFolder();
 	}
 
+	/** The chat log folder setting, for the background log thread; updated whenever it's saved or loaded. */
+	private volatile String chatLogFolderSetting = "";
+
 	private void applyDataFolder() {
 		String data = textFieldDataFolder.getText().trim();
 		String chat = textFieldChatLogFolder.getText().trim();
+		chatLogFolderSetting = chat;
 		GameLog.setDataFolder(!data.isEmpty() ? Paths.get(data) : chat.isEmpty() ? null : Paths.get(chat, "Gizmo"));
 		Path folder = GameLog.dataFolder().toAbsolutePath().normalize();
 		if (voyageRecords == null || !voyageRecords.folder().equals(folder)) {
