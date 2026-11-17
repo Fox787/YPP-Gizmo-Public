@@ -193,6 +193,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private boolean autoScanArmed;
 	/** How long after the last station symbol auto scan keeps looking for the duty report. */
 	private static final long AUTOSCAN_SYMBOL_WINDOW_MS = 3 * 60_000L;
+	static final int AUTOSCAN_TICK_MS = 1000;
 
 	private final ReportClipboard reportClipboard = new ReportClipboard();
 
@@ -2106,7 +2107,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				else runLog.startNewRun();
 			});
 
-			new javax.swing.Timer(2000, ev -> autoScanTick()).start();
+			// Auto scan checks every second (it only reads the duty report window once a trigger is armed).
+			new javax.swing.Timer(AUTOSCAN_TICK_MS, ev -> autoScanTick()).start();
 
 			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
 			labelSymbols = new JLabel("Symbols: waiting");

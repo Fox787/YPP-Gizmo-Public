@@ -10,13 +10,31 @@ import java.nio.file.Path;
  * When a rumble (boxing puzzle) is running, from the client's own game log, as Thalassa's log_parser does:
  *   start  "Reporting ready data.BoxingObject:"
  *   end    a view change replacing a com.threerings.piracy.puzzle.boxing.client.* panel
- * The log is read incrementally; only lines written after Gizmo started count.
+ * and, like Thalassa's Cursed Isles forage timer, when the forage period ends:
+ *   start  "Stopping foraging in 119 seconds" (Cursed Isles only)
+ *   end    "Asking server to stop foraging" (119.6 s later in practice), or the stated time + 1 s
+ * It also feeds MercPlank (Cursed Isles crew and frays won). The log is read incrementally; only lines
+ * written after Gizmo started count.
  */
 public final class RumbleClock {
 
 	private Path file;
 	private long offset = -1;
 	private volatile long startedAt;   // 0 when no rumble is on (written on the file thread, read on the UI thread)
+	private volatile long forageEndsAt;   // 0 when no forage period is on
+	private final MercPlank plank = new MercPlank();
+
+	/** Cursed Isles merc count and plank check, from the same game log. */
+	public MercPlank plank() { return plank; }
+
+	/** Milliseconds of foraging left, or -1 if no forage period is running. */
+	public long forageLeft(long now) {
+		long end = forageEndsAt;
+		return end == 0 || now >= end ? -1 : end - now;
+	}
+
+	/** When the current forage period ends (ms), 0 if none: one key per period for its warning sound. */
+	public long forageEndsAt() { return forageEndsAt; }
 
 	/** Milliseconds since the rumble started, or -1 if none is running. */
 	public long elapsed(long now) {
@@ -30,12 +48,14 @@ public final class RumbleClock {
 			if (newest == null) {
 				file = null;
 				startedAt = 0;
+				forageEndsAt = 0;
 				return;
 			}
 			if (!newest.equals(file)) {           // new session log: start at its end
 				file = newest;
 				offset = Files.size(newest);
 				startedAt = 0;
+				forageEndsAt = 0;
 				return;
 			}
 			long size = Files.size(file);
@@ -83,12 +103,25 @@ public final class RumbleClock {
 		}
 	}
 
+	private static final java.util.regex.Pattern FORAGE = java.util.regex.Pattern.compile("Stopping foraging in (\\d+) seconds");
+
 	void feed(String line, long now) {
+		plank.feed(line);
+		if (line.contains("Stopping foraging in ")) {
+			var m = FORAGE.matcher(line);
+			if (m.find()) { forageEndsAt = lineTime(line, now) + (Long.parseLong(m.group(1)) + 1) * 1000; startedAt = 0; }
+			return;
+		}
+		if (forageEndsAt != 0 && line.contains("Asking server to stop foraging")) {
+			forageEndsAt = 0;
+			return;
+		}
 		var ready = READY.matcher(line);
 		if (ready.find()) {
 			String object = ready.group(1);
 			if ("BoxingObject".equals(object)) {
 				if (startedAt == 0) startedAt = lineTime(line, now);
+				forageEndsAt = 0;
 			} else {
 				startedAt = 0;
 				PuzzleListener listener = puzzleListener;

@@ -263,7 +263,13 @@ public final class StationClock {
 		return entry == null ? null : new LairEntry(Set.copyOf(entry.rounds()), entry.haul().clone());
 	}
 
+	/** Called with each live message (not ones replayed while catching up on the log at startup). */
+	private volatile java.util.function.Consumer<String> onLiveMessage;
+	void setOnLiveMessage(java.util.function.Consumer<String> c) { onLiveMessage = c; }
+
 	synchronized void message(String msg, long now) {
+		java.util.function.Consumer<String> live = onLiveMessage;
+		if (live != null && Math.abs(System.currentTimeMillis() - now) < 120_000) live.accept(msg);
 		trackLair(msg, now);
 		String voyage = ChatLog.arrivalVoyage(msg);
 		if (voyage != null) {

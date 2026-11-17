@@ -20,6 +20,13 @@ final class WoodhallowTools {
 	private final JCheckBox chatOnly, checkBoxClearSound, checkBoxWarningSound;
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
 	private final JCheckBox checkBoxRatingsExport;
+	// Cursed Isles forage timer (Thalassa's), merc plank warning (PP_Timer's), and the rumble minute warning.
+	private final JCheckBox checkBoxForageTimer, checkBoxForageSound, checkBoxPlankSound, checkBoxRumbleSound;
+	static final long FORAGE_WARNING_MS = 30_000;
+	static final long PLANK_REPEAT_MS = 6500;   // PP_Timer's gap between "plank swabbie" voice lines
+	private long forageWarnedFor, plankPlayedAt, rumbleWarnedMinute = -1;
+	private Color shorthandColor;
+	private static final Color WARNING_RED = new Color(0xe03030);
 
 	/** Whether timed Woodhallow periods are appended to dr_ratings.jsonl in the data folder. */
 	boolean exportRatings() { return checkBoxRatingsExport.isSelected(); }
@@ -60,6 +67,16 @@ final class WoodhallowTools {
 		checkBoxRumbleShorthand = option(section, prefs, "Rumble shorthand", "rumbleshorthand", true);
 		checkBoxClearSound = option(section, prefs, "Last wolf sound", "clearsound", true);
 		checkBoxWarningSound = option(section, prefs, "30-second warning", "warningsound", true);
+		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
+		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
+		checkBoxForageTimer = option(section, prefs, "Cursed Isles: forage timer", "foragetimer", true);
+		checkBoxForageTimer.setToolTipText("Time left to forage, in a Forage tab; red in the last 30 seconds");
+		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
+		checkBoxForageSound.setToolTipText("Three pulses at 30 seconds left to forage");
+		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
+		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
+		// Chat log: mercs and pirates leaving the vessel, for the plank check.
+		clock.setOnLiveMessage(rumbleClock.plank()::chat);
 		checkBoxRatingsExport = option(section, prefs, "Export dr_ratings.jsonl", "drratingsexport", true);
 		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
 		addVolume(section, prefs);
@@ -273,6 +290,7 @@ final class WoodhallowTools {
 		labelRumbleShorthand = new JLabel(" ");
 		labelRumbleShorthand.setFont(bigFont);
 		labelRumbleShorthand.setToolTipText("Recommended number of groups to charge this minute");
+		shorthandColor = labelRumbleShorthand.getForeground();
 		JPanel rumbleTop = new JPanel(new BorderLayout(8, 0));
 		rumbleTop.add(labelRumble, BorderLayout.WEST);
 		rumbleTop.add(labelRumbleShorthand, BorderLayout.EAST);
@@ -288,19 +306,62 @@ final class WoodhallowTools {
 
 	private void updateRumble(long now) {
 		long elapsed = rumbleClock.elapsed(now);
+		long forageLeft = rumbleClock.forageLeft(now);
+		playTimerSounds(now, elapsed, forageLeft);
+		// Cursed Isles: more pirates + mercs aboard than the next fray takes. Shown during the forage;
+		// after it, until the next fray starts, it fills the tab and the voice line repeats.
+		MercPlank plank = rumbleClock.plank();
+		int toPlank = elapsed < 0 && plank.betweenFrays() ? plank.toPlank() : 0;
+		boolean plankAlert = toPlank > 0 && forageLeft < 0;
+		if (plankAlert && checkBoxPlankSound.isSelected() && now - plankPlayedAt >= PLANK_REPEAT_MS) {
+			plankPlayedAt = now;
+			Sounds.play(Sounds.PLANK);
+		}
+		String plankText = "Plank " + toPlank + (toPlank == 1 ? " merc!" : " mercs!");
+
 		boolean board = elapsed >= 0 && checkBoxRumbleBoard.isSelected();
 		boolean shorthand = elapsed >= 0 && checkBoxRumbleShorthand.isSelected();
-		boolean show = board || shorthand;
+		boolean foraging = elapsed < 0 && forageLeft >= 0 && checkBoxForageTimer.isSelected();
+		boolean show = board || shorthand || foraging || plankAlert;
+		String title = plankAlert ? "Plank!" : foraging ? "Forage" : "Rumble";
 		int index = tabbedPane.indexOfComponent(panelRumble);
 		if (show && index < 0) {
 			lastForecastTick = 0;
 			tabBeforeRumble = userTab();
-			tabbedPane.addTab("Rumble", panelRumble);
+			tabbedPane.addTab(title, panelRumble);
 			tabbedPane.setSelectedComponent(panelRumble);
+		} else if (show && !title.equals(tabbedPane.getTitleAt(index))) {
+			tabbedPane.setTitleAt(index, title);
 		} else if (!show && index >= 0) {
 			removeAutoTab(panelRumble, tabBeforeRumble);
 		}
 		if (!show) return;
+		if (plankAlert || foraging) {
+			rumbleSecond = -1;
+			rumbleGroups = null;
+			rumbleBoard.setVisible(false);
+			rumbleForecast.setVisible(false);
+			if (plankAlert) {
+				labelRumble.setText(plankText);
+				labelRumble.setForeground(WARNING_RED);
+				labelRumble.setToolTipText(plank.pirates() + " pirates and " + plank.mercs() + " mercs aboard; the next fray takes "
+						+ (plank.pirates() + plank.mercs() - toPlank));
+				labelRumbleShorthand.setVisible(false);
+			} else {
+				// Time left to forage, counting down from 2:00; red in the last 30 seconds. A merc that will
+				// need planking once it's over shows on the right.
+				long s = (forageLeft + 999) / 1000;
+				labelRumble.setText(String.format("%d:%02d", s / 60, s % 60));
+				labelRumble.setForeground(forageLeft <= FORAGE_WARNING_MS ? WARNING_RED : labelWolvesLeftColor);
+				labelRumble.setToolTipText("Time left to forage; red in the last 30 seconds");
+				labelRumbleShorthand.setVisible(toPlank > 0);
+				labelRumbleShorthand.setText(plankText);
+				labelRumbleShorthand.setForeground(WARNING_RED);
+			}
+			return;
+		}
+		labelRumble.setToolTipText("Time into the rumble; red in the last 5 seconds before the punch sizes change");
+		labelRumbleShorthand.setForeground(shorthandColor);
 
 		boolean woodhallow = stationClock.inDen();
 		boolean maxDamage = woodhallow && stationClock.elitesLeft() == 0;
@@ -372,6 +433,26 @@ final class WoodhallowTools {
 		if (checkBoxWarningSound.isSelected() && thirty > 0 && thirty != warningPlayedFor && now - thirty < 15_000) {
 			warningPlayedFor = thirty;
 			Sounds.play(Sounds.THIRTY_SECONDS);
+		}
+	}
+
+	/**
+	 * The rumble's minute warning (5 s before the punch sizes change, once a minute) and the Cursed Isles
+	 * forage warning (30 s left, once a period), through the same separate-process player as the rest.
+	 */
+	private void playTimerSounds(long now, long rumbleElapsed, long forageLeft) {
+		if (rumbleElapsed < 0) rumbleWarnedMinute = -1;
+		else {
+			long sec = rumbleElapsed / 1000, minute = sec / 60;
+			if (60 - sec % 60 <= 5 && rumbleWarnedMinute != minute) {
+				rumbleWarnedMinute = minute;
+				if (checkBoxRumbleSound.isSelected()) Sounds.play(Sounds.RUMBLE_WARNING);
+			}
+		}
+		long forageEnd = rumbleClock.forageEndsAt();
+		if (forageLeft >= 0 && forageLeft <= FORAGE_WARNING_MS && forageWarnedFor != forageEnd) {
+			forageWarnedFor = forageEnd;
+			if (checkBoxForageSound.isSelected()) Sounds.play(Sounds.THIRTY_SECONDS);
 		}
 	}
 

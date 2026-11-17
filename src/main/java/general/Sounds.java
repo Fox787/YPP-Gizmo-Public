@@ -26,6 +26,8 @@ import java.nio.file.StandardCopyOption;
 public final class Sounds {
 
 	public static final String CLEAR = "werewolves_clear.wav", THIRTY_SECONDS = "werewolves_30_seconds.wav";
+	/** From PP_Timer / Thalassa (converted to WAV): the "plank swabbie" voice line and the rumble warning. */
+	public static final String PLANK = "plank_swabbie.wav", RUMBLE_WARNING = "rumble_warning.wav";
 
 	private Sounds() { }
 
