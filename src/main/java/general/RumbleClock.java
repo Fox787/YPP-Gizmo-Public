@@ -17,7 +17,6 @@ public final class RumbleClock {
 	private Path file;
 	private long offset = -1;
 	private volatile long startedAt;   // 0 when no rumble is on (written on the file thread, read on the UI thread)
-	private long nextLookup;
 
 	/** Milliseconds since the rumble started, or -1 if none is running. */
 	public long elapsed(long now) {
@@ -27,14 +26,12 @@ public final class RumbleClock {
 
 	public void poll(long now) {
 		try {
-			// This client's own log: with two clients open, the newest log can be the other client's.
-			// Finding it lists the app folder, so only look again every 30 s (it never changes mid-session).
-			Path newest = file;
-			if (now >= nextLookup) {
-				newest = GameLog.clientLog();
-				nextLookup = now + (newest == null ? 5_000 : 30_000);
+			Path newest = GameLog.activeLog();
+			if (newest == null) {
+				file = null;
+				startedAt = 0;
+				return;
 			}
-			if (newest == null) return;
 			if (!newest.equals(file)) {           // new session log: start at its end
 				file = newest;
 				offset = Files.size(newest);
