@@ -6,8 +6,9 @@ import java.util.Deque;
 /**
  * When auto scan should look for a duty report, from log end times only (no scene reading):
  *   Den   a station period's end, from the chat log (StationClock periods)
- *   Lair  a round's end, from the chat log's 15-second warning (StationClock lair round)
- *   CI    the forage period's end, from this client's game log (RumbleClock)
+ *   Lair  the final duty report the client shows (game log) at a round's end from the chat log's
+ *         15-second warning; the chat round end itself if the game log has no such report
+ *   CI    the forage period's duty report the client shows, from its game log (RumbleClock)
  * Each end arms auto scan for WINDOW_MS after it (D3), and once a report has been scanned for an end,
  * that end doesn't arm it again.
  */
@@ -23,6 +24,18 @@ final class AutoScanTrigger {
 		for (long end : ends)
 			if (end > 0 && now >= end && now - end <= WINDOW_MS && !scanned.contains(end)) return end;
 		return 0;
+	}
+
+	/** How close the client's final report must be to the chat's lair round end to be that round's. */
+	static final long LAIR_MATCH_MS = 5_000;
+	/** With no matching report this long after the chat's round end, the round end arms auto scan itself. */
+	static final long LAIR_FALLBACK_MS = 3_000;
+
+	/** The lair round end that arms auto scan: the matching final report, else the chat round end once it's late. */
+	static long lairEnd(long now, long chatRoundEnd, long finalReport) {
+		if (chatRoundEnd <= 0) return 0;
+		if (finalReport > 0 && Math.abs(finalReport - chatRoundEnd) <= LAIR_MATCH_MS) return finalReport;
+		return now - chatRoundEnd >= LAIR_FALLBACK_MS ? chatRoundEnd : 0;
 	}
 
 	/** A report was scanned for this end: don't arm for it again. */

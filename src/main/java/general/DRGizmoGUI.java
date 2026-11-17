@@ -268,18 +268,20 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	/**
 	 * Auto scan looks for a new duty report for a few seconds (AutoScanTrigger.WINDOW_MS) after a
-	 * station end read from the logs, when auto scan is ticked:
+	 * period end read from the logs, when auto scan is ticked:
 	 *  - Den: a station period ends (chat log),
-	 *  - Lair: a round ends (chat log's 15-second warning),
-	 *  - CI: the forage period ends (this client's game log).
+	 *  - Lair: the client shows a final duty report (game log) within 5 s of the round end the chat's
+	 *    15-second warning gives; if none is logged, the chat round end itself (from 3 s after it),
+	 *  - CI: the client shows the forage period's duty report (game log, right after it stops foraging).
 	 * It then reads only the displayed duty report window. A report that is new is scanned once, like
 	 * the Scan button.
 	 */
 	private void autoScanTick() {
 		if (!checkBoxAutoScan.isSelected()) return;
 		long now = System.currentTimeMillis();
-		long end = autoScanTrigger.armed(now, activityTracker.lastStationEnd(now), stationClock.lastLairRoundEnd(),
-				woodhallowTools.lastForageEnd(now));
+		long end = autoScanTrigger.armed(now, activityTracker.lastStationEnd(now),
+				AutoScanTrigger.lairEnd(now, stationClock.lastLairRoundEnd(), woodhallowTools.lastFinalReport()),
+				woodhallowTools.lastCiReport());
 		if (end == 0) return;
 		try {
 			// Look quietly first, so an empty attempt doesn't fill the Output tab.

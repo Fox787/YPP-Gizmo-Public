@@ -13,6 +13,11 @@ import java.nio.file.Path;
  * and, like Thalassa's Cursed Isles forage timer, when the forage period ends:
  *   start  "Stopping foraging in 119 seconds" (Cursed Isles only)
  *   end    "Asking server to stop foraging" (119.6 s later in practice), or the stated time + 1 s
+ * and when the client shows a duty report at the end of a period (for auto scan):
+ *   "Displaying game over duty report." is logged each time a puzzle game ends; mid-period a new game
+ *   starts at once ("Game did start", within milliseconds). The Cursed Isles period's report is the one
+ *   right after "Asking server to stop foraging"; any other with no new game after it is a final report
+ *   (a station or lair round closing, or leaving the puzzle).
  * It also feeds MercPlank (Cursed Isles crew and frays won). The log is read incrementally; only lines
  * written after Gizmo started count.
  */
@@ -36,12 +41,25 @@ public final class RumbleClock {
 	/** When the current forage period ends (ms), 0 if none: one key per period for its warning sound. */
 	public long forageEndsAt() { return forageEndsAt; }
 
-	private volatile long forageEndedAt;   // when the last forage period ended ("Asking server to stop foraging")
+	/** How soon after "Asking server to stop foraging" the period's duty report shows (0.6 s at most in practice). */
+	static final long CI_REPORT_AFTER_STOP_MS = 3_000;
+	/** A report with no new game started this long after it is a final one. */
+	static final long NO_NEW_GAME_MS = 1_000;
+	private volatile long ciReportAt, finalReportAt;
+	private long stopAskedAt, pendingReportAt;
 
-	/** When the latest forage period ended (or its stated end has passed), 0 if none. For auto scan. */
-	public long lastForageEnd(long now) {
-		long end = forageEndsAt;
-		return end != 0 && now >= end ? end : forageEndedAt;
+	/** When the client last showed a Cursed Isles forage period's duty report (game log time), 0 if none. */
+	public long lastCiReport() { return ciReportAt; }
+
+	/** When the client last showed a duty report with no new game after it (game log time), 0 if none. */
+	public long lastFinalReport() { return finalReportAt; }
+
+	/** A shown report that no new game followed within NO_NEW_GAME_MS is final. */
+	void settleReport(long now) {
+		if (pendingReportAt != 0 && now - pendingReportAt >= NO_NEW_GAME_MS) {
+			finalReportAt = pendingReportAt;
+			pendingReportAt = 0;
+		}
 	}
 
 	/** Milliseconds since the rumble started, or -1 if none is running. */
@@ -51,6 +69,7 @@ public final class RumbleClock {
 	}
 
 	public void poll(long now) {
+		settleReport(now);
 		try {
 			Path newest = GameLog.activeLog();
 			if (newest == null) {
@@ -120,8 +139,23 @@ public final class RumbleClock {
 			if (m.find()) { forageEndsAt = lineTime(line, now) + (Long.parseLong(m.group(1)) + 1) * 1000; startedAt = 0; }
 			return;
 		}
+		if (line.contains("Displaying game over duty report.")) {
+			long at = lineTime(line, now);
+			if (stopAskedAt != 0 && at - stopAskedAt <= CI_REPORT_AFTER_STOP_MS) {
+				ciReportAt = finalReportAt = at;
+				pendingReportAt = 0;
+			} else {
+				pendingReportAt = at;
+			}
+			stopAskedAt = 0;
+			return;
+		}
+		if (line.contains("Game did start")) {
+			pendingReportAt = 0;
+			return;
+		}
 		if (forageEndsAt != 0 && line.contains("Asking server to stop foraging")) {
-			forageEndedAt = lineTime(line, now);
+			stopAskedAt = lineTime(line, now);
 			forageEndsAt = 0;
 			return;
 		}

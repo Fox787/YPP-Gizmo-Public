@@ -213,8 +213,11 @@ final class WoodhallowTools {
 		if (files != null) files.shutdownNow();
 	}
 
-	/** When the latest Cursed Isles forage period ended (game log), 0 if none. For auto scan. */
-	long lastForageEnd(long now) { return rumbleClock.lastForageEnd(now); }
+	/** When the client showed the latest Cursed Isles forage period's duty report (game log), 0 if none. For auto scan. */
+	long lastCiReport() { return rumbleClock.lastCiReport(); }
+
+	/** When the client last showed a duty report no new game followed (game log), 0 if none. For auto scan. */
+	long lastFinalReport() { return rumbleClock.lastFinalReport(); }
 
 	void scanned(DRGroupData report, ActivityTracker.Period period) {
 		lastReport = report;
