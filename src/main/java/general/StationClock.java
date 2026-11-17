@@ -59,6 +59,14 @@ public final class StationClock {
 
 	public Path file() { return file; }
 
+	/** Called when the chat log shows a new arrival at Woodhallow (a new run starts). */
+	private Runnable onArrival;
+	public void setOnArrival(Runnable r) { onArrival = r; }
+
+	/** Called with each live message (not ones replayed while catching up on the log at startup). */
+	private java.util.function.Consumer<String> onLiveMessage;
+	public void setOnLiveMessage(java.util.function.Consumer<String> c) { onLiveMessage = c; }
+
 	/** Reads whatever the client has appended since the last call. */
 	public void poll() {
 		if (file == null) return;
@@ -102,10 +110,57 @@ public final class StationClock {
 		message(m.group(4), now);
 	}
 
+	/** Crew size from the run's "N o' M still standin'!" lines (M), 0 until seen. */
+	private int crew;
+	/** Pirates eliminated in the current fray (reset when stations open). */
+	private int frayDeaths;
+
+	public int crew() { return crew; }
+	public int frayDeaths() { return frayDeaths; }
+
+	// "Name is eliminated!" - pirate names are one word; the wolves' names have two ("Sly Moe").
+	private static final Pattern ELIMINATED = Pattern.compile("^([A-Z][A-Za-z]*) is eliminated!$");
+
+	/**
+	 * Elite werewolves (the ones that transform; they deal no damage) still up in the current fray:
+	 * "Transformation! N werewolves have transformed!" minus elites eliminated since. -1 if unknown.
+	 */
+	private int elitesLeft = -1;
+	public int elitesLeft() { return elitesLeft; }
+
+	private static final Pattern TRANSFORMED = Pattern.compile("^Transformation! (\\d+) werewolves have transformed!$");
+	private static final Pattern WOLF_ELIMINATED = Pattern.compile("^(\\S+) [A-Z][A-Za-z'-]* is eliminated!$");
+	/** Name prefixes of transformed (elite) werewolves; the wolf-kin use a different set (Sly, Lean, ...). */
+	static final java.util.Set<String> ELITE_PREFIXES = new java.util.HashSet<>(java.util.Arrays.asList(
+			"Accursed", "Blood-moon", "Bone-cracking", "Dread", "Fell", "Flesh-rending", "Frenzied", "Ghastly",
+			"Gore-jawed", "Grave-howling", "Hulking", "Iron-clawed", "Marrow-hungry", "Merciless", "Monstrous",
+			"Moon-cursed", "Murderous", "Night-stalking", "Nightmarish", "Rabid", "Red-eyed", "Shadow-born",
+			"Silver-scarred", "Skull-splitting", "Unholy"));
+
 	void message(String msg, long now) {
-		if (msg.equals(ARRIVAL)) { periods.clear(); return; }
+		if (onLiveMessage != null && Math.abs(System.currentTimeMillis() - now) < 120_000) onLiveMessage.accept(msg);
+		Matcher el = ELIMINATED.matcher(msg);
+		if (el.matches()) { frayDeaths++; return; }
+		Matcher tr = TRANSFORMED.matcher(msg);
+		if (tr.matches()) { elitesLeft = Integer.parseInt(tr.group(1)); return; }
+		Matcher we = WOLF_ELIMINATED.matcher(msg);
+		if (we.matches()) {
+			if (elitesLeft > 0 && ELITE_PREFIXES.contains(we.group(1))) elitesLeft--;
+			return;
+		}
+		if (msg.equals(ARRIVAL)) {
+			crew = 0;
+			frayDeaths = 0;
+			elitesLeft = -1;
+			periods.clear();
+			// Only a live arrival, not one replayed while catching up on the log at startup.
+			if (onArrival != null && Math.abs(System.currentTimeMillis() - now) < 120_000) onArrival.run();
+			return;
+		}
 		Matcher sv = SURVIVORS.matcher(msg);
 		if (sv.matches()) {
+			crew = Integer.parseInt(sv.group(2));
+			frayDeaths = 0;
 			Period last = periods.isEmpty() ? null : periods.get(periods.size() - 1);
 			if (last != null && !last.closed()) return;   // same period announced twice
 			Period p = new Period();
@@ -138,9 +193,19 @@ public final class StationClock {
 	}
 
 	/**
+	 * When the given period's stations close: the "30 seconds" warning's time if seen, otherwise
+	 * 2 minutes after the start for the run's first period and 5 minutes for the rest.
+	 */
+	public long expectedEnd(Period p) {
+		if (p == null) return 0;
+		if (p.closed()) return p.end;
+		return p.start + duration(p);
+	}
+
+	/**
 	 * How long stations last, from Thalassa's duty_seconds: 2:00 for the first wave, otherwise
-	 * 2:00 + 3:00 x survivors / crew, both read from the chat log's "N o' M still standin'!" line.
-	 * So 5:00 with everyone standing, and e.g. 3:07.5 with 3 of 8.
+	 * 2:00 + 3:00 x survivors / crew ("N o' M still standin'!"). So 5:00 with everyone standing,
+	 * and e.g. 3:07.5 with 3 of 8.
 	 */
 	public long duration(Period p) {
 		boolean first = !periods.isEmpty() && periods.get(0) == p;

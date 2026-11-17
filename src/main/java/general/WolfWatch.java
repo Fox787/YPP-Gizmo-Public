@@ -24,6 +24,9 @@ public final class WolfWatch {
 	public static final class Reading {
 		public int werewolves, wolfkin, round;
 		public float moon;
+		/** When this round's stations close (client clock, ms), 0 when stations aren't running. */
+		public long roundEndsAt;
+		public boolean fraying;
 
 		public String text() {
 			return "Werewolves left to convert: " + werewolves + "  (wave " + round + ", " + wolfkin + " wolf-kin)";
@@ -45,15 +48,34 @@ public final class WolfWatch {
 		this.timer.setRepeats(true);
 	}
 
+	/** True while a rumble is running (set by the GUI from RumbleClock): a fray hides the island too. */
+	private java.util.function.BooleanSupplier inRumble = () -> false;
+	public void setInRumble(java.util.function.BooleanSupplier s) { inRumble = s == null ? () -> false : s; }
+
+	/**
+	 * An island that can't be found is still the one you're on while its stations are running (you're
+	 * in the Duty Nav puzzle), its fray is on, or a rumble is running (you're in the fray's rumble).
+	 */
+	private boolean stillThere(Object previous) {
+		Reading r = read(previous);
+		if (r == null) return false;
+		return r.roundEndsAt > System.currentTimeMillis() || r.fraying || inRumble.getAsBoolean();
+	}
+
 	public void start() { timer.start(); }
 	public void stop() { timer.stop(); }
 
 	private void tick() {
 		try {
 			if (holder == null || !holder.isDisplayable()) {
+				// While you're in the Duty Nav puzzle or a fray's rumble the island's panel is out of the
+				// window, so it can't be found; keep reading the island object found last time (it stays
+				// live). At any other time, an island that can't be found means you've left Woodhallow:
+				// drop it, so nothing keeps showing the old island's werewolves.
+				Object previous = scene;
 				holder = null;
 				scene = null;
-				findScene(window, 0);
+				if (!findScene(window, 0) && previous != null && stillThere(previous)) scene = previous;
 			}
 			listener.accept(scene == null ? null : read(scene));
 		} catch (RuntimeException ex) {
@@ -98,6 +120,8 @@ public final class WolfWatch {
 			r.wolfkin = k.getField("packWolfmen").getInt(scene);
 			r.round = k.getField("round").getInt(scene);
 			r.moon = k.getField("moonWhiteness").getFloat(scene);
+			try { r.roundEndsAt = k.getField("roundEndsAt").getLong(scene); } catch (ReflectiveOperationException ignored) { }
+			try { r.fraying = k.getField("fraying").getBoolean(scene); } catch (ReflectiveOperationException ignored) { }
 			return r;
 		} catch (ReflectiveOperationException | RuntimeException e) {
 			return null;

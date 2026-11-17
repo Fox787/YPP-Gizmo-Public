@@ -134,6 +134,7 @@ public final class ActivityTracker {
 			}
 			if (now - lastAtWoodhallow > ARRIVAL_GAP_MS && onArrival != null) onArrival.accept(lastAtWoodhallow == 0);
 			lastAtWoodhallow = now;
+			watchClientTiming(scene, now);
 			if (fraying(scene)) return;
 			Object set = scene.getClass().getField("occupantInfo").get(scene);
 			if (!(set instanceof Iterable)) return;
@@ -170,6 +171,74 @@ public final class ActivityTracker {
 		} catch (ReflectiveOperationException | RuntimeException e) {
 			return false;
 		}
+	}
+
+	// ---------------------------------------------------------------- client station timing
+
+	/**
+	 * Station start straight from the client, to the quarter second: the island's "fraying" flag
+	 * going from true (a fight) to false is the moment stations open. The chat log's
+	 * "To yer stations!" line only has whole seconds. Also logs the island's roundEndsAt and round
+	 * changes to exported_data/client_timing.log so the station timer can be checked against chat.
+	 */
+	private Boolean lastFraying;
+	private long lastRoundEndsAt = Long.MIN_VALUE;
+	private int lastRound = Integer.MIN_VALUE;
+	private final List<Long> clientOpens = new ArrayList<>();
+	/** The island's station timer values (roundEndsAt): the exact moment each round's stations close. */
+	private final List<Long> clientEnds = new ArrayList<>();
+
+	/** The client's station-close time within 10 s of the chat's, or 0. */
+	long clientEndNear(long chatEnd) {
+		long best = 0;
+		for (long t : clientEnds) if (Math.abs(t - chatEnd) <= 10_000 && (best == 0 || Math.abs(t - chatEnd) < Math.abs(best - chatEnd))) best = t;
+		return best;
+	}
+
+	private void watchClientTiming(Object scene, long now) {
+		boolean fr = fraying(scene);
+		long ends = longField(scene, "roundEndsAt");
+		int round = (int) longField(scene, "round");
+		if (lastFraying != null && lastFraying && !fr) {
+			clientOpens.add(now);
+			if (clientOpens.size() > 50) clientOpens.remove(0);
+			timingLog(now, "stations open (fraying -> false)", round, ends);
+		} else if (lastFraying != null && !lastFraying && fr) {
+			timingLog(now, "fray starts (fraying -> true)", round, ends);
+		}
+		if (ends != lastRoundEndsAt && lastRoundEndsAt != Long.MIN_VALUE) timingLog(now, "roundEndsAt changed", round, ends);
+		if (ends > 0 && ends != lastRoundEndsAt) {
+			clientEnds.add(ends);
+			if (clientEnds.size() > 50) clientEnds.remove(0);
+		}
+		if (round != lastRound && lastRound != Integer.MIN_VALUE) timingLog(now, "round changed", round, ends);
+		lastFraying = fr;
+		lastRoundEndsAt = ends;
+		lastRound = round;
+	}
+
+	private static long longField(Object o, String name) {
+		try { return ((Number) o.getClass().getField(name).get(o)).longValue(); }
+		catch (ReflectiveOperationException | RuntimeException e) { return -1; }
+	}
+
+	private static void timingLog(long now, String what, int round, long roundEndsAt) {
+		try {
+			java.nio.file.Path f = GameLog.clientFolder().resolve("exported_data").resolve("client_timing.log");
+			java.nio.file.Files.createDirectories(f.getParent());
+			String line = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+					+ "\tnow=" + now + "\t" + what + "\tround=" + round + "\troundEndsAt=" + roundEndsAt
+					+ "\t(roundEndsAt-now=" + (roundEndsAt - now) + ")\n";
+			java.nio.file.Files.write(f, line.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+					java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+		} catch (java.io.IOException | RuntimeException ignored) { }
+	}
+
+	/** The client's station-open moment within 10 s of the chat's, or 0. */
+	long clientOpenNear(long chatStart) {
+		long best = 0;
+		for (long t : clientOpens) if (Math.abs(t - chatStart) <= 10_000 && (best == 0 || Math.abs(t - chatStart) < Math.abs(best - chatStart))) best = t;
+		return best;
 	}
 
 	/** Only Woodhallow is timed. */
@@ -288,6 +357,8 @@ public final class ActivityTracker {
 	/** Gets true for the first sighting since Gizmo started (maybe a restart mid-run). */
 	public void setOnArrival(java.util.function.Consumer<Boolean> r) { onArrival = r; }
 	private long lastAtWoodhallow;
+	/** True if this client was at Woodhallow within the last 10 minutes (a duty report scanned now is from there). */
+	public boolean atWoodhallowRecently(long now) { return lastAtWoodhallow > 0 && now - lastAtWoodhallow < 600_000; }
 	static final long ARRIVAL_GAP_MS = 10 * 60_000L;
 
 	/** End of the last report's period, so a fallback period never overlaps it. */
@@ -310,20 +381,33 @@ public final class ActivityTracker {
 			period.end = Math.min(sp.end, now);
 			period.timedToTimer = true;
 			expectedLength = clock.duration(sp);
+			// Prefer the client's own station-open moment (quarter-second) over chat's whole second;
+			// the period then runs exactly its expected length from there.
+			// Best: the island's own station timer (roundEndsAt) is the exact close, to the millisecond;
+			// the period is the expected length back from there. Next best: the fraying flag's flip.
+			long close = clientEndNear(sp.end);
+			long open = clientOpenNear(sp.start);
+			if (close > 0) {
+				period.end = Math.min(close, now);
+				period.start = close - expectedLength;
+			} else if (open > 0) {
+				period.start = open;
+				period.end = Math.min(open + expectedLength, now);
+			}
 		} else {
 			// No station messages found (chat log missing?): from the last report, or the last 15 minutes, to now.
 			period.start = Math.max(lastEnd, now - 15 * 60_000L);
 			period.end = now;
 		}
 		// A station period never runs past 5 minutes, whatever the messages say, and a length within
-		// 15 s of the expected one (2:00 + 3:00 x survivors / crew, from the chat log's
-		// "N o' M still standin'!") is taken as exactly that, since chat timestamps are only to the second.
+		// 15 s of the expected one (2:00 + 3:00 x survivors / crew) is taken as exactly that, since chat
+		// timestamps are only to the second.
 		period.end = Math.min(period.end, period.start + MAX_PERIOD_MS);
 		if (period.timedToTimer) period.end = period.start + snap(period.end - period.start, expectedLength);
 		periods.add(period);
 		fresh = period;
 
-		Map<String, Integer> codes = assignCodes(dr);
+		Map<String, Integer> codes = assignCodes(dr, period);
 		Map<String, Integer> stationsOf = new HashMap<>();
 		for (LinkedHashMap<String, DRIndividualData> m : dr.data.values())
 			for (String n : m.keySet()) stationsOf.merge(n, 1, Integer::sum);
@@ -462,7 +546,7 @@ public final class ActivityTracker {
 	}
 
 	/** Each station on the report and its symbol code (0 for a station without one). */
-	private Map<String, Integer> assignCodes(DRGroupData dr) {
+	private Map<String, Integer> assignCodes(DRGroupData dr, Period period) {
 		Map<String, Integer> out = new HashMap<>();
 		for (String station : dr.data.keySet()) out.put(station, knownCode(station));
 		return out;
@@ -482,6 +566,16 @@ public final class ActivityTracker {
 	public long lastStationEnd(long now) {
 		StationClock.Period p = clock == null ? null : clock.lastEnded(now);
 		return p == null ? 0 : p.end;
+	}
+
+	/** Pirates in the scene showing the Dnav symbol right now; -1 until that symbol has been learned. */
+	public int navigatorsNow() {
+		int code = knownCode("Navigating");
+		if (code == 0) return -1;
+		long now = System.currentTimeMillis();
+		int n = 0;
+		for (PirateState p : pirates.values()) if (now - p.lastSeen < 5000 && p.showing == code) n++;
+		return n;
 	}
 
 	/** Pirates and their current symbol code, for the debug view. */

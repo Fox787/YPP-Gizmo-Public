@@ -169,6 +169,95 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JLabel labelWolvesLeft;
 	private ActivityTracker activityTracker;
 	private JLabel labelSymbols;
+	private JTabbedPane tabbedPane;
+	/** Rumble tab: only in the tab bar while a rumble is running. */
+	private JPanel panelRumble;
+	private JLabel labelRumble, labelRumbleShorthand;
+	private RumbleBoard rumbleBoard;
+	/** The tab that was showing when a rumble started, to go back to afterwards. */
+	private Component tabBeforeRumble;
+	private JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
+	private final RumbleClock rumbleClock = new RumbleClock();
+	public static final String RUMBLEBOARD = "rumbleboard", RUMBLESHORTHAND = "rumbleshorthand";
+	/** The latest island reading (null when not at Woodhallow). */
+	private WolfWatch.Reading lastWolfReading;
+	/** The Rumble tab's "Next Dnav" box (Woodhallow frays only). */
+	private DnavPanel rumbleForecast;
+
+	/**
+	 * During a Woodhallow fray (rounds 1-5): what the next Dnav stations need, how the navigators'
+	 * pace on the last duty report compares, and the solo strategy (with odds). False if not shown.
+	 */
+	private boolean updateForecast() {
+		WolfWatch.Reading r = lastWolfReading;
+		if (r == null || r.round < 1 || r.round > 5 || stationClock == null) return false;
+		int crew = stationClock.crew();
+		if (crew <= 0) crew = activityTracker.snapshot().size();   // before the first "still standin'"
+		if (crew <= 0) return false;
+		int deaths = stationClock.frayDeaths();
+		double team = 0;
+		ActivityTracker.Period last = activityTracker.lastPeriod();
+		if (last != null)
+			for (ActivityTracker.Row row : last.rows)
+				if (row.station.toLowerCase().startsWith("navigat") && row.ms > 0)
+					team += DnavForecast.navPoints(row.tokens) / (row.ms / 60000.0);   // werewolf points per minute
+		DnavForecast f = DnavForecast.during(r.round, crew, deaths, team);
+		rumbleForecast.show(f, DnavPanel.strategies(f.odds));
+		return true;
+	}
+	private final PackRecorder packRecorder = new PackRecorder();
+	private JLabel labelPackRounding;
+
+	private JCheckBox checkBoxClearSound, checkBoxWarningSound;
+	public static final String CLEARSOUND = "clearsound", WARNINGSOUND = "warningsound";
+	// Cursed Isles forage timer (Thalassa's): a countdown in the Rumble tab, red and a sound at 30 s left.
+	private JCheckBox checkBoxForageTimer, checkBoxForageSound;
+	public static final String FORAGETIMER = "foragetimer", FORAGESOUND = "foragesound";
+	static final long FORAGE_WARNING_MS = 30_000;
+	private long forageWarnedFor;
+	// Cursed Isles merc plank warning (PP_Timer's) and the rumble's minute warning (Thalassa's).
+	private JCheckBox checkBoxPlankSound, checkBoxRumbleSound;
+	public static final String PLANKSOUND = "planksound", RUMBLESOUND = "rumblesound";
+	static final long PLANK_REPEAT_MS = 6500;   // PP_Timer's gap between "plank swabbie" voice lines
+	private long plankPlayedAt, rumbleWarnedMinute = -1;
+	// Options tab: every sound option and the volume, together.
+	private JPanel panelSounds;
+	public static final String SOUNDVOLUME = "soundvolume";
+	/** Station timer each sound last played for (once per round), and when that timer was first seen. */
+	private long clearPlayedFor, warningPlayedFor, timerSeen, timerFirstSeenLeft, firstTimerOfRound;
+	private int lastWolves = -1;
+	private int timerRound = Integer.MIN_VALUE;
+
+	/**
+	 * Thalassa's Woodhallow alerts, once per station period each, only for things seen happening live:
+	 * a rising chime when the last werewolf is turned back (count drops to 0 during Dnav stations), and
+	 * three pulses at 30 seconds left of stations (including the lair's final forage).
+	 */
+	private void playWerewolfSounds(WolfWatch.Reading r, long now) {
+		if (checkBoxWarningSound == null || checkBoxClearSound == null) return;   // still building the window
+		if (r == null) { lastWolves = -1; return; }
+		long ends = r.roundEndsAt;
+		// Only a round's first timer is its stations. After the lair is plundered the island sets a
+		// second, 10-minute timer in the same round (time to leave), which must not trigger the warning.
+		if (r.round != timerRound) { timerRound = r.round; firstTimerOfRound = 0; }
+		if (ends > 0 && firstTimerOfRound == 0) firstTimerOfRound = ends;
+		if (ends > now && ends == firstTimerOfRound) {
+			if (ends != timerSeen) { timerSeen = ends; timerFirstSeenLeft = ends - now; }
+			// Only if this timer had more than 30 s left when first seen (not when starting up late).
+			if (checkBoxWarningSound.isSelected() && warningPlayedFor != ends
+					&& ends - now <= 30_000 && timerFirstSeenLeft > 30_000
+					&& timerFirstSeenLeft <= 320_000) {   // station timers are at most ~5 min long
+				warningPlayedFor = ends;
+				Sounds.play(Sounds.THIRTY_SECONDS);
+			}
+			if (checkBoxClearSound.isSelected() && r.round < 6 && clearPlayedFor != ends
+					&& lastWolves > 0 && r.werewolves == 0) {
+				clearPlayedFor = ends;
+				Sounds.play(Sounds.CLEAR);
+			}
+		}
+		lastWolves = r.werewolves;
+	}
 	private RunLog runLog;
 	private StationClock stationClock;
 	private long lastChatLookup;
@@ -274,7 +363,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			String activity = RecordChecker.activityOf(found);
 			if (!autoScanWanted(activity)) return;        // not an activity the player opted into
 			if (byClock) autoScannedDeadline = d;
-			printStatus("Auto scan: reading the " + (activity == null ? "" : activity + " ") + "duty report", false);
+			printStatus("Auto scan: reading the " + (activity == null ? "" : activity + " ") + "duty report", true);
 			buttonScan.doClick();
 		} catch (RuntimeException ignored) {
 			// Try again on the next tick.
@@ -644,7 +733,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		doubleFormatter.setMaximum(Double.MAX_VALUE);
 		doubleFormatter.setAllowsInvalid(true);
 
-		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+		tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 		getContentPane().add(tabbedPane, BorderLayout.CENTER);
 
 		JPanel panelOutput = new JPanel();
@@ -885,6 +974,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			// A fresh install has no selected profile yet; without this every field stays empty and Scan
 			// fails parsing the token values.
 			if (currentPrefs == null) currentPrefs = globalPrefs.node(PROFILE_ROOT).node(currentProfile);
+
+			// Sounds: filled in with the sound options further down, so they sit together.
+			panelSounds = new JPanel();
+			panelSounds.setBorder(new TitledBorder(null, "Sounds", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+			panelSounds.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelSounds.setLayout(new BoxLayout(panelSounds, BoxLayout.Y_AXIS));
+			panelOptions_2.add(panelSounds);
 
 			// Booty export: where to find chat logs, and where readable copies go.
 			JPanel panelBootyExport = new JPanel();
@@ -1820,7 +1916,21 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			labelWolvesLeft = new JLabel(" ");
 			panelQuickOptions.add(labelWolvesLeft);
 
-			wolfWatch = new WolfWatch(window, r -> labelWolvesLeft.setText(r == null ? " " : r.text()));
+			wolfWatch = new WolfWatch(window, r -> {
+				labelWolvesLeft.setText(r == null ? " " : r.text());
+				long now = System.currentTimeMillis();
+				lastWolfReading = r;
+				playWerewolfSounds(r, now);
+				// Stations are on while the island's own station timer (roundEndsAt) is set and in the
+				// future. Not in the lair (round 6): forage only, no Dnav.
+				if (r != null && r.roundEndsAt > now && r.round < 6 && stationClock != null) {
+					// The pack as stations open (before any charting), to learn how the werewolf count is rounded.
+					StationClock.Period sp = stationClock.current();
+					packRecorder.onStations(r, stationClock.crew(), sp == null ? 0 : sp.survivors);
+				}
+			});
+			// A fray's rumble hides the island too: keep the island's reading while one is running.
+			wolfWatch.setInRumble(() -> rumbleClock.elapsed(System.currentTimeMillis()) >= 0);
 			stationClock = new StationClock();
 			activityTracker = new ActivityTracker(window, globalPrefs, stationClock);
 			// Follow the logged-in pirate's chat log for station start/end messages.
@@ -1838,10 +1948,200 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				stationClock.poll();
 			}).start();
 			runLog = new RunLog(globalPrefs);
+			// Each "Hark the dread howlin'!" arrival starts its own run file, even when the crew goes
+			// straight back in after a lair (no time away from the island).
+			stationClock.setOnArrival(runLog::startNewRun);
 			activityTracker.setOnArrival(firstSinceStart -> {
 				if (firstSinceStart) runLog.startNewRunUnlessRecent();
 				else runLog.startNewRun();
 			});
+
+			// Rumble: Thalassa's punch table and/or its shorthand, in a "Rumble" tab that only exists while
+			// a rumble is running (from this client's game log). Gizmo switches to it when the rumble
+			// starts and back to the previous tab when it ends.
+			labelRumble = new JLabel(" ");
+			Font baseFont = labelRumble.getFont();
+			labelRumble.setFont(baseFont.deriveFont(Font.BOLD, baseFont.getSize2D() * 2.2f));
+			labelRumble.setToolTipText("Time into the rumble; red in the last 5 seconds before the punch sizes change");
+			Color rumbleTimerColor = labelRumble.getForeground();
+			labelRumbleShorthand = new JLabel(" ");
+			labelRumbleShorthand.setFont(baseFont.deriveFont(Font.BOLD, baseFont.getSize2D() * 1.6f));
+			labelRumbleShorthand.setToolTipText("Recommended number of groups to charge this minute");
+			Color shorthandColor = labelRumbleShorthand.getForeground();
+			JPanel rumbleTop = new JPanel(new BorderLayout(8, 0));
+			rumbleTop.add(labelRumble, BorderLayout.WEST);
+			rumbleTop.add(labelRumbleShorthand, BorderLayout.EAST);
+			rumbleBoard = new RumbleBoard();
+			panelRumble = new JPanel(new BorderLayout(0, 2));
+			panelRumble.add(rumbleTop, BorderLayout.NORTH);
+			panelRumble.add(rumbleBoard, BorderLayout.CENTER);
+			// At Woodhallow: the next Dnav stations' forecast and solo strategy, under the board.
+			rumbleForecast = new DnavPanel(baseFont);
+			rumbleForecast.setVisible(false);
+			panelRumble.add(rumbleForecast, BorderLayout.SOUTH);
+			checkBoxRumbleBoard = new JCheckBox("Rumble board");
+			checkBoxRumbleBoard.setToolTipText("During a rumble: punch sizes for each number of charged groups");
+			checkBoxRumbleBoard.setSelected(globalPrefs.getBoolean(RUMBLEBOARD, true));
+			checkBoxRumbleBoard.addActionListener(ev -> globalPrefs.putBoolean(RUMBLEBOARD, checkBoxRumbleBoard.isSelected()));
+			checkBoxRumbleBoard.setAlignmentX(Component.LEFT_ALIGNMENT);
+			checkBoxShowExtraButtons.getParent().add(checkBoxRumbleBoard);
+			checkBoxRumbleShorthand = new JCheckBox("Rumble shorthand");
+			checkBoxRumbleShorthand.setToolTipText("During a rumble: just the recommended number of groups, e.g. '10-11 groups'");
+			checkBoxRumbleShorthand.setSelected(globalPrefs.getBoolean(RUMBLESHORTHAND, true));
+			checkBoxRumbleShorthand.addActionListener(ev -> globalPrefs.putBoolean(RUMBLESHORTHAND, checkBoxRumbleShorthand.isSelected()));
+			checkBoxRumbleShorthand.setAlignmentX(Component.LEFT_ALIGNMENT);
+			checkBoxShowExtraButtons.getParent().add(checkBoxRumbleShorthand);
+			checkBoxForageTimer = new JCheckBox("Forage timer");
+			checkBoxForageTimer.setToolTipText("Cursed Isles: time left to forage, in the Rumble tab; red in the last 30 seconds");
+			checkBoxForageTimer.setSelected(globalPrefs.getBoolean(FORAGETIMER, true));
+			checkBoxForageTimer.addActionListener(ev -> globalPrefs.putBoolean(FORAGETIMER, checkBoxForageTimer.isSelected()));
+			checkBoxForageTimer.setAlignmentX(Component.LEFT_ALIGNMENT);
+			checkBoxShowExtraButtons.getParent().add(checkBoxForageTimer);
+			checkBoxClearSound = new JCheckBox("Woodhallow: last wolf cleared");
+			checkBoxClearSound.setToolTipText("Woodhallow: a chime when the last werewolf of the wave is turned back during stations");
+			checkBoxClearSound.setSelected(globalPrefs.getBoolean(CLEARSOUND, true));
+			checkBoxClearSound.addActionListener(ev -> globalPrefs.putBoolean(CLEARSOUND, checkBoxClearSound.isSelected()));
+			checkBoxClearSound.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelSounds.add(checkBoxClearSound);
+			checkBoxWarningSound = new JCheckBox("Woodhallow: 30 seconds left of stations");
+			checkBoxWarningSound.setToolTipText("Woodhallow: three pulses at 30 seconds left of stations");
+			checkBoxWarningSound.setSelected(globalPrefs.getBoolean(WARNINGSOUND, true));
+			checkBoxWarningSound.addActionListener(ev -> globalPrefs.putBoolean(WARNINGSOUND, checkBoxWarningSound.isSelected()));
+			checkBoxWarningSound.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelSounds.add(checkBoxWarningSound);
+			checkBoxForageSound = new JCheckBox("Cursed Isles: 30 seconds left to forage");
+			checkBoxForageSound.setToolTipText("Cursed Isles: three pulses at 30 seconds left to forage");
+			checkBoxForageSound.setSelected(globalPrefs.getBoolean(FORAGESOUND, true));
+			checkBoxForageSound.addActionListener(ev -> globalPrefs.putBoolean(FORAGESOUND, checkBoxForageSound.isSelected()));
+			checkBoxForageSound.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelSounds.add(checkBoxForageSound);
+			checkBoxPlankSound = new JCheckBox("Cursed Isles: plank merc voice line");
+			checkBoxPlankSound.setToolTipText("Cursed Isles: \"plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
+			checkBoxPlankSound.setSelected(globalPrefs.getBoolean(PLANKSOUND, true));
+			checkBoxPlankSound.addActionListener(ev -> globalPrefs.putBoolean(PLANKSOUND, checkBoxPlankSound.isSelected()));
+			checkBoxPlankSound.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelSounds.add(checkBoxPlankSound);
+			checkBoxRumbleSound = new JCheckBox("Rumble: 5 seconds before punch sizes change");
+			checkBoxRumbleSound.setToolTipText("Any rumble: a warning 5 seconds before each minute, in case you want to save your punch");
+			checkBoxRumbleSound.setSelected(globalPrefs.getBoolean(RUMBLESOUND, true));
+			checkBoxRumbleSound.addActionListener(ev -> globalPrefs.putBoolean(RUMBLESOUND, checkBoxRumbleSound.isSelected()));
+			checkBoxRumbleSound.setAlignmentX(Component.LEFT_ALIGNMENT);
+			panelSounds.add(checkBoxRumbleSound);
+			// Chat log: mercs and pirates leaving the vessel, for the plank check.
+			stationClock.setOnLiveMessage(rumbleClock.plank()::chat);
+			// Volume for all of the above. Letting go of the slider plays a sample at the new volume.
+			Sounds.setVolume(globalPrefs.getInt(SOUNDVOLUME, 100));
+			JSlider sliderVolume = new JSlider(0, 100, Sounds.volume());
+			sliderVolume.setToolTipText("Volume of Gizmo's sounds (0 = off)");
+			JLabel labelVolume = new JLabel(Sounds.volume() + "%");
+			labelVolume.setPreferredSize(new Dimension(labelVolume.getFontMetrics(labelVolume.getFont()).stringWidth("100%") + 4,
+					labelVolume.getPreferredSize().height));
+			sliderVolume.addChangeListener(ev -> {
+				Sounds.setVolume(sliderVolume.getValue());
+				labelVolume.setText(sliderVolume.getValue() + "%");
+				if (!sliderVolume.getValueIsAdjusting()) {
+					globalPrefs.putInt(SOUNDVOLUME, sliderVolume.getValue());
+					Sounds.play(Sounds.THIRTY_SECONDS);
+				}
+			});
+			JPanel rowVolume = new JPanel(new BorderLayout(6, 0));
+			rowVolume.add(new JLabel("Volume"), BorderLayout.WEST);
+			rowVolume.add(sliderVolume, BorderLayout.CENTER);
+			rowVolume.add(labelVolume, BorderLayout.EAST);
+			rowVolume.setAlignmentX(Component.LEFT_ALIGNMENT);
+			rowVolume.setMaximumSize(new Dimension(320, rowVolume.getPreferredSize().height));
+			panelSounds.add(rowVolume);
+			new javax.swing.Timer(250, ev -> {
+				long now = System.currentTimeMillis();
+				rumbleClock.poll(now);
+				long el = rumbleClock.elapsed(now);
+				long forageLeft = rumbleClock.forageLeft(now);
+				// Forage warning: once per period, through the same separate-process player as the Woodhallow sounds.
+				long forageEnd = rumbleClock.forageEndsAt();
+				if (forageLeft >= 0 && forageLeft <= FORAGE_WARNING_MS && forageWarnedFor != forageEnd) {
+					forageWarnedFor = forageEnd;
+					if (checkBoxForageSound.isSelected()) Sounds.play(Sounds.THIRTY_SECONDS);
+				}
+				// Rumble: a warning 5 seconds before each minute (when the punch sizes change), once per minute.
+				if (el < 0) rumbleWarnedMinute = -1;
+				else {
+					long sec = el / 1000, minuteNow = sec / 60;
+					if (60 - sec % 60 <= 5 && rumbleWarnedMinute != minuteNow) {
+						rumbleWarnedMinute = minuteNow;
+						if (checkBoxRumbleSound.isSelected()) Sounds.play(Sounds.RUMBLE_WARNING);
+					}
+				}
+				// Cursed Isles: more pirates + mercs aboard than the next fray takes. Shown during the forage;
+				// after it, until the next fray starts, it fills the tab and the voice line repeats.
+				MercPlank plank = rumbleClock.plank();
+				int toPlank = el < 0 && plank.betweenFrays() ? plank.toPlank() : 0;
+				boolean plankAlert = toPlank > 0 && forageLeft < 0;
+				if (plankAlert && checkBoxPlankSound.isSelected() && now - plankPlayedAt >= PLANK_REPEAT_MS) {
+					plankPlayedAt = now;
+					Sounds.play(Sounds.PLANK);
+				}
+				String plankText = "Plank " + toPlank + (toPlank == 1 ? " merc!" : " mercs!");
+				boolean board = el >= 0 && checkBoxRumbleBoard.isSelected();
+				boolean shorthand = el >= 0 && checkBoxRumbleShorthand.isSelected();
+				boolean foraging = el < 0 && forageLeft >= 0 && checkBoxForageTimer.isSelected();
+				boolean show = board || shorthand || foraging || plankAlert;
+				int idx = tabbedPane.indexOfComponent(panelRumble);
+				String title = plankAlert ? "Plank!" : foraging ? "Forage" : "Rumble";
+				if (show && idx < 0) {
+					tabBeforeRumble = tabbedPane.getSelectedComponent();
+					tabbedPane.addTab(title, panelRumble);
+					tabbedPane.setSelectedComponent(panelRumble);
+				} else if (show && !title.equals(tabbedPane.getTitleAt(idx))) {
+					tabbedPane.setTitleAt(idx, title);
+				} else if (!show && idx >= 0) {
+					boolean wasOnIt = tabbedPane.getSelectedComponent() == panelRumble;
+					tabbedPane.remove(panelRumble);
+					if (wasOnIt && tabBeforeRumble != null && tabbedPane.indexOfComponent(tabBeforeRumble) >= 0)
+						tabbedPane.setSelectedComponent(tabBeforeRumble);
+				}
+				if (!show) return;
+				if (plankAlert) {
+					labelRumble.setText(plankText);
+					labelRumble.setForeground(new Color(0xe03030));
+					labelRumble.setToolTipText(plank.pirates() + " pirates and " + plank.mercs() + " mercs aboard; the next fray takes "
+							+ (plank.pirates() + plank.mercs() - toPlank));
+					labelRumbleShorthand.setVisible(false);
+					rumbleBoard.setVisible(false);
+					if (rumbleForecast.isVisible()) { rumbleForecast.setVisible(false); panelRumble.revalidate(); }
+					return;
+				}
+				if (foraging) {
+					// Time left to forage, counting down from 2:00; red in the last 30 seconds.
+					long s = (forageLeft + 999) / 1000;
+					labelRumble.setText(String.format("%d:%02d", s / 60, s % 60));
+					labelRumble.setForeground(forageLeft <= FORAGE_WARNING_MS ? new Color(0xe03030) : rumbleTimerColor);
+					labelRumble.setToolTipText("Time left to forage; red in the last 30 seconds");
+					// Heads-up while foraging: a merc will need planking once it's over.
+					labelRumbleShorthand.setVisible(toPlank > 0);
+					labelRumbleShorthand.setText(plankText);
+					labelRumbleShorthand.setForeground(new Color(0xe03030));
+					rumbleBoard.setVisible(false);
+					if (rumbleForecast.isVisible()) { rumbleForecast.setVisible(false); panelRumble.revalidate(); }
+					return;
+				}
+				labelRumbleShorthand.setForeground(shorthandColor);
+				labelRumble.setToolTipText("Time into the rumble; red in the last 5 seconds before the punch sizes change");
+				int minute = (int) (el / 60_000);
+				rumbleBoard.setVisible(board);
+				rumbleBoard.setMinute(minute);
+				// At Woodhallow: dotted max-damage line always; the 75% window once no elites are left.
+				boolean woodhallow = lastWolfReading != null && lastWolfReading.round >= 1;
+				boolean maxDamage = woodhallow && stationClock != null && stationClock.elitesLeft() == 0;
+				rumbleBoard.setWerewolfFight(woodhallow, maxDamage);
+				// Time into the rumble, red in the last 5 seconds before the punch sizes change.
+				long s = el / 1000, toNext = 60 - s % 60;
+				labelRumble.setText(String.format("%d:%02d", s / 60, s % 60));
+				labelRumble.setForeground(toNext <= 5 ? new Color(0xe03030) : rumbleTimerColor);
+				labelRumbleShorthand.setVisible(shorthand);
+				labelRumbleShorthand.setText(RumbleBoard.shorthand(minute, maxDamage) + " groups");
+				boolean forecast = updateForecast();
+				if (rumbleForecast.isVisible() != forecast) { rumbleForecast.setVisible(forecast); panelRumble.revalidate(); }
+			}).start();
 
 			// Auto scan: while stations are running (or just after), look for a new duty report every
 			// 2 seconds and scan it the same way the Scan button does. One setting for Den, CI and Lair;
@@ -1850,13 +2150,27 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			checkBoxAutoScan.setToolTipText("Scan the duty report on its own after each Wolves Den, Cursed Isles or Vampire Lair round. Untick to scan by hand.");
 			checkBoxAutoScan.setSelected(globalPrefs.getBoolean(AUTOSCAN, true));
 			checkBoxAutoScan.addActionListener(ev -> globalPrefs.putBoolean(AUTOSCAN, checkBoxAutoScan.isSelected()));
-			panelQuickOptions.add(checkBoxAutoScan);
+			checkBoxAutoScan.setAlignmentX(Component.LEFT_ALIGNMENT);
+			// In Options with the other set-and-forget switches, to keep the main window short.
+			checkBoxShowExtraButtons.getParent().add(checkBoxAutoScan);
 			new javax.swing.Timer(AUTOSCAN_TICK_MS, ev -> autoScanTick()).start();
 
-			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
+			// Live check that the symbols over heads are being read (Debug only): count, list in the tooltip.
 			labelSymbols = new JLabel("Symbols: not found yet");
+			labelSymbols.setVisible(false);
 			panelQuickOptions.add(labelSymbols);
+			// Debug only: how Woodhallow werewolf counts were rounded so far (exported_data/werewolf_rounding.jsonl).
+			labelPackRounding = new JLabel(packRecorder.summary());
+			labelPackRounding.setToolTipText("<html>Each Woodhallow station period: werewolves in the next pack vs pack x (0.4 + 0.1 x fray).<br>"
+					+ "up / down: which way it was rounded; whole: no fraction to round; other: doesn't fit the model.<br>"
+					+ "Details in exported_data/werewolf_rounding.jsonl</html>");
+			labelPackRounding.setVisible(false);
+			panelQuickOptions.add(labelPackRounding);
 			new javax.swing.Timer(2000, ev -> {
+				boolean dbg = checkBoxDebug.isSelected();
+				if (labelSymbols.isVisible() != dbg) { labelSymbols.setVisible(dbg); labelPackRounding.setVisible(dbg); panelQuickOptions.revalidate(); }
+				if (!dbg) return;   // nothing to show: skip the work
+				labelPackRounding.setText(packRecorder.summary());
 				java.util.List<String> seen = activityTracker.snapshot();
 				int withSymbol = 0;
 				for (String s : seen) if (!s.contains("[0]")) withSymbol++;
@@ -1902,7 +2216,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			java.awt.geom.AffineTransform tx = gc == null ? null : gc.getDefaultTransform();
 			printStatus("Display check: repaint manager " + RepaintManager.currentManager(this).getClass().getName()
 					+ ", screen scale " + (tx == null ? "?" : tx.getScaleX() + "x")
-					+ ", uiScale " + System.getProperty("sun.java2d.uiScale", "unset"), false);
+					+ ", uiScale " + System.getProperty("sun.java2d.uiScale", "unset"), true);   // Debug only
 		});
 	}
 
@@ -2022,6 +2336,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					}
 				}
 				boolean inline = isDen && checkBoxScan2ScorePerMinute.isSelected();
+				printStatus("Score/min option " + (inline ? "on" : "off") + ", rates for "
+						+ (rates == null ? 0 : rates.values().stream().mapToInt(java.util.Map::size).sum()) + " pirates", true);
 				//print dr to output with print settings
 				String dataString = data.toString(checkBoxIgnoreAI.isSelected(), checkBoxScanWriteDate.isSelected(),
 						checkBoxScanUseTabs.isSelected(), comboBoxScanOcean.getSelectedItem().toString(),
@@ -2032,6 +2348,20 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				printStatus(dataString, false);
 				// Without the Score/min option, the per-minute lists still print separately.
 				if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(perMinute, false);
+				// Debug: exactly how long each pirate was counted on each station.
+				if (checkBoxDebug.isSelected() && timed != null) {
+					ActivityTracker.Period pd = timed;
+					java.time.format.DateTimeFormatter hms = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+					java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+					StringBuilder sb = new StringBuilder("Station times: ")
+							.append(java.time.Instant.ofEpochMilli(pd.start).atZone(zone).format(hms)).append(" to ")
+							.append(java.time.Instant.ofEpochMilli(pd.end).atZone(zone).format(hms))
+							.append(String.format(" (%.1fs%s)", (pd.end - pd.start) / 1000.0, pd.timedToTimer ? "" : ", no station period found"));
+					for (ActivityTracker.Row r : pd.rows)
+						sb.append('\n').append(r.pirate).append(' ').append(r.station).append(' ')
+								.append(r.ms > 0 ? String.format("%.1fs", r.ms / 1000.0) : "unknown");
+					printStatus(sb.toString(), true);
+				}
 				//check for broken records, against the records for the activity this report is from
 				if (checkBoxBrokenRecordAlert.isSelected()) {
 					checkScanRecords(data);
