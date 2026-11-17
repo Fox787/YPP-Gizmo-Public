@@ -7,8 +7,16 @@ import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.List;
 
-/** Times Woodhallow duty reports using the chat log and the logged-in pirate's puzzle log.
- * Scene symbols always feed auto-scan. Other pirates' station changes are stored only by opt-in.
+/**
+ * Times Woodhallow duty reports (only while "Score per minute" is on), from:
+ *   - the chat log: when each station period starts and ends (StationClock), so a pirate on one
+ *     station gets the whole period;
+ *   - this client's own game log: which puzzle the logged-in pirate entered and when (ownPuzzle,
+ *     via RumbleClock), so your own split between Dnav and foraging is known;
+ *   - the displayed duty report: each pirate's stations and scores.
+ * Other pirates who switched stations are "unknown". Only with the opt-in "Scene-wide score per
+ * minute" (pending developer approval) does it read the island scene every 250 ms: its occupants'
+ * station activity, role and name, and whether the fray is on. With that off, nothing here polls.
  */
 public final class ActivityTracker {
 

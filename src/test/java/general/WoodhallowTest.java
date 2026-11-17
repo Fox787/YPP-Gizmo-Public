@@ -79,7 +79,9 @@ class WoodhallowTest {
 				frame.pack();
 				frame.setVisible(true);
 				assertEquals(5, AhoyWolfCount.read(frame));
-				sidebar.select(2, new YoMultiLineLabel("Next pack: 8 wolf-kin and 99 werewolves"));
+				// Another page (no "Next pack" line) is showing: no count. The page is told apart by its
+				// visible text, not by SunshineTab's private selection field.
+				sidebar.select(2, new YoMultiLineLabel("Crew: 8 aboard"));
 				assertEquals(-1, AhoyWolfCount.read(frame));
 				sidebar.select(4, ahoy);
 				ahoy.setVisible(false);

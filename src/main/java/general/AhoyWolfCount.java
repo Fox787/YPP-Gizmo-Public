@@ -3,8 +3,6 @@ package main.java.general;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
-import java.lang.reflect.Field;
-import java.util.Optional;
 import java.util.regex.Pattern;
 import javax.swing.AbstractButton;
 import javax.swing.JLabel;
@@ -14,18 +12,6 @@ import javax.swing.text.JTextComponent;
 /** Reads the rendered wolf count from the selected, visible Ahoy tab. */
 final class AhoyWolfCount {
 	private static final String SUNSHINE_TAB = "com.threerings.yohoho.swing.SunshineTab";
-	// SunshineTab highlights this index as Ahoy in the client sidebar.
-	private static final int AHOY_INDEX = 4;
-	private static final ClassValue<Optional<Field>> SELECTED_TAB = new ClassValue<>() {
-		@Override protected Optional<Field> computeValue(Class<?> type) {
-			try {
-				Field selected = type.getDeclaredField("_selected");
-				return selected.trySetAccessible() ? Optional.of(selected) : Optional.empty();
-			} catch (NoSuchFieldException | SecurityException ignored) {
-				return Optional.empty();
-			}
-		}
-	};
 	private static final String MULTILINE_LABEL = "com.threerings.piracy.swing.YoMultiLineLabel";
 	private static final Pattern HTML_TAG = Pattern.compile("<[^>]*>");
 	private static final Pattern PACK = Pattern.compile(
@@ -70,14 +56,15 @@ final class AhoyWolfCount {
 		return null;
 	}
 
+	/**
+	 * The page SunshineTab is showing: it mounts only the selected page, in its center. That page is the
+	 * Ahoy page when its visible text has the "Next pack" line (read() checks), which only Ahoy shows;
+	 * so no private field is needed to know which page is selected.
+	 */
 	private static Component sunshineAhoy(Container tabs) {
-		Field selected = SELECTED_TAB.get(tabs.getClass()).orElse(null);
-		if (selected == null || !(tabs.getLayout() instanceof BorderLayout layout)) return null;
-		try {
-			return selected.getInt(tabs) == AHOY_INDEX ? layout.getLayoutComponent(BorderLayout.CENTER) : null;
-		} catch (IllegalAccessException | IllegalArgumentException ignored) {
-			return null;
-		}
+		if (!(tabs.getLayout() instanceof BorderLayout layout)) return null;
+		Component page = layout.getLayoutComponent(BorderLayout.CENTER);
+		return page != null && page.isShowing() ? page : null;
 	}
 
 	private static boolean isAhoy(String title) {
@@ -96,6 +83,10 @@ final class AhoyWolfCount {
 
 	private static String multilineText(Component component) {
 		if (!component.getClass().getName().equals(MULTILINE_LABEL)) return null;
+		// Public route first: the label's accessible name, if the client sets one.
+		var accessible = component.getAccessibleContext();
+		String name = accessible == null ? null : accessible.getAccessibleName();
+		if (name != null && !name.isBlank()) return name;
 		try {
 			// YoMultiLineLabel inherits w(), the getter for its rendered text.
 			return component.getClass().getMethod("w").invoke(component) instanceof String text ? text : null;
