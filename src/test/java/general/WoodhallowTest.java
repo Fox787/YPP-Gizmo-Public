@@ -93,7 +93,7 @@ class WoodhallowTest {
 	}
 
 	@Test
-	void ahoyRemainsTheSourceAfterChatAndChatOnlyNeverReadsAhoy() {
+	void chatCountTakesOverWhenAhoyIsHiddenAndChatOnlyNeverReadsAhoy() {
 		var wolves = new WolfCount();
 		long start = 100_000;
 		var unknown = new StationClock.WolfProgress(-1, -1, 0);
@@ -103,16 +103,52 @@ class WoodhallowTest {
 		assertEquals(new WolfCount.Reading(8, 8, start + 1_000),
 				wolves.read(false, visible::get, unknown, start, start + 1_000, choices));
 		visible.set(-1);
-		assertEquals(new WolfCount.Reading(8, 8, start + 1_000),
-				wolves.read(false, visible::get, half, start, start + 45_000, choices));
+		assertEquals(new WolfCount.Reading(4, 8, start + 40_000),
+				wolves.read(false, visible::get, half, start, start + 45_000, choices), "Ahoy closed: chat's newer count");
 		visible.set(3);
 		assertEquals(new WolfCount.Reading(3, 8, start + 50_000),
-				wolves.read(false, visible::get, half, start, start + 50_000, choices));
+				wolves.read(false, visible::get, half, start, start + 50_000, choices), "Ahoy open again and newer");
 
 		wolves.clearRemaining();
 		assertEquals(new WolfCount.Reading(4, -1, half.changedAt()),
 				wolves.read(true, () -> fail("Chat only must never read Ahoy"), half, start, start + 51_000, choices));
-		assertEquals(-1, wolves.read(false, () -> -1, half, start, start + 52_000, choices).remaining());
+		assertEquals(4, wolves.read(false, () -> -1, half, start, start + 52_000, choices).remaining(),
+				"Ahoy never read: chat's count");
+		var only = new StationClock.WolfProgress(2, -1, start + 60_000);
+		assertEquals(2, new WolfCount().read(false, () -> -1, only, start, start + 61_000, choices).remaining(),
+				"\"Only N left\" without a half message");
+	}
+
+	@Test
+	void everyWolfMessageGivesTheCountAndStart() {
+		var clock = new StationClock();
+		clock.message(StationClock.ARRIVAL, 500);
+		clock.message("5 o' 5 still standin'! To yer stations!", 1_000);
+		clock.message("Ozpin's charting has turned a werewolf back! 6 still to come in the next wave.", 40_000);
+		clock.message("Rudis's charting has turned a werewolf back! 5 still to come in the next wave.", 50_000);
+		var progress = clock.wolfProgress(clock.current());
+		assertEquals(new StationClock.WolfProgress(5, -1, 50_000, 7), progress);
+		clock.message("Rudis's charting has turned a werewolf back! 0 still to come in the next wave.", 90_000);
+		assertEquals(0, clock.wolfProgress(clock.current()).remaining());
+		assertEquals(90_000, clock.lastWolfClearedAt());
+		clock.message("The wolf-kin gather! 30 seconds!", 100_000);
+		clock.message("4 o' 5 still standin'! To yer stations!", 400_000);
+		assertEquals(-1, clock.wolfProgress(clock.current()).starting(), "a new period starts unknown");
+	}
+
+	@Test
+	void vampTimerFromGameOverThenTheWarning() {
+		var clock = new StationClock();
+		clock.message("Welcome to the vampire sanctum.", 1_000);
+		assertEquals(0, clock.lairTimerEnd());
+		clock.message("Game over.  Winners: Mikethyson, Gummybears, Ozpin, Bkvi, Maros.", 100_000);
+		assertEquals(100_000 + StationClock.LAIR_ROUND_AFTER_FRAY_MS, clock.lairTimerEnd());
+		clock.message("Ye hear the sound of rustling in coffins.", 210_000);
+		assertEquals(225_000, clock.lairTimerEnd());
+		clock.message("Game over.  Winners: Ozpin.", 500_000);
+		assertEquals(0, new StationClock().lairTimerEnd(), "not in a lair");
+		clock.message(StationClock.ARRIVAL, 600_000);
+		assertEquals(0, clock.lairTimerEnd(), "left the lair");
 	}
 
 	@Test

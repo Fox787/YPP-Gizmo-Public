@@ -16,9 +16,15 @@ final class WolfCount {
 
 	Reading read(boolean chatOnly, IntSupplier readAhoy, StationClock.WolfProgress chat,
 				 long startedAt, long now, List<Integer> candidates) {
-		if (chatOnly) return new Reading(chat.remaining(), -1, chat.changedAt());
+		if (chatOnly) return new Reading(chat.remaining(), chat.starting(), chat.changedAt());
 		observe(readAhoy.getAsInt(), chat, startedAt, now);
-		return new Reading(remaining, startingCount(candidates), changedAt);
+		int starting = startingCount(candidates);
+		if (starting < 0) starting = chat.starting();
+		// The Ahoy tab isn't always the one showing: when chat has a count Ahoy hasn't shown (none read yet,
+		// or chat changed since), the chat count is the current one.
+		if (chat.remaining() >= 0 && (remaining < 0 || chat.changedAt() > changedAt))
+			return new Reading(chat.remaining(), starting, chat.changedAt());
+		return new Reading(remaining, starting, changedAt);
 	}
 
 	private void observe(int shown, StationClock.WolfProgress chat, long startedAt, long now) {

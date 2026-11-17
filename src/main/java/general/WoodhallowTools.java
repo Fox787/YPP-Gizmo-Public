@@ -22,6 +22,10 @@ final class WoodhallowTools {
 	private final JCheckBox checkBoxRatingsExport;
 	// Cursed Isles forage timer (Thalassa's), merc plank warning (PP_Timer's), and the rumble minute warning.
 	private final JCheckBox checkBoxForageTimer, checkBoxForageSound, checkBoxPlankSound, checkBoxRumbleSound;
+	// The row next to the Scan button: the running timer on the left, the shorthand (or wolves left) on the right.
+	private final JCheckBox checkBoxScanRow;
+	private final JLabel scanTimer = new JLabel(" "), scanShorthand = new JLabel(" ");
+	private long dnavEnds;
 	static final long FORAGE_WARNING_MS = 30_000;
 	static final long PLANK_REPEAT_MS = 6500;   // PP_Timer's gap between "plank swabbie" voice lines
 	private long forageWarnedFor, plankPlayedAt, rumbleWarnedMinute = -1;
@@ -90,10 +94,70 @@ final class WoodhallowTools {
 		clock.setOnLiveMessage(rumbleClock.plank()::chat);
 		checkBoxRatingsExport = option(section, prefs, "Export dr_ratings.jsonl", "drratingsexport", true);
 		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
+		checkBoxScanRow = option(section, prefs, "Timers next to the Scan button", "scanrowtimers", true);
+		checkBoxScanRow.setToolTipText("Rumble, forage, vampire lair and Dnav station timers beside the Scan button, with the shorthand or wolves left on the right");
 		addVolume(section, prefs);
 		createDnavTab();
 		createRumbleTab();
+		Font font = scanTimer.getFont();
+		scanTimer.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.3f));
+		scanShorthand.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.3f));
 	}
+
+	/** Adds the timer (left, after the Scan button) and the shorthand (right) to the Scan button's row. */
+	void addToScanRow(JPanel row) {
+		row.add(Box.createHorizontalStrut(10));
+		row.add(scanTimer);
+		row.add(Box.createHorizontalGlue());
+		row.add(scanShorthand);
+		row.add(Box.createHorizontalStrut(6));
+	}
+
+	private static String clock(long seconds) { return String.format("%d:%02d", seconds / 60, seconds % 60); }
+
+	/**
+	 * The Scan row, every tick: the plank warning, else the rumble timer and its shorthand, else the forage
+	 * timer (and a merc to plank), else the vampire lair round, else the Dnav stations and wolves left.
+	 */
+	private void updateScanRow(long now, long elapsed, long forageLeft, int toPlank, boolean plankAlert) {
+		String left = " ", right = " ";
+		Color leftColor = labelWolvesLeftColor, rightColor = labelWolvesLeftColor;
+		long lairLeft = stationClock.lairTimerEnd() - now;
+		if (!checkBoxScanRow.isSelected()) {
+			// Nothing.
+		} else if (plankAlert) {
+			left = plankText(toPlank);
+			leftColor = WARNING_RED;
+		} else if (elapsed >= 0) {
+			long s = elapsed / 1000;
+			left = "Rumble " + clock(s);
+			if (s % 60 >= 55) leftColor = WARNING_RED;
+			if (checkBoxRumbleShorthand.isSelected()) {
+				boolean maxDamage = stationClock.inDen() && stationClock.elitesLeft() == 0;
+				right = RumbleBoard.shorthand((int) (elapsed / 60_000), maxDamage) + " groups";
+			}
+		} else if (forageLeft >= 0 && checkBoxForageTimer.isSelected()) {
+			left = "Forage " + clock((forageLeft + 999) / 1000);
+			if (forageLeft <= FORAGE_WARNING_MS) leftColor = WARNING_RED;
+			if (toPlank > 0) {
+				right = plankText(toPlank);
+				rightColor = WARNING_RED;
+			}
+		} else if (lairLeft > 0 && lairLeft <= StationClock.LAIR_ROUND_AFTER_FRAY_MS) {
+			left = "Lair " + clock((lairLeft + 999) / 1000);
+			if (lairLeft <= 15_000) leftColor = WARNING_RED;
+		} else if (dnavEnds > now) {
+			left = "Stations " + clock((dnavEnds - now + 999) / 1000);
+			right = labelWolvesLeft.getText();
+			rightColor = labelWolvesLeft.getForeground();
+		}
+		if (!left.equals(scanTimer.getText())) scanTimer.setText(left);
+		scanTimer.setForeground(leftColor);
+		if (!right.equals(scanShorthand.getText())) scanShorthand.setText(right);
+		scanShorthand.setForeground(rightColor);
+	}
+
+	private static String plankText(int toPlank) { return "Plank " + toPlank + (toPlank == 1 ? " merc!" : " mercs!"); }
 
 	private static JCheckBox option(JPanel section, Preferences prefs, String label, String key, boolean defaultValue) {
 		JCheckBox option = new JCheckBox(label, prefs.getBoolean(key, defaultValue));
@@ -214,6 +278,7 @@ final class WoodhallowTools {
 		long ends = stationClock.expectedEnd(period);
 		boolean inStations = period != null && stationClock.inDen() && !period.lair && ends > now && now - period.start < 360_000;
 		setDnavTab(inStations);
+		dnavEnds = inStations ? ends : 0;
 		if (!inStations) return;
 		if (dnavPeriodStart != period.start) {
 			dnavPeriodStart = period.start;
@@ -331,7 +396,8 @@ final class WoodhallowTools {
 			plankPlayedAt = now;
 			Sounds.play(Sounds.PLANK);
 		}
-		String plankText = "Plank " + toPlank + (toPlank == 1 ? " merc!" : " mercs!");
+		String plankText = plankText(toPlank);
+		updateScanRow(now, elapsed, forageLeft, toPlank, plankAlert);
 
 		boolean board = elapsed >= 0 && checkBoxRumbleBoard.isSelected();
 		boolean shorthand = elapsed >= 0 && checkBoxRumbleShorthand.isSelected();

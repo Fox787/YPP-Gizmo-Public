@@ -47,6 +47,9 @@ public final class StationClock {
 
 	private final Map<Long, LairEntry> lairEntries = new LinkedHashMap<>();
 	private long lairArrival, lairRoundEnd;
+	/** When the current lair puzzle round ends, for the vamp timer: "Game over." + 2:03, then the warning + 15 s. */
+	private long lairTimerEnd;
+	static final long LAIR_ROUND_AFTER_FRAY_MS = 123_000;
 	private final List<Period> periods = new ArrayList<>();
 	private String arrivalVoyage;
 	private long arrivalAt;
@@ -83,7 +86,7 @@ public final class StationClock {
 				ownChat.clear();
 				clearArrival();
 				lairEntries.clear();
-				lairArrival = lairRoundEnd = 0;
+				lairArrival = lairRoundEnd = lairTimerEnd = 0;
 			}
 		}
 
@@ -176,7 +179,7 @@ public final class StationClock {
 		periods.clear();
 		inDen = false;
 		crew = fraysDone = frayDeaths = 0;
-		wolvesAtHalf = elitesLeft = wolvesLeft = -1;
+		wolvesAtHalf = wolvesAtStart = elitesLeft = wolvesLeft = -1;
 		wolvesChangedAt = lastWolfClearedAt = thirtySecondsAt = 0;
 	}
 
@@ -213,6 +216,8 @@ public final class StationClock {
 	/** Werewolves left for the next wave as the chat last said; -1 until "turned back half". */
 	private int wolvesLeft = -1;
 	private int wolvesAtHalf = -1;
+	/** The pack's werewolves when stations opened, known when the chat counts every wolf ("turned a werewolf back"). */
+	private int wolvesAtStart = -1;
 	/** When the chat last changed wolvesLeft, and when stations opened (for the pace). */
 	private long wolvesChangedAt;
 	/** Times of the last "turned back the last werewolf" and "30 seconds" messages (for the sounds). */
@@ -221,14 +226,20 @@ public final class StationClock {
 	public synchronized boolean inDen() { return inDen; }
 	/** The fray being fought or next: frays finished + 1. */
 	public synchronized int frayNumber() { return fraysDone + 1; }
-	record WolfProgress(int remaining, int atHalf, long changedAt) { }
+	/** Werewolves left as the chat last said, the count at "half", when it changed, and the starting count if known (-1 if not). */
+	record WolfProgress(int remaining, int atHalf, long changedAt, int starting) {
+		WolfProgress(int remaining, int atHalf, long changedAt) { this(remaining, atHalf, changedAt, -1); }
+	}
 
 	synchronized WolfProgress wolfProgress(Period period) {
 		if (period == null || periods.isEmpty() || periods.get(periods.size() - 1).start != period.start) return null;
-		return new WolfProgress(wolvesLeft, wolvesAtHalf, wolvesChangedAt);
+		return new WolfProgress(wolvesLeft, wolvesAtHalf, wolvesChangedAt, wolvesAtStart);
 	}
 	public synchronized long lastWolfClearedAt() { return lastWolfClearedAt; }
 	public synchronized long thirtySecondsAt() { return thirtySecondsAt; }
+
+	// The newer format (seen on Ice): a message for every werewolf, from the first.
+	private static final Pattern EACH = Pattern.compile("charting has turned a werewolf back! (\\d+) still to come");
 
 	private static final Pattern HALF = Pattern.compile("charting has turned back half the werewolves! (\\d+) still to come");
 	private static final Pattern ONLY = Pattern.compile("charting has turned back more o' the werewolves! Only (\\d+) left");
@@ -237,14 +248,17 @@ public final class StationClock {
 		String arrival = ChatLog.arrivalVoyage(message);
 		if (arrival != null) {
 			lairArrival = "vampireLairs".equals(arrival) ? now : 0;
-			lairRoundEnd = 0;
+			lairRoundEnd = lairTimerEnd = 0;
 			if (lairArrival != 0) lairEntries.computeIfAbsent(now, unused -> new LairEntry(new LinkedHashSet<>(), new int[3]));
 			return;
 		}
 		if (lairArrival == 0) return;
 		LairEntry entry = lairEntries.get(lairArrival);
-		if (LAIR_WARNING.equals(message)) {
-			lairRoundEnd = now + 15_000;
+		if (message.startsWith("Game over.  Winner")) {
+			// A lair fray just ended: the puzzle round ends 2:03 later (2:00 after "Hold yer horses").
+			lairTimerEnd = now + LAIR_ROUND_AFTER_FRAY_MS;
+		} else if (LAIR_WARNING.equals(message)) {
+			lairRoundEnd = lairTimerEnd = now + 15_000;
 			entry.rounds().add(lairRoundEnd);
 		} else if (message.startsWith("Ye have taken aboard ")) {
 			int[] haul = ChatLog.lairHaul(message);
@@ -252,6 +266,9 @@ public final class StationClock {
 				for (int i = 0; i < haul.length; i++) entry.haul()[i] += haul[i];
 		}
 	}
+
+	/** When the current Vampire Lair puzzle round ends, for the vamp timer: 0 if not in a lair or unknown. */
+	synchronized long lairTimerEnd() { return lairArrival == 0 ? 0 : lairTimerEnd; }
 
 	/** When the current Vampire Lair round ends (chat "15 seconds" warning + 15 s), 0 if unknown. For auto scan. */
 	synchronized long lastLairRoundEnd() { return lairArrival == 0 ? 0 : lairRoundEnd; }
@@ -292,6 +309,15 @@ public final class StationClock {
 		}
 		Matcher on = ONLY.matcher(msg);
 		if (on.find()) { wolvesLeft = Integer.parseInt(on.group(1)); wolvesChangedAt = now; return; }
+		Matcher each = EACH.matcher(msg);
+		if (each.find()) {
+			int left = Integer.parseInt(each.group(1));
+			if (wolvesLeft < 0 && wolvesAtStart < 0) wolvesAtStart = left + 1;   // the first wolf of the period
+			wolvesLeft = left;
+			wolvesChangedAt = now;
+			if (left == 0) lastWolfClearedAt = now;
+			return;
+		}
 		if (msg.contains("charting has turned back the last werewolf!")) {
 			wolvesLeft = 0; wolvesChangedAt = now; lastWolfClearedAt = now; return;
 		}
@@ -315,7 +341,7 @@ public final class StationClock {
 			frayDeaths = 0;
 			elitesLeft = -1;
 			fraysDone++;
-			wolvesAtHalf = wolvesLeft = -1;
+			wolvesAtHalf = wolvesAtStart = wolvesLeft = -1;
 			wolvesChangedAt = 0;
 			Period p = new Period();
 			p.start = now;

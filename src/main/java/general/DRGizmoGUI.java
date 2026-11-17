@@ -2093,6 +2093,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			buttonScan.setMaximumSize(new Dimension(80, 23));
 			buttonScan.setPreferredSize(new Dimension(80, 23));
 			panelScan.add(buttonScan);
+			woodhallowTools.addToScanRow(panelScan);
 
 		JPanel scanStatus = new JPanel();
 		panelGeneral.add(scanStatus, BorderLayout.CENTER);
