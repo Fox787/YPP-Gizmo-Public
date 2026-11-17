@@ -46,7 +46,7 @@ public final class VoyageRecords {
 	private final Path folder;
 
 	public VoyageRecords() {
-		this(GameLog.clientFolder().resolve("exported_data"));
+		this(GameLog.dataFolder());
 	}
 
 	VoyageRecords(Path folder) {
@@ -64,6 +64,8 @@ public final class VoyageRecords {
 		}
 		snapshot = new Snapshot(List.copyOf(cached), loadedAt);
 	}
+
+	Path folder() { return folder; }
 
 	public int size() { return snapshot.records().size(); }
 	public long loadedAt() { return snapshot.loadedAt(); }

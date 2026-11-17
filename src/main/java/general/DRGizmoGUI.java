@@ -38,7 +38,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	public static final String[] OCEANS = new String[] {"Cerulean", "Emerald", "Meridian", "Obsidian", "No Ocean"};
 
-	public static final String AUTOCOPY = "autocopy", AUTOREAD = "autoread", BROKENRECORDALERT = "brokenrecordalert",
+	public static final String AUTOCOPY = "autocopy", COPYSCANTOVESSEL = "copyscantovessel", AUTOREAD = "autoread", BROKENRECORDALERT = "brokenrecordalert",
 			DEBUG = "debug", IGNOREAI = "ignoreai",
 
 			SCANWRITEDATE = "scanwritedate", SCANUSETABS = "scanusetabs", SCANOCEAN = "scanocean",
@@ -118,7 +118,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JButton buttonOutputChest;
 	private JButton buttonOutputCombined;
 	private JButton buttonOutputCarpAvg;
-	private JCheckBox checkBoxAutoCopy, checkBoxBrokenRecordAlert;
+	private JCheckBox checkBoxAutoCopy, checkBoxCopyScanToVessel, checkBoxBrokenRecordAlert;
 	private JCheckBox checkBoxDebug, checkBoxIgnoreAI;
 	private JLabel labelDRCount;
 
@@ -166,23 +166,23 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private final String PROFILE_ROOT = "profiles";
 	private final String GLOBAL_ROOT = "global";
 
-	private JCheckBox checkBoxBootyExport;
-	private JTextField textFieldChatLogFolder, textFieldBootyTextFolder;
-	private JButton buttonChatLogBrowse, buttonBootyTextBrowse;
+	private JCheckBox checkBoxBootyExport, checkBoxPromptMissingRun;
+	private static final String PROMPT_MISSING_RUN = "booty.promptMissingRun";
+	private JTextField textFieldChatLogFolder, textFieldBootyTextFolder, textFieldDataFolder;
+	private JButton buttonChatLogBrowse, buttonBootyTextBrowse, buttonDataBrowse;
 
-	public static final String BOOTYEXPORT = "bootyexport", CHATLOGFOLDER = "chatlogfolder", BOOTYTEXTFOLDER = "bootytextfolder";
+	public static final String BOOTYEXPORT = "bootyexport", CHATLOGFOLDER = "chatlogfolder", BOOTYTEXTFOLDER = "bootytextfolder", DATAFOLDER = "datafolder";
 
-	private JLabel labelWolvesLeft;
+	private WoodhallowTools woodhallowTools;
 	private ActivityTracker activityTracker;
 	private VoyageRecords voyageRecords;
 	private JButton buttonGetRecords;
 	private JLabel labelRecordStatus;
 	private final Map<String, JPanel> recordPanels = new LinkedHashMap<>();
-	private String loggedInOcean;
+	private String logPirate; // Accessed by the log worker only.
 	private JLabel labelSymbols;
 	private RunLog runLog;
 	private StationClock stationClock;
-	private long lastChatLookup;
 	/** Auto scan for every activity (Den, CI, Lair) or none; off means scanning by hand. */
 	private JCheckBox checkBoxAutoScan;
 	public static final String AUTOSCAN = "autoscan";
@@ -194,21 +194,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	/** How long after the last station symbol auto scan keeps looking for the duty report. */
 	private static final long AUTOSCAN_SYMBOL_WINDOW_MS = 3 * 60_000L;
 
-	/** Score-per-minute lists still to copy, next first. */
-	private final java.util.ArrayDeque<String> pendingCopies = new java.util.ArrayDeque<>();
-	private boolean pasteWatchInstalled;
-
-	/** Puzzle Pirates chat takes at most this many characters per message. */
-	static final int CHAT_LIMIT = 240;
+	private final ReportClipboard reportClipboard = new ReportClipboard();
 
 	/** The text as one piece if it fits in a chat message, else whole lines packed into pieces that each fit. */
 	static java.util.List<String> splitForChat(String text) {
 		java.util.List<String> out = new java.util.ArrayList<>();
-		if (text.length() <= CHAT_LIMIT) { out.add(text); return out; }
+		if (text.length() <= ReportClipboard.CHAT_LIMIT) { out.add(text); return out; }
 		String nl = System.getProperty("line.separator");
 		StringBuilder cur = new StringBuilder();
 		for (String line : text.split("\\r?\\n")) {
-			if (cur.length() > 0 && cur.length() + nl.length() + line.length() > CHAT_LIMIT) {
+			if (cur.length() > 0 && cur.length() + nl.length() + line.length() > ReportClipboard.CHAT_LIMIT) {
 				out.add(cur.toString());
 				cur.setLength(0);
 			}
@@ -224,25 +219,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, selection);
 	}
 
-	/** Copies the next queued list; if more remain, the next Ctrl+V in this process moves on again. */
-	private void copyNext() {
-		String next = pendingCopies.poll();
-		if (next == null) return;
-		copyToClipboard(next);
-		printStatus(pendingCopies.isEmpty() ? "Copied the last list" : "Copied; paste with Ctrl+V and the next list is copied", true);
-		if (!pasteWatchInstalled) {
-			pasteWatchInstalled = true;
-			// Only watches key presses in this Java process (Gizmo and the game's window); changes nothing.
-			Toolkit.getDefaultToolkit().addAWTEventListener(ev -> {
-				java.awt.event.KeyEvent k = (java.awt.event.KeyEvent) ev;
-				if (k.getID() == java.awt.event.KeyEvent.KEY_PRESSED && k.getKeyCode() == java.awt.event.KeyEvent.VK_V
-						&& k.isControlDown() && !pendingCopies.isEmpty()) {
-					// Let the paste read the clipboard first.
-					javax.swing.Timer t = new javax.swing.Timer(300, e2 -> copyNext());
-					t.setRepeats(false);
-					t.start();
-				}
-			}, AWTEvent.KEY_EVENT_MASK);
+	private void checkSent() {
+		if (reportClipboard.hasPending()) {
+			reportClipboard.update(stationClock.drainOwnChat(), java.time.LocalDateTime.now(),
+					DRGizmoGUI::copyToClipboard);
 		}
 	}
 
@@ -252,9 +232,46 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		return RecordChecker.DEN.equals(activity) || RecordChecker.CI.equals(activity) || RecordChecker.LAIR.equals(activity);
 	}
 
+	private void startLogPolling() {
+		ChatLog.Discovery chatLogs = new ChatLog.Discovery();
+		java.util.concurrent.ScheduledExecutorService files =
+				java.util.concurrent.Executors.newSingleThreadScheduledExecutor(task -> {
+					Thread thread = new Thread(task, "Gizmo logs");
+					thread.setDaemon(true);
+					return thread;
+				});
+		files.scheduleWithFixedDelay(() -> {
+			try {
+				long now = System.currentTimeMillis();
+				GameLog.poll(now);
+				GameLog.Info game = GameLog.read();
+				if (game == null || game.pirate == null) return;
+				String setting = textFieldChatLogFolder.getText().trim();
+				Path folder = setting.isEmpty() ? null : Paths.get(setting);
+				if (!game.pirate.equals(logPirate)) {
+					logPirate = game.pirate;
+					SwingUtilities.invokeLater(() -> activityTracker.setSelf(game.pirate));
+				}
+				stationClock.poll(chatLogs.logs(folder, game.pirate, game.ocean, now), game.pirate);
+			} catch (RuntimeException ignored) {
+				// Retry on the file thread after chat settings or log files change.
+			}
+		}, 0, 1, java.util.concurrent.TimeUnit.SECONDS);
+		javax.swing.Timer clipboard = new javax.swing.Timer(1000, event -> checkSent());
+		clipboard.start();
+		addWindowListener(new java.awt.event.WindowAdapter() {
+			private void stop() {
+				files.shutdown();
+				clipboard.stop();
+			}
+			@Override public void windowClosing(java.awt.event.WindowEvent event) { stop(); }
+			@Override public void windowClosed(java.awt.event.WindowEvent event) { stop(); }
+		});
+	}
+
 	/**
 	 * Auto scan looks for a new duty report while either
-	 *  - a Den station period ended in the last 2 minutes (chat log), or
+	 *  - a Den station period ended in the last five seconds (chat log), or
 	 *  - a station symbol was over someone's head in a Den, Cursed Isles or Vampire Lair scene in the
 	 *    last few minutes (foraging, carpentry, treasure haul...),
 	 * and auto scan is ticked. A report that is new is scanned once, like the Scan button.
@@ -262,7 +279,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private void autoScanTick() {
 		long now = System.currentTimeMillis();
 		long d = checkBoxAutoScan.isSelected() ? activityTracker.lastStationEnd(now) : 0;
-		boolean byClock = d != 0 && d != autoScannedDeadline && now - d <= 120_000;
+		boolean byClock = d != 0 && d != autoScannedDeadline && now - d <= 5_000;
 		long seen = activityTracker.lastSymbolAt();
 		boolean bySymbol = seen != 0 && now - seen <= AUTOSCAN_SYMBOL_WINDOW_MS && autoScanWanted(activityTracker.lastSymbolKind());
 		boolean wasArmed = autoScanArmed;
@@ -270,7 +287,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		if (!autoScanArmed) return;
 		try {
 			// Look quietly first, so an empty attempt doesn't fill the Output tab.
-			DRGroupData found = new DRGizmo(window, new JTextArea(), false).findDutyReportQuietly();
+			JTextArea scanDebug = new JTextArea();
+			DRGroupData found = new DRGizmo(window, scanDebug, checkBoxDebug.isSelected()).findDutyReportQuietly();
 			if (found == null || found.isEmpty()) return;
 			String key = found.toString();
 			if (!wasArmed && !byClock && lastScannedReport == null) {
@@ -283,9 +301,87 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			if (!autoScanWanted(activity)) return;        // not an activity the player opted into
 			if (byClock) autoScannedDeadline = d;
 			printStatus("Auto scan: reading the " + (activity == null ? "" : activity + " ") + "duty report", false);
-			buttonScan.doClick();
+			if (scanDebug.getDocument().getLength() != 0) printStatus(scanDebug.getText().stripTrailing(), true);
+			processDutyReport(found);
+			printStatus("", false);
 		} catch (RuntimeException ignored) {
 			// Try again on the next tick.
+		}
+	}
+
+	private void processDutyReport(DRGroupData data) {
+		lastScannedReport = data.toString();
+		if (RecordChecker.LAIR.equals(RecordChecker.activityOf(data))) {
+			var round = stationClock.lairRound(System.currentTimeMillis());
+			if (round != null) data.setLairRound(round.arrival(), round.end());
+		}
+
+		// Save the original report so it can be rescored with other profile settings.
+		addDRToTree(data);
+		try {
+			PrefObj.putObject(prefs, TREEDATA, drTreeToPersistantData());
+			printStatus("Tree Saved", true);
+		} catch (IOException | BackingStoreException | ClassNotFoundException e) {
+			printStatus("Saving Tree Failed: " + e.getMessage(), true);
+		}
+
+		calculateReportScore(data);
+		// Score per minute first, so it can go on the same lines as the report. Only Wolves Den
+		// reports are timed; CI and Lair reports print just the options the player ticked.
+		boolean isDen = RecordChecker.DEN.equals(RecordChecker.activityOf(data));
+		String voyage = RunLog.voyageOf(data);
+		long arrival = stationClock.lastArrival(voyage);
+		String perMinute = null;
+		java.util.Map<String, java.util.Map<String, Double>> rates = null;
+		ActivityTracker.Period timed = null;
+		if (isDen) {
+			try {
+				perMinute = activityTracker.report(data);
+				ActivityTracker.Period fresh = activityTracker.takeNewPeriod();
+				timed = activityTracker.lastPeriod();
+				rates = ActivityTracker.rates(timed);
+				woodhallowTools.scanned(data, timed);
+				if (fresh != null) {
+					printStatus("Saved to " + runLog.record(fresh, voyage, arrival), true);
+					if (fresh.timedToTimer) runLog.recordRatings(fresh);
+				}
+			} catch (IOException | RuntimeException ex) {
+				printStatus("Score per minute failed: " + ex, false);
+			}
+		} else if (voyage != null) {
+			try {
+				Path receipt = runLog.recordUntimed(data, voyage, arrival);
+				if (receipt != null) printStatus("Saved to " + receipt, true);
+			} catch (IOException | RuntimeException e) {
+				printStatus("Duty report export failed: " + e, false);
+			}
+		}
+		boolean inline = isDen && checkBoxScan2ScorePerMinute.isSelected();
+		String dataString = formatScanOutput(data, inline ? rates : null);
+		printStatus(dataString, false);
+		if (checkBoxDebug.isSelected() && timed != null) printStatus(ActivityTracker.describeTimes(timed), true);
+		// Without the Score/min option, the per-minute lists still print separately.
+		if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(perMinute, false);
+		//check for broken records, against the records for the activity this report is from
+		if (checkBoxBrokenRecordAlert.isSelected()) {
+			checkScanRecords(data);
+		}
+
+		if (checkBoxAutoCopy.isSelected()) {
+			java.util.List<String> pieces = checkBoxCopyScanToVessel.isSelected()
+					? ActivityTracker.chatMessages(data, timed, checkBoxIgnoreAI.isSelected()) : java.util.List.of();
+			if (pieces.isEmpty()) {
+				pieces = new java.util.ArrayList<>();
+				if (dataString.length() <= ReportClipboard.CHAT_LIMIT) {
+					pieces.add(dataString);
+				} else {
+					for (String station : data.data.keySet())
+						pieces.addAll(splitForChat(formatScanOutput(data.get(station), inline ? rates : null)));
+				}
+			}
+			stationClock.drainOwnChat();
+			reportClipboard.replace(pieces);
+			checkSent();
 		}
 	}
 
@@ -409,7 +505,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	private String recordsOcean() {
-		if (loggedInOcean != null && !loggedInOcean.isBlank()) return loggedInOcean;
+		GameLog.Info identity = GameLog.read();
+		if (identity != null && identity.ocean != null && !identity.ocean.isBlank()) return identity.ocean;
 		String selected = (String) comboBoxScanOcean.getSelectedItem();
 		return "No Ocean".equals(selected) ? null : selected;
 	}
@@ -685,8 +782,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 	}
 
-	private WolfWatch wolfWatch;
-
 	private JComponent folderRow(String name, JTextField field, JButton browse) {
 		JPanel row = new JPanel(new BorderLayout(0, 3));
 		row.setAlignmentX(LEFT_ALIGNMENT);
@@ -704,7 +799,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		return row;
 	}
 
-	private OptionsPanel createOptions(NumberFormatter integerFormatter) {
+	private OptionsPanel createOptions(JTabbedPane tabs, NumberFormatter integerFormatter) {
 		buttonSavePrefs = new JButton("Save settings");
 		buttonSavePrefs.setToolTipText("Save the active profile, folders and window size");
 		buttonSavePrefs.addActionListener(this);
@@ -730,6 +825,12 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxAutoScan = liveOption("Auto-scan", AUTOSCAN);
 		checkBoxAutoScan.setToolTipText("Scan the duty report automatically after a Den, Cursed Isles or Vampire Lair round.");
 		checkBoxAutoCopy = new JCheckBox("Auto-copy");
+		checkBoxAutoCopy.addItemListener(ev -> {
+			if (!checkBoxAutoCopy.isSelected()) reportClipboard.replace(List.of());
+		});
+		checkBoxCopyScanToVessel = new JCheckBox("Copy scans as /ve");
+		checkBoxCopyScanToVessel.setToolTipText("With Auto-copy enabled, format duty reports for vessel chat.");
+		checkBoxCopyScanToVessel.addItemListener(ev -> reportClipboard.replace(List.of()));
 		checkBoxIgnoreAI = new JCheckBox("Hide NPCs");
 		checkBoxIgnoreAI.addActionListener(ev -> updateOutputPreviews());
 		checkBoxShowExtraButtons = liveOption("Extra output buttons", SHOWEXTRABUTTONS);
@@ -739,6 +840,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxDebug.setToolTipText("Show debug messages in the Output tab");
 		scanning.add(checkBoxAutoScan);
 		scanning.add(checkBoxAutoCopy);
+		scanning.add(checkBoxCopyScanToVessel);
 		scanning.add(checkBoxIgnoreAI);
 		scanning.add(checkBoxShowExtraButtons);
 		scanning.add(checkBoxDebug);
@@ -746,6 +848,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		createOutputOptions(options);
 		createScoringOptions(options, integerFormatter);
 		createRecordOptions(options);
+		woodhallowTools = new WoodhallowTools(window, tabs, globalPrefs, stationClock, activityTracker,
+				options.section("Woodhallow & Rumble", "rumble", false));
 		createFileOptions(options);
 
 		return options;
@@ -936,10 +1040,17 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private void createFileOptions(OptionsPanel options) {
 		JPanel files = options.section("Booty & files", "export", false);
 		checkBoxBootyExport = new JCheckBox("Export on scan");
-		checkBoxBootyExport.setToolTipText("Export the booty division to exported_data beside the game, plus a text copy if configured");
+		checkBoxBootyExport.setToolTipText("Export the booty division to the data folder and write a text copy if configured");
 		checkBoxBootyExport.addActionListener(ev -> saveLogSettings());
 		files.add(checkBoxBootyExport);
+		checkBoxPromptMissingRun = new JCheckBox("Ask about missing runs");
+		checkBoxPromptMissingRun.setToolTipText("Ask to link an unobserved run when many opened chests are missing from the chat log");
+		checkBoxPromptMissingRun.addItemListener(ev ->
+				globalPrefs.putBoolean(PROMPT_MISSING_RUN, checkBoxPromptMissingRun.isSelected()));
+		files.add(checkBoxPromptMissingRun);
 		files.add(Box.createVerticalStrut(5));
+		options.section(files, SpecialDrops.TITLE, "options.specialDrops.expanded", false)
+				.add(new SpecialDropsPanel(globalPrefs));
 
 		textFieldChatLogFolder = new JTextField();
 		buttonChatLogBrowse = new JButton("Browse…");
@@ -950,8 +1061,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		buttonBootyTextBrowse = new JButton("Browse…");
 		files.add(folderRow("Text copies", textFieldBootyTextFolder, buttonBootyTextBrowse));
 		files.add(Box.createVerticalStrut(6));
+		textFieldDataFolder = new JTextField();
+		textFieldDataFolder.setToolTipText("Where Gizmo keeps booty divisions, run files, records and ratings");
+		buttonDataBrowse = new JButton("Browse…");
+		files.add(folderRow("Data folder", textFieldDataFolder, buttonDataBrowse));
 	}
-
 
 	private void createRecordOptions(OptionsPanel options) {
 		JPanel records = options.section("Voyage records", "records", false);
@@ -1069,19 +1183,21 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	private void refreshRecords() {
+		VoyageRecords records = voyageRecords;
 		buttonGetRecords.setEnabled(false);
 		labelRecordStatus.setText("Refreshing…");
 		labelRecordStatus.setToolTipText(null);
 		Thread worker = new Thread(() -> {
 			String error = null;
 			try {
-				voyageRecords.download();
+				records.download();
 			} catch (IOException | RuntimeException e) {
 				error = e.getMessage();
 				if (error == null) error = e.getClass().getSimpleName();
 			}
 			String failure = error;
 			SwingUtilities.invokeLater(() -> {
+				if (voyageRecords != records) return;
 				buttonGetRecords.setEnabled(true);
 				if (failure == null) {
 					updateRecordPanels();
@@ -1322,7 +1438,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 
-			tabbedPane.addTab("Options", createOptions(integerFormatter));
+			stationClock = new StationClock();
+			activityTracker = new ActivityTracker(window, stationClock);
+			runLog = new RunLog(globalPrefs);
+			tabbedPane.addTab("Options", createOptions(tabbedPane, integerFormatter));
 
 			// Records tab: one box per activity. Broken Record Alert checks the box for the activity scanned.
 			JPanel panelRecords = new JPanel();
@@ -1973,51 +2092,30 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			buttonScan.setPreferredSize(new Dimension(80, 23));
 			panelScan.add(buttonScan);
 
-		JPanel panelQuickOptions = new JPanel();
-		panelGeneral.add(panelQuickOptions, BorderLayout.CENTER);
-		panelQuickOptions.setLayout(new BoxLayout(panelQuickOptions, BoxLayout.Y_AXIS));
-
-			// Read-only: shown here in Gizmo's window, never added to the client.
-			labelWolvesLeft = new JLabel(" ");
-			panelQuickOptions.add(labelWolvesLeft);
-
-			wolfWatch = new WolfWatch(window, r -> labelWolvesLeft.setText(r == null ? " " : r.text()));
-			stationClock = new StationClock();
-			activityTracker = new ActivityTracker(window, globalPrefs, stationClock);
-			// Follow the logged-in pirate's chat log for station start/end messages.
-			new javax.swing.Timer(1000, ev -> {
-				long now = System.currentTimeMillis();
-				if (now - lastChatLookup > 60_000) {
-					lastChatLookup = now;
-					GameLog.Info g = GameLog.read();
-					Path folder = textFieldChatLogFolder.getText().trim().isEmpty() ? null : Paths.get(textFieldChatLogFolder.getText().trim());
-					if (g != null) {
-						loggedInOcean = g.ocean;
-						stationClock.follow(ChatLog.findLog(folder, g.pirate, g.ocean));
-						activityTracker.setSelf(g.pirate);
-					}
-				}
-				stationClock.poll();
-			}).start();
-			runLog = new RunLog(globalPrefs);
+		JPanel scanStatus = new JPanel();
+		panelGeneral.add(scanStatus, BorderLayout.CENTER);
+			startLogPolling();
+			woodhallowTools.start();
+			addWindowListener(new java.awt.event.WindowAdapter() {
+				@Override public void windowClosing(java.awt.event.WindowEvent ev) { woodhallowTools.stop(); }
+				@Override public void windowClosed(java.awt.event.WindowEvent ev) { woodhallowTools.stop(); }
+			});
 			activityTracker.setOnArrival(firstSinceStart -> {
+				if (stationClock.lastArrival("woodhallow") != 0) return;
 				if (firstSinceStart) runLog.startNewRunUnlessRecent();
 				else runLog.startNewRun();
 			});
 
-			// Auto scan: while stations are running (or just after), look for a new duty report every
-			// 2 seconds and scan it the same way the Scan button does. One setting for Den, CI and Lair;
-			// untick to scan by hand.
 			new javax.swing.Timer(2000, ev -> autoScanTick()).start();
 
 			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
-			labelSymbols = new JLabel("Symbols: not found yet");
-			panelQuickOptions.add(labelSymbols);
+			labelSymbols = new JLabel("Symbols: waiting");
+			scanStatus.add(labelSymbols);
 			new javax.swing.Timer(2000, ev -> {
 				java.util.List<String> seen = activityTracker.snapshot();
 				int withSymbol = 0;
 				for (String s : seen) if (!s.contains("[0]")) withSymbol++;
-				labelSymbols.setText(seen.isEmpty() ? "Symbols: not found yet"
+				labelSymbols.setText(seen.isEmpty() ? (activityTracker.lastSymbolAt() == 0 ? "Symbols: waiting" : "Symbols: detected")
 						: "Symbols: " + seen.size() + " pirates, " + withSymbol + " with a symbol");
 				labelSymbols.setToolTipText(seen.isEmpty() ? null : "<html>" + String.join("<br>", seen) + "</html>");
 			}).start();
@@ -2050,10 +2148,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			Component rigidArea = Box.createRigidArea(new Dimension(20, 20));
 			panelScore.add(rigidArea);
 
-		voyageRecords = new VoyageRecords();
-		updateRecordPanels();
 		loadSettings();
-		refreshRecords();
 
 		// Diagnosis for blurry text until clicked: is the client's repaint manager (and its 2x scaling)
 		// drawing Gizmo's window too? Printed once, after the window is up.
@@ -2136,83 +2231,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 		if (e.getSource().equals(buttonScan)) {
 			DRGizmo gizmo = new DRGizmo(window, textAreaOutput, checkBoxDebug.isSelected());
-			DRGroupData data = gizmo.scanDutyReport();
+			DRGroupData data = gizmo.scanDutyReport(SpecialDrops.load(globalPrefs));
 			if (data != null && !data.isEmpty()) {
-				lastScannedReport = data.toString();
-				if (RecordChecker.LAIR.equals(RecordChecker.activityOf(data))) {
-					var round = stationClock.lairRound(System.currentTimeMillis());
-					if (round != null) data.setLairRound(round.arrival(), round.end());
-				}
-
-				//add to drTree with the default tokenScore
-				addDRToTree(data);
-				//save new true to prefs
-				try {
-    				PrefObj.putObject(prefs, TREEDATA, drTreeToPersistantData());
-    				printStatus("Tree Saved", true);
-    			} catch (IOException e1) {
-    				printStatus("Saving Tree Failed: IO", true);
-    			} catch (BackingStoreException e1) {
-    				printStatus("Saving Tree Failed: BSE", true);
-    			} catch (ClassNotFoundException e1) {
-    				printStatus("Saving Tree Failed: CNFE", true);
-    			}
-
-				//change tokenScore based on the settings
-				calculateReportScore(data);
-				// Score per minute first, so it can go on the same lines as the report. Only Wolves Den
-				// reports are timed; CI and Lair reports print just the options the player ticked.
-				boolean isDen = RecordChecker.DEN.equals(RecordChecker.activityOf(data));
-				String perMinute = null;
-				java.util.Map<String, java.util.Map<String, Double>> rates = null;
-				ActivityTracker.Period timed = null;
-				if (isDen) {
-					try {
-						perMinute = activityTracker.report(data);
-						ActivityTracker.Period fresh = activityTracker.takeNewPeriod();
-						if (fresh != null) printStatus("Saved to " + runLog.record(fresh), true);
-						timed = activityTracker.lastPeriod();
-						rates = ActivityTracker.rates(timed);
-					} catch (IOException | RuntimeException ex) {
-						printStatus("Score per minute failed: " + ex, false);
-					}
-				}
-				boolean inline = isDen && checkBoxScan2ScorePerMinute.isSelected();
-				String dataString = formatScanOutput(data, rates);
-				printStatus(dataString, false);
-				// Without the Score/min option, the per-minute lists still print separately.
-				if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(perMinute, false);
-				//check for broken records, against the records for the activity this report is from
-				if (checkBoxBrokenRecordAlert.isSelected()) {
-					checkScanRecords(data);
-				}
-
-				//copy
-				if (checkBoxAutoCopy.isSelected()) {
-					// First the report exactly as printed, split by station when it is over the chat limit;
-					// then (Den only, when Score/min isn't already on the lines) the score-per-minute lists.
-					// The first piece is copied now, the rest after each Ctrl+V.
-					java.util.List<String> pieces = new java.util.ArrayList<>();
-					if (dataString.length() <= CHAT_LIMIT) {
-						pieces.add(dataString);
-					} else {
-						for (String station : data.data.keySet()) {
-							String part = formatScanOutput(data.get(station), rates);
-							pieces.addAll(splitForChat(part));
-						}
-					}
-					if (timed != null && !inline)
-						for (String block : ActivityTracker.blocks(timed, checkBoxScanUseTabs.isSelected() ? "\t" : " ", false))
-							pieces.addAll(splitForChat(block));
-					pieces.removeIf(String::isEmpty);
-					pendingCopies.clear();
-					if (pieces.size() > 1) {
-						pendingCopies.addAll(pieces);
-						copyNext();
-					} else {
-						copyToClipboard(pieces.isEmpty() ? dataString : pieces.get(0));
-					}
-				}
+				processDutyReport(data);
 			} else if (gizmo.getBootyDivision() != null) {
 				exportBooty(gizmo.getBootyDivision());
 			} else {
@@ -2222,8 +2243,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			return;
 		}
 
-		if (e.getSource().equals(buttonChatLogBrowse) || e.getSource().equals(buttonBootyTextBrowse)) {
-			JTextField field = e.getSource().equals(buttonChatLogBrowse) ? textFieldChatLogFolder : textFieldBootyTextFolder;
+		if (e.getSource().equals(buttonChatLogBrowse) || e.getSource().equals(buttonBootyTextBrowse)
+				|| e.getSource().equals(buttonDataBrowse)) {
+			JTextField field = e.getSource().equals(buttonChatLogBrowse) ? textFieldChatLogFolder
+					: e.getSource().equals(buttonDataBrowse) ? textFieldDataFolder : textFieldBootyTextFolder;
 			JFileChooser chooser = new JFileChooser(field.getText().isEmpty() ? null : field.getText());
 			chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
 			if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -2553,6 +2576,19 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	/** Adds chat log and game log context to a scanned booty division and writes it out. */
+	private boolean promptForMissingRun(BootyExporter.ChestGap gap) {
+		JCheckBox dontAsk = new JCheckBox("Don't ask me again");
+		String summary = String.format("The crew opened %,d chests, and the chat log accounts for %,d.",
+				gap.opened(), gap.logged());
+		String question = String.format("Add a linked run for the remaining %,d chests?", gap.missing());
+		Object[] choices = {"Add linked run", "Export as is"};
+		int choice = JOptionPane.showOptionDialog(this, new Object[]{summary, question, dontAsk},
+				"Missing chests in booty division", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+				null, choices, choices[1]);
+		if (dontAsk.isSelected()) checkBoxPromptMissingRun.setSelected(false);
+		return choice == 0;
+	}
+
 	private void exportBooty(BootyDivision booty) {
 		if (!checkBoxBootyExport.isSelected()) {
 			printStatus("Booty export is off (Options > Booty & files)", false);
@@ -2568,32 +2604,29 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			printStatus("Voyage: " + c.battlesWon + " won, " + c.battlesLost + " lost, "
 					+ (c.chestsOpened == null ? "?" : c.chestsOpened) + " chests opened"
 					+ (c.myCut == null ? "" : ", your cut " + c.myCut + " PoE"), false);
-			if (checkBoxBrokenRecordAlert.isSelected() && booty.ocean() != null) {
-				List<String> pirates = booty.pirates.stream().map(pirate -> pirate.name).distinct().sorted().toList();
-				if (!pirates.isEmpty()) {
-					for (ChatLog.Run run : c.runs) {
-						String result = voyageRecords.check(run, pirates.size(), booty.ocean(), pirates);
-						if (!result.isEmpty()) printStatus(result, false);
-					}
-				}
-			}
 		}
 
-		booty.runFiles.addAll(runLog.pending());
+		booty.runFiles.addAll(runLog.pending(booty.pirate(), booty.ocean()));
+		java.util.List<ActivityTracker.Period> exportedPeriods = activityTracker.periods();
 
 		Path textFolder = textFieldBootyTextFolder.getText().trim().isEmpty() ? null : Paths.get(textFieldBootyTextFolder.getText().trim());
 		try {
-			BootyExporter.Result r = BootyExporter.export(booty, textFolder);
-			if (!r.duplicate) {   // the next voyage starts afresh
-				activityTracker.clearPeriods();
-				runLog.clearPending();
-				runLog.startNewRun();
+			BootyExporter.Result r = BootyExporter.export(booty, textFolder,
+					gap -> checkBoxPromptMissingRun.isSelected() && promptForMissingRun(gap));
+			if (checkBoxBrokenRecordAlert.isSelected()) checkBootyRecords(booty);
+			if (!r.duplicate && !r.replaced) {
+				activityTracker.finishExport(exportedPeriods);
+				runLog.clearPending(booty.runFiles);
 			}
 			if (r.duplicate) {
 				printStatus("Booty division already exported to " + r.jsonl.getFileName(), false);
+			} else if (r.replaced) {
+				printStatus("Updated booty division in " + r.jsonl
+						+ (r.text == null ? "" : " and " + r.text.getFileName()), false);
 			} else {
 				printStatus("Booty exported: " + r.jsonl + (r.text == null ? "" : " and " + r.text.getFileName()), false);
 			}
+			if (r.textError != null) printStatus("Text copy failed: " + r.textError, false);
 			if (checkBoxAutoCopy.isSelected()) {
 				StringSelection selection = new StringSelection(booty.toText());
 				Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, selection);
@@ -2603,15 +2636,44 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 	}
 
+	private void checkBootyRecords(BootyDivision booty) {
+		if (booty.chat == null || booty.chat.openedAt == null || booty.ocean() == null) return;
+		List<String> names = booty.pirates.stream().map(pirate -> pirate.name).distinct().sorted().toList();
+		if (names.isEmpty()) return;
+		List<ChatLog.Run> runs = booty.chat.runs;
+		for (int i = 0; i < runs.size(); i++) {
+			ChatLog.Run run = runs.get(i);
+			java.time.LocalDateTime end = i + 1 < runs.size() ? runs.get(i + 1).arrivedAt : booty.chat.openedAt;
+			Map<String, int[]> pirateLoot = RunLog.pirateLoot(booty.runFiles, run, end);
+			String result = voyageRecords.check(run, names.size(), booty.ocean(), names, pirateLoot);
+			if (!result.isEmpty()) printStatus(result, false);
+		}
+	}
+
 	/** Log folders are machine-wide, so they live in the global prefs rather than a profile. */
 	private void saveLogSettings() {
 		globalPrefs.putBoolean(BOOTYEXPORT, checkBoxBootyExport.isSelected());
 		globalPrefs.put(CHATLOGFOLDER, textFieldChatLogFolder.getText().trim());
 		globalPrefs.put(BOOTYTEXTFOLDER, textFieldBootyTextFolder.getText().trim());
+		globalPrefs.put(DATAFOLDER, textFieldDataFolder.getText().trim());
+		applyDataFolder();
+	}
+
+	private void applyDataFolder() {
+		String data = textFieldDataFolder.getText().trim();
+		String chat = textFieldChatLogFolder.getText().trim();
+		GameLog.setDataFolder(!data.isEmpty() ? Paths.get(data) : chat.isEmpty() ? null : Paths.get(chat, "Gizmo"));
+		Path folder = GameLog.dataFolder().toAbsolutePath().normalize();
+		if (voyageRecords == null || !voyageRecords.folder().equals(folder)) {
+			voyageRecords = new VoyageRecords(folder);
+			updateRecordPanels();
+			refreshRecords();
+		}
 	}
 
 	private void loadLogSettings() {
 		checkBoxBootyExport.setSelected(globalPrefs.getBoolean(BOOTYEXPORT, true));
+		checkBoxPromptMissingRun.setSelected(globalPrefs.getBoolean(PROMPT_MISSING_RUN, true));
 		String chat = globalPrefs.get(CHATLOGFOLDER, "");
 		if (chat.isEmpty()) {
 			Path guess = ChatLog.guessFolder();
@@ -2621,8 +2683,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		String text = globalPrefs.get(BOOTYTEXTFOLDER, "");
 		if (text.isEmpty() && !chat.isEmpty()) text = Paths.get(chat, "booty_division").toString();
 		textFieldBootyTextFolder.setText(text);
+		textFieldDataFolder.setText(globalPrefs.get(DATAFOLDER, ""));
+		applyDataFolder();
 
-		wolfWatch.start();
 		activityTracker.start();
 
 		checkBoxShowExtraButtons.setSelected(globalPrefs.getBoolean(SHOWEXTRABUTTONS, true));
@@ -2648,6 +2711,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxDebug.setSelected(currentPrefs.getBoolean(DEBUG, false));
 		checkBoxIgnoreAI.setSelected(currentPrefs.getBoolean(IGNOREAI, false));
 		checkBoxAutoCopy.setSelected(currentPrefs.getBoolean(AUTOCOPY, false));
+		checkBoxCopyScanToVessel.setSelected(currentPrefs.getBoolean(COPYSCANTOVESSEL, true));
 		checkBoxBrokenRecordAlert.setSelected(currentPrefs.getBoolean(BROKENRECORDALERT, true));
 
 		// Scan options
@@ -2754,6 +2818,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		try {
 			// Save all settings (same as buttonSavePrefs but to currentPrefs)
 			currentPrefs.putBoolean(AUTOCOPY, checkBoxAutoCopy.isSelected());
+			currentPrefs.putBoolean(COPYSCANTOVESSEL, checkBoxCopyScanToVessel.isSelected());
 			currentPrefs.putBoolean(BROKENRECORDALERT, checkBoxBrokenRecordAlert.isSelected());
 			currentPrefs.putBoolean(DEBUG, checkBoxDebug.isSelected());
 			currentPrefs.putBoolean(IGNOREAI, checkBoxIgnoreAI.isSelected());
