@@ -160,7 +160,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private final String PROFILE_ROOT = "profiles";
 	private final String GLOBAL_ROOT = "global";
 
-	private JCheckBox checkBoxBootyExport;
+	private JCheckBox checkBoxBootyExport, checkBoxPromptMissingRun;
+	private static final String PROMPT_MISSING_RUN = "booty.promptMissingRun";
 	private JTextField textFieldChatLogFolder, textFieldBootyTextFolder, textFieldDataFolder;
 	private JButton buttonChatLogBrowse, buttonBootyTextBrowse, buttonDataBrowse;
 
@@ -996,6 +997,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				checkBoxBootyExport.setAlignmentX(Component.LEFT_ALIGNMENT);
 				checkBoxBootyExport.addActionListener(ev -> saveLogSettings());
 				panelBootyExport.add(checkBoxBootyExport);
+				checkBoxPromptMissingRun = new JCheckBox("Ask about missing runs");
+				checkBoxPromptMissingRun.setToolTipText("Ask to link an unobserved run when many opened chests are missing from the chat log");
+				checkBoxPromptMissingRun.addItemListener(ev ->
+						globalPrefs.putBoolean(PROMPT_MISSING_RUN, checkBoxPromptMissingRun.isSelected()));
+				panelBootyExport.add(checkBoxPromptMissingRun);
 
 				textFieldChatLogFolder = new JTextField();
 				buttonChatLogBrowse = new JButton("...");
@@ -2439,6 +2445,19 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	/** Adds chat log and game log context to a scanned booty division and writes it out. */
+	private boolean promptForMissingRun(BootyExporter.ChestGap gap) {
+		JCheckBox dontAsk = new JCheckBox("Don't ask me again");
+		String summary = String.format("The crew opened %,d chests, and the chat log accounts for %,d.",
+				gap.opened(), gap.logged());
+		String question = String.format("Add a linked run for the remaining %,d chests?", gap.missing());
+		Object[] choices = {"Add linked run", "Export as is"};
+		int choice = JOptionPane.showOptionDialog(this, new Object[]{summary, question, dontAsk},
+				"Missing chests in booty division", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+				null, choices, choices[1]);
+		if (dontAsk.isSelected()) checkBoxPromptMissingRun.setSelected(false);
+		return choice == 0;
+	}
+
 	private void exportBooty(BootyDivision booty) {
 		if (!checkBoxBootyExport.isSelected()) {
 			printStatus("Booty export is off (Options > Booty Export)", false);
@@ -2457,12 +2476,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 
 		booty.runFiles.addAll(runLog.pending(booty.pirate(), booty.ocean()));
+		java.util.List<ActivityTracker.Period> exportedPeriods = activityTracker.periods();
 
 		Path textFolder = textFieldBootyTextFolder.getText().trim().isEmpty() ? null : Paths.get(textFieldBootyTextFolder.getText().trim());
 		try {
-			BootyExporter.Result r = BootyExporter.export(booty, textFolder);
-			runLog.clearPending(booty.runFiles);
-			if (!r.duplicate && !r.replaced) activityTracker.clearPeriods();
+			BootyExporter.Result r = BootyExporter.export(booty, textFolder,
+					gap -> checkBoxPromptMissingRun.isSelected() && promptForMissingRun(gap));
+			if (!r.duplicate && !r.replaced) {
+				activityTracker.finishExport(exportedPeriods);
+				runLog.clearPending(booty.runFiles);
+			}
 			if (r.duplicate) {
 				printStatus("Booty division already exported to " + r.jsonl.getFileName(), false);
 			} else if (r.replaced) {
@@ -2498,6 +2521,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	private void loadLogSettings() {
 		checkBoxBootyExport.setSelected(globalPrefs.getBoolean(BOOTYEXPORT, true));
+		checkBoxPromptMissingRun.setSelected(globalPrefs.getBoolean(PROMPT_MISSING_RUN, true));
 		String chat = globalPrefs.get(CHATLOGFOLDER, "");
 		if (chat.isEmpty()) {
 			Path guess = ChatLog.guessFolder();

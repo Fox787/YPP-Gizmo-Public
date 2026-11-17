@@ -267,7 +267,7 @@ public final class ActivityTracker {
 	private final List<Period> periods = new ArrayList<>();
 
 	public List<Period> periods() { return new ArrayList<>(periods); }
-	public void clearPeriods() { periods.clear(); }
+	void finishExport(List<Period> exported) { periods.removeAll(exported); }
 
 	/** The period added by the latest report() call, once; null if that report was a repeat. */
 	private Period fresh;

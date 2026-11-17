@@ -13,6 +13,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,6 +23,12 @@ import java.util.regex.Pattern;
  *  - a readable N.txt in a text folder (by default &lt;chat log folder&gt;/booty_division).
  */
 public final class BootyExporter {
+
+	private static final int MIN_CHEST_GAP = 50;
+
+	record ChestGap(int opened, int logged) {
+		int missing() { return opened - logged; }
+	}
 
 	public static final class Result {
 		public Path jsonl;
@@ -57,7 +64,20 @@ public final class BootyExporter {
 		}
 	}
 
-	public static synchronized Result export(BootyDivision division, Path textFolder) throws IOException {
+	public static Result export(BootyDivision division, Path textFolder) throws IOException {
+		return export(division, textFolder, gap -> false);
+	}
+
+	static ChestGap chestGap(ChatLog.Segment chat) {
+		if (chat == null || chat.openedAt == null || chat.chestsOpened == null) return null;
+		long logged = chat.takenAboard.values().stream().mapToLong(Integer::longValue).sum();
+		long missing = chat.chestsOpened - logged;
+		if (missing < MIN_CHEST_GAP) return null;
+		return new ChestGap(chat.chestsOpened, (int) logged);
+	}
+
+	static synchronized Result export(BootyDivision division, Path textFolder, Predicate<ChestGap> addMissingRun)
+			throws IOException {
 		Result result = new Result();
 		String ocean = division.ocean() == null ? "unknown" : division.ocean().toLowerCase(Locale.ROOT);
 		String pirate = division.pirate() == null ? "unknown" : division.pirate();
@@ -67,12 +87,13 @@ public final class BootyExporter {
 		Path lock = result.jsonl.resolveSibling(result.jsonl.getFileName() + ".lock");
 		try (var channel = FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 			 var ignored = channel.lock()) {
-			saveDivision(division, textFolder, result);
+			saveDivision(division, textFolder, result, addMissingRun);
 		}
 		return result;
 	}
 
-	private static void saveDivision(BootyDivision division, Path textFolder, Result result) throws IOException {
+	private static void saveDivision(BootyDivision division, Path textFolder, Result result,
+									 Predicate<ChestGap> addMissingRun) throws IOException {
 		Path folder = result.jsonl.getParent();
 		String key = division.key();
 		String opened = division.chat == null || division.chat.openedAt == null ? null : division.chat.openedAt.toString();
@@ -100,6 +121,12 @@ public final class BootyExporter {
 				result.duplicate = true;
 				if (exact && textFolder != null && division.textFile != null) writeTextCopy(division, result);
 				return;
+			}
+		} else {
+			ChestGap gap = chestGap(division.chat);
+			if (gap != null && addMissingRun.test(gap)) {
+				Path run = RunLog.writeUnobservedRun(folder, division, division.pirate(), gap.missing());
+				if (!division.runFiles.contains(run)) division.runFiles.add(run);
 			}
 		}
 

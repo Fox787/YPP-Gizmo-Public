@@ -3,6 +3,7 @@ package main.java.general;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -154,5 +155,84 @@ class BootyExportTest {
 
 	private static long stamp(LocalDateTime time) {
 		return time.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+	}
+	@Test
+	void onlyOffersARunForALargeShortfall() {
+		assertNull(BootyExporter.chestGap(null));
+		assertNull(BootyExporter.chestGap(gapDivision(100, 51).chat));
+		assertNull(BootyExporter.chestGap(gapDivision(100, 120).chat));
+		assertEquals(50, BootyExporter.chestGap(gapDivision(1500, 1450).chat).missing());
+	}
+
+	@Test
+	void linksTheConfirmedRunAndKeepsItOnRescan(@TempDir Path folder) throws IOException {
+		Path previousFolder = GameLog.dataFolder();
+		GameLog.setDataFolder(folder);
+		try {
+			Path textFolder = folder.resolve("text");
+			Path observed = folder.resolve("emerald/runs/run_observed.jsonl");
+			Files.createDirectories(observed.getParent());
+			Files.createFile(observed);
+			BootyDivision original = gapDivision(1480, 1284);
+			original.runFiles.add(observed);
+
+			BootyExporter.Result saved = BootyExporter.export(original, textFolder, gap -> {
+				assertEquals(196, gap.missing());
+				return true;
+			});
+			Path inferred = original.runFiles.get(1);
+			String run = Files.readString(inferred);
+			assertTrue(run.contains("\"chest_count\":196"));
+			assertTrue(run.contains("\"rows\":[]"));
+			assertTrue(run.contains("\"started_at\":null"));
+			assertTrue(run.contains("\"source\":\"division_reconciliation\""));
+			String references = "\"run_files\":[\"runs/" + observed.getFileName() + "\",\"runs/" + inferred.getFileName() + "\"]";
+			assertTrue(Files.readString(saved.jsonl).contains(references));
+			assertTrue(Files.readString(saved.text).contains(inferred.toString()));
+
+			BootyDivision duplicate = gapDivision(1480, 1284);
+			assertTrue(BootyExporter.export(duplicate, textFolder, gap -> fail("Prompted again")).duplicate);
+			assertEquals(List.of(observed, inferred), duplicate.runFiles);
+
+			BootyDivision moreTooltips = gapDivision(1480, 1284);
+			moreTooltips.pirates.get(0).items.put("Barrel", 1);
+			moreTooltips.runFiles.add(folder.resolve("emerald/runs/run_next_voyage.jsonl"));
+			assertTrue(BootyExporter.export(moreTooltips, textFolder, gap -> fail("Prompted again")).replaced);
+			String updated = Files.readString(saved.jsonl);
+			assertTrue(updated.contains(references));
+			assertTrue(updated.contains("\"taken_aboard\":{\"wolf boxes\":1284}"));
+			assertEquals(1, updated.lines().count());
+			assertEquals(run, Files.readString(inferred));
+		} finally {
+			GameLog.setDataFolder(previousFolder);
+		}
+	}
+
+	@Test
+	void skippingStillExportsTheDivision(@TempDir Path folder) throws IOException {
+		Path previousFolder = GameLog.dataFolder();
+		GameLog.setDataFolder(folder);
+		try {
+			BootyDivision division = gapDivision(1480, 1284);
+			BootyExporter.Result saved = BootyExporter.export(division, null, gap -> false);
+			assertTrue(Files.isRegularFile(saved.jsonl));
+			assertTrue(division.runFiles.isEmpty());
+			assertFalse(Files.exists(folder.resolve("emerald/runs")));
+		} finally {
+			GameLog.setDataFolder(previousFolder);
+		}
+	}
+
+	private static BootyDivision gapDivision(int opened, int logged) {
+		BootyDivision division = new BootyDivision();
+		division.game = new GameLog.Info();
+		division.game.pirate = "Jice";
+		division.game.ocean = "Emerald";
+		division.pirates.add(new BootyDivision.PirateLoot("Jice"));
+		division.chat = new ChatLog.Segment();
+		division.chat.openedAt = LocalDateTime.of(2026, 11, 17, 1, 21, 25);
+		division.chat.chestsOpened = opened;
+		division.chat.takenAboard.put("wolf boxes", logged);
+		return division;
 	}
 }

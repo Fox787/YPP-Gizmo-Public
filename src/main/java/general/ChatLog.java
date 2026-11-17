@@ -301,7 +301,7 @@ public final class ChatLog {
 		IOException failure = null;
 		for (Path file : files) {
 			try {
-				batches.put(file, read(file, line -> BOOTY_LINE.matcher(line.text).find()));
+				batches.put(file, read(file, line -> BOOTY_LINE.matcher(line.text).find() || arrivalVoyage(line.text) != null));
 			} catch (IOException e) {
 				failure = e;
 			}

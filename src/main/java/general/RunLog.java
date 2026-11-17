@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -71,6 +73,45 @@ public final class RunLog {
 		if (RecordChecker.CI.equals(activity)) return "cursedIsles";
 		if (RecordChecker.LAIR.equals(activity)) return "vampireLairs";
 		return null;
+	}
+
+	/** Archives confirmed missing chests without adding a duty report or opening a tracked run. */
+	static Path writeUnobservedRun(Path divisionFolder, BootyDivision division, String pirate, int chests)
+			throws IOException {
+		String name = "run_" + division.chat.openedAt.format(STAMP) + "_" + (pirate == null ? "unknown" : pirate) + "_unobserved";
+		Path folder = divisionFolder.resolve("runs");
+		Path file = folder.resolve(name + ".jsonl");
+		BootyDivision.Json j = new BootyDivision.Json();
+		j.open();
+		j.field("run", name);
+		j.field("pirate", null);
+		j.field("ocean", division.ocean());
+		j.field("voyage", null);
+		j.field("scanned_at", null);
+		j.field("started", null);
+		j.field("started_at", null);
+		j.field("ended", null);
+		j.field("ended_at", null);
+		j.field("period_from_chat_log", false);
+		j.key("rows").openArray().closeArray();
+		j.field("chest_count", chests);
+		j.field("source", "division_reconciliation");
+		j.field("division_opened_at", division.chat.openedAt.toString());
+		j.close();
+
+		Files.createDirectories(folder);
+		Path staged = Files.createTempFile(folder, name, ".tmp");
+		try {
+			Files.writeString(staged, j + "\n", StandardCharsets.UTF_8);
+			try {
+				Files.move(staged, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(staged, file, StandardCopyOption.REPLACE_EXISTING);
+			}
+		} finally {
+			Files.deleteIfExists(staged);
+		}
+		return file;
 	}
 
 	Path recordUntimed(DRGroupData report, String voyage, long arrival) throws IOException {
