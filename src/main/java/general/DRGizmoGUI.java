@@ -186,13 +186,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	/** Auto scan for every activity (Den, CI, Lair) or none; off means scanning by hand. */
 	private JCheckBox checkBoxAutoScan;
 	public static final String AUTOSCAN = "autoscan";
-	/** Station timer already auto-scanned for, and the last duty report scanned (by hand or auto). */
-	private long autoScannedDeadline;
+	/** Station ends from the logs that arm auto scan, and the last duty report scanned (by hand or auto). */
+	private final AutoScanTrigger autoScanTrigger = new AutoScanTrigger();
 	private String lastScannedReport;
-	/** Auto scan was looking for a report on the previous tick. */
-	private boolean autoScanArmed;
-	/** How long after the last station symbol auto scan keeps looking for the duty report. */
-	private static final long AUTOSCAN_SYMBOL_WINDOW_MS = 3 * 60_000L;
 	static final int AUTOSCAN_TICK_MS = 1000;
 
 	private final ReportClipboard reportClipboard = new ReportClipboard();
@@ -271,36 +267,30 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	/**
-	 * Auto scan looks for a new duty report while either
-	 *  - a Den station period ended in the last five seconds (chat log), or
-	 *  - a station symbol was over someone's head in a Den, Cursed Isles or Vampire Lair scene in the
-	 *    last few minutes (foraging, carpentry, treasure haul...),
-	 * and auto scan is ticked. A report that is new is scanned once, like the Scan button.
+	 * Auto scan looks for a new duty report for a few seconds (AutoScanTrigger.WINDOW_MS) after a
+	 * station end read from the logs, when auto scan is ticked:
+	 *  - Den: a station period ends (chat log),
+	 *  - Lair: a round ends (chat log's 15-second warning),
+	 *  - CI: the forage period ends (this client's game log).
+	 * It then reads only the displayed duty report window. A report that is new is scanned once, like
+	 * the Scan button.
 	 */
 	private void autoScanTick() {
+		if (!checkBoxAutoScan.isSelected()) return;
 		long now = System.currentTimeMillis();
-		long d = checkBoxAutoScan.isSelected() ? activityTracker.lastStationEnd(now) : 0;
-		boolean byClock = d != 0 && d != autoScannedDeadline && now - d <= 5_000;
-		long seen = activityTracker.lastSymbolAt();
-		boolean bySymbol = seen != 0 && now - seen <= AUTOSCAN_SYMBOL_WINDOW_MS && autoScanWanted(activityTracker.lastSymbolKind());
-		boolean wasArmed = autoScanArmed;
-		autoScanArmed = byClock || bySymbol;
-		if (!autoScanArmed) return;
+		long end = autoScanTrigger.armed(now, activityTracker.lastStationEnd(now), stationClock.lastLairRoundEnd(),
+				woodhallowTools.lastForageEnd(now));
+		if (end == 0) return;
 		try {
 			// Look quietly first, so an empty attempt doesn't fill the Output tab.
 			JTextArea scanDebug = new JTextArea();
 			DRGroupData found = new DRGizmo(window, scanDebug, checkBoxDebug.isSelected()).findDutyReportQuietly();
 			if (found == null || found.isEmpty()) return;
 			String key = found.toString();
-			if (!wasArmed && !byClock && lastScannedReport == null) {
-				// Just started watching and a report is already open: it is from before, leave it.
-				lastScannedReport = key;
-				return;
-			}
 			if (key.equals(lastScannedReport)) return;   // still the previous report
 			String activity = RecordChecker.activityOf(found);
 			if (!autoScanWanted(activity)) return;        // not an activity the player opted into
-			if (byClock) autoScannedDeadline = d;
+			autoScanTrigger.scanned(end);
 			printStatus("Auto scan: reading the " + (activity == null ? "" : activity + " ") + "duty report", false);
 			if (scanDebug.getDocument().getLength() != 0) printStatus(scanDebug.getText().stripTrailing(), true);
 			processDutyReport(found);
@@ -335,7 +325,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		String perMinute = null;
 		java.util.Map<String, java.util.Map<String, Double>> rates = null;
 		ActivityTracker.Period timed = null;
-		if (isDen) {
+		if (isDen && !woodhallowTools.scorePerMinute()) woodhallowTools.scanned(data, null);
+		if (isDen && woodhallowTools.scorePerMinute()) {
 			try {
 				perMinute = activityTracker.report(data);
 				ActivityTracker.Period fresh = activityTracker.takeNewPeriod();
@@ -845,6 +836,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		scanning.add(checkBoxIgnoreAI);
 		scanning.add(checkBoxShowExtraButtons);
 		scanning.add(checkBoxDebug);
+		// Debug: find out whether the station countdown (Den 5:00, Lair 2:00) is readable text.
+		JButton dumpClocks = new JButton("Dump visible m:ss text");
+		dumpClocks.setToolTipText("Lists showing labels in the game window whose text looks like a countdown. Click during a station.");
+		dumpClocks.addActionListener(ev -> {
+			java.util.List<String> clocks = VisibleTextDump.clocks(window);
+			printStatus(clocks.isEmpty() ? "No showing m:ss text in the game window" : String.join("\n", clocks), false);
+		});
+		dumpClocks.setVisible(false);
+		checkBoxDebug.addItemListener(ev -> dumpClocks.setVisible(checkBoxDebug.isSelected()));
+		scanning.add(dumpClocks);
 
 		createOutputOptions(options);
 		createScoringOptions(options, integerFormatter);
@@ -2117,7 +2118,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				java.util.List<String> seen = activityTracker.snapshot();
 				int withSymbol = 0;
 				for (String s : seen) if (!s.contains("[0]")) withSymbol++;
-				labelSymbols.setText(seen.isEmpty() ? (activityTracker.lastSymbolAt() == 0 ? "Symbols: waiting" : "Symbols: detected")
+				labelSymbols.setText(!activityTracker.sceneTrackingEnabled() ? "Symbols: scene reading off"
+						: seen.isEmpty() ? "Symbols: waiting"
 						: "Symbols: " + seen.size() + " pirates, " + withSymbol + " with a symbol");
 				labelSymbols.setToolTipText(seen.isEmpty() ? null : "<html>" + String.join("<br>", seen) + "</html>");
 			}).start();

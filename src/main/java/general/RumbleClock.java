@@ -36,6 +36,14 @@ public final class RumbleClock {
 	/** When the current forage period ends (ms), 0 if none: one key per period for its warning sound. */
 	public long forageEndsAt() { return forageEndsAt; }
 
+	private volatile long forageEndedAt;   // when the last forage period ended ("Asking server to stop foraging")
+
+	/** When the latest forage period ended (or its stated end has passed), 0 if none. For auto scan. */
+	public long lastForageEnd(long now) {
+		long end = forageEndsAt;
+		return end != 0 && now >= end ? end : forageEndedAt;
+	}
+
 	/** Milliseconds since the rumble started, or -1 if none is running. */
 	public long elapsed(long now) {
 		long start = startedAt;
@@ -113,6 +121,7 @@ public final class RumbleClock {
 			return;
 		}
 		if (forageEndsAt != 0 && line.contains("Asking server to stop foraging")) {
+			forageEndedAt = lineTime(line, now);
 			forageEndsAt = 0;
 			return;
 		}

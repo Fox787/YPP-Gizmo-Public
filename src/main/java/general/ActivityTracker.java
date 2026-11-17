@@ -81,7 +81,17 @@ public final class ActivityTracker {
 	void setSceneTrackingEnabled(boolean enabled, long now) {
 		scenePirates.clear();
 		sceneTrackingSince = enabled ? now : Long.MAX_VALUE;
+		// The scene is only read while this is on: with it off the poll timer doesn't run at all.
+		if (!enabled) {
+			timer.stop();
+			scene = null;
+		} else if (started) {
+			timer.start();
+		}
 	}
+
+	/** True while the opt-in scene reading is running. */
+	boolean sceneTrackingEnabled() { return sceneTrackingSince != Long.MAX_VALUE; }
 
 	private String lastReportKey;
 	private String lastReportText;
@@ -92,8 +102,21 @@ public final class ActivityTracker {
 		this.timer = new javax.swing.Timer(POLL_MS, e -> poll(System.currentTimeMillis()));
 	}
 
-	public void start() { timer.start(); }
-	public void stop() { timer.stop(); }
+	private boolean started;
+
+	/** Starts scene reading if "Scene-wide score per minute" is on; otherwise nothing polls. */
+	public void start() {
+		started = true;
+		if (sceneTrackingEnabled()) timer.start();
+	}
+
+	public void stop() {
+		started = false;
+		timer.stop();
+	}
+
+	/** For tests: whether the scene poll timer is running. */
+	boolean polling() { return timer.isRunning(); }
 
 	// ---------------------------------------------------------------- polling
 
@@ -124,19 +147,15 @@ public final class ActivityTracker {
 					return;
 				}
 			}
+			// Only Woodhallow's occupants are read (other pirates' station switches, for their score per minute).
+			if (!den || now < sceneTrackingSince) return;
 			if (!(fields.occupants().get(scene) instanceof Iterable<?> occupants)) return;
-			boolean trackSceneTimes = den && now >= sceneTrackingSince;
 			for (Object info : occupants) {
 				if (info == null) continue;
 				OccupantFields occupant = OCCUPANT_FIELDS.get(info.getClass());
 				if (occupant.activity() == null || isBot(info, occupant.role())) continue;
 				int code = ((Number) occupant.activity().get(info)).intValue();
-				if (code != 0) {
-					lastSymbolAt = now;
-					lastSymbolKind = fields.kind();
-					if (!trackSceneTimes) break; // Auto-scan only needs to know that a symbol is showing.
-				}
-				if (!trackSceneTimes || occupant.username() == null) continue;
+				if (occupant.username() == null) continue;
 				Object name = occupant.username().get(info);
 				if (name != null) observeSceneActivity(name.toString(), code, now);
 			}
@@ -198,15 +217,6 @@ public final class ActivityTracker {
 		return null;
 	}
 
-	/** Last time any pirate in a Den / CI / Lair scene had a station symbol over their head, and which scene. */
-	private long lastSymbolAt;
-	private String lastSymbolKind;
-
-	/** When a station symbol was last seen in a Den, CI or Lair scene; 0 if never. For auto scan. */
-	public long lastSymbolAt() { return lastSymbolAt; }
-
-	/** RecordChecker.DEN / CI / LAIR for lastSymbolAt(); null if never seen. */
-	public String lastSymbolKind() { return lastSymbolKind; }
 
 	void observeSceneActivity(String pirate, int code, long now) {
 		if (now < sceneTrackingSince || pirate.equalsIgnoreCase(self)) return;

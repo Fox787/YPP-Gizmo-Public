@@ -253,6 +253,9 @@ public final class StationClock {
 		}
 	}
 
+	/** When the current Vampire Lair round ends (chat "15 seconds" warning + 15 s), 0 if unknown. For auto scan. */
+	synchronized long lastLairRoundEnd() { return lairArrival == 0 ? 0 : lairRoundEnd; }
+
 	synchronized LairRound lairRound(long now) {
 		return lairArrival == 0 || lairRoundEnd == 0 || now < lairRoundEnd - 2000
 				? null : new LairRound(lairArrival, lairRoundEnd);

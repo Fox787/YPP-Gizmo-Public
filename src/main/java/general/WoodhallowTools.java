@@ -29,7 +29,11 @@ final class WoodhallowTools {
 	private static final Color WARNING_RED = new Color(0xe03030);
 
 	/** Whether timed Woodhallow periods are appended to dr_ratings.jsonl in the data folder. */
-	boolean exportRatings() { return checkBoxRatingsExport.isSelected(); }
+	boolean exportRatings() { return scorePerMinute() && checkBoxRatingsExport.isSelected(); }
+
+	/** Master switch for all score-per-minute work (timing, rates in run files, dr_ratings.jsonl, /ve rates). */
+	private final JCheckBox checkBoxScorePerMinute;
+	boolean scorePerMinute() { return checkBoxScorePerMinute.isSelected(); }
 	private JPanel panelDnav, panelRumble, ahoyRow, ahoyButtons;
 	private JLabel labelWolvesLeft, labelRumble, labelRumbleShorthand;
 	private JTextArea labelStrategy;
@@ -56,10 +60,17 @@ final class WoodhallowTools {
 		stationClock = clock;
 		activityTracker = tracker;
 
+		checkBoxScorePerMinute = option(section, prefs, "Score per minute", "scoreperminute", false);
+		checkBoxScorePerMinute.setToolTipText("Time Woodhallow duty reports from the chat log and your own game log, and show score per minute");
 		JCheckBox sceneTiming = option(section, prefs, "Scene-wide score per minute", "scenescoreperminute", false);
-		sceneTiming.setToolTipText("Time other players' station switches at Woodhallow. Enable after developer approval.");
-		sceneTiming.addActionListener(ev -> tracker.setSceneTrackingEnabled(sceneTiming.isSelected()));
-		tracker.setSceneTrackingEnabled(sceneTiming.isSelected());
+		sceneTiming.setToolTipText("Also time other players' station switches by reading the island scene. Enable after developer approval.");
+		Runnable applySceneTiming = () -> {
+			sceneTiming.setEnabled(checkBoxScorePerMinute.isSelected());
+			tracker.setSceneTrackingEnabled(checkBoxScorePerMinute.isSelected() && sceneTiming.isSelected());
+		};
+		checkBoxScorePerMinute.addActionListener(ev -> applySceneTiming.run());
+		sceneTiming.addActionListener(ev -> applySceneTiming.run());
+		applySceneTiming.run();
 		chatOnly = option(section, prefs, "Wolf count from chat only", "chatonlywolfcount", false);
 		chatOnly.setToolTipText("Use the chat log for the remaining wolf count. Untick to use the selected, visible Ahoy tab.");
 		chatOnly.addItemListener(ev -> wolfCount.clearRemaining());
@@ -137,6 +148,9 @@ final class WoodhallowTools {
 		if (timer != null) timer.stop();
 		if (files != null) files.shutdownNow();
 	}
+
+	/** When the latest Cursed Isles forage period ended (game log), 0 if none. For auto scan. */
+	long lastForageEnd(long now) { return rumbleClock.lastForageEnd(now); }
 
 	void scanned(DRGroupData report, ActivityTracker.Period period) {
 		lastReport = report;
