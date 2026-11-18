@@ -21,7 +21,7 @@ final class WoodhallowTools {
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
 	private final JCheckBox checkBoxRatingsExport;
 	// Cursed Isles forage timer (Thalassa's), merc plank warning (PP_Timer's), and the rumble minute warning.
-	private final JCheckBox checkBoxForageTimer, checkBoxForageSound, checkBoxPlankSound, checkBoxRumbleSound;
+	private final JCheckBox checkBoxForageTimer, checkBoxForageSound, checkBoxPlankSound, checkBoxRumbleSound, checkBoxLairSound;
 	// The row next to the Scan button: the running timer on the left, the shorthand (or wolves left) on the right.
 	private final JCheckBox checkBoxScanRow, checkBoxExtendedDnav;
 	private final JLabel scanTimer = new JLabel(" "), scanShorthand = new JLabel(" ");
@@ -55,7 +55,7 @@ final class WoodhallowTools {
 		}
 	};
 
-	private long clearPlayedFor, warningPlayedFor, dnavPeriodStart = Long.MIN_VALUE;
+	private long clearPlayedFor, warningPlayedFor, lairWarningPlayedFor, dnavPeriodStart = Long.MIN_VALUE;
 	private long lastDnavTick;
 	private long rumbleSecond = -1;
 	private String rumbleGroups;
@@ -98,6 +98,8 @@ final class WoodhallowTools {
 		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
 		checkBoxForageSound.setToolTipText("The rumble warning sound at 30 seconds left to forage");
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
+		checkBoxLairSound = option(section, prefs, "Lair: 15 s warning sound", "lairsound", true);
+		checkBoxLairSound.setToolTipText("The vampire warning when the chat says \"Ye hear the sound of rustling in coffins.\" (15 seconds left of the round)");
 		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
 		// Chat log: mercs and pirates leaving the vessel, for the plank check.
 		clock.setOnLiveMessage(rumbleClock.plank()::chat);
@@ -530,8 +532,9 @@ final class WoodhallowTools {
 	}
 
 	/**
-	 * Thalassa's Woodhallow alerts, from the chat log's own messages: a rising chime on "...turned back
-	 * the last werewolf!", and three pulses on "The wolf-kin gather! 30 seconds!" (or the lair's).
+	 * Woodhallow and lair alerts, from the chat log's own messages: a rising chime on "...turned back
+	 * the last werewolf!", the rumble warning on "The wolf-kin gather! 30 seconds!", and the vampire
+	 * warning on the lair's "Ye hear the sound of rustling in coffins." (15 s left of the round).
 	 */
 	private void playWerewolfSounds(long now) {
 		// Only live messages (the chat log is also read back at startup).
@@ -543,6 +546,12 @@ final class WoodhallowTools {
 		if (checkBoxWarningSound.isSelected() && thirty > 0 && thirty != warningPlayedFor && now - thirty < 15_000) {
 			warningPlayedFor = thirty;
 			Sounds.play(Sounds.THIRTY_SECONDS);
+		}
+		// The lair's "rustling in coffins" warning: the round ends 15 s after it.
+		long lairEnd = stationClock.lastLairRoundEnd(), lairWarned = lairEnd - 15_000;
+		if (checkBoxLairSound.isSelected() && lairEnd > 0 && lairEnd != lairWarningPlayedFor && now >= lairWarned && now < lairEnd) {
+			lairWarningPlayedFor = lairEnd;
+			Sounds.play(Sounds.LAIR_WARNING);
 		}
 	}
 

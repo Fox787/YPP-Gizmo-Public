@@ -245,6 +245,7 @@ class WoodhallowTest {
 		assertEquals(java.util.List.of("NaviObject", "ForageObject"), puzzles);
 		assertTrue(Sounds.scaled(Sounds.CLEAR, 50).length > 44);
 		assertTrue(Sounds.scaled(Sounds.THIRTY_SECONDS, 0).length > 44);
+		assertTrue(Sounds.scaled(Sounds.LAIR_WARNING, 50).length > 44);
 		assertEquals(120_000, DnavForecast.during(1, 4, 0, 300).clearMs);
 	}
 }
