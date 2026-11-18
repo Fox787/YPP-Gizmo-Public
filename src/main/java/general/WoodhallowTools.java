@@ -130,24 +130,24 @@ final class WoodhallowTools {
 			leftColor = WARNING_RED;
 		} else if (elapsed >= 0) {
 			long s = elapsed / 1000;
-			left = "Rumble " + clock(s);
+			left = clock(s);
 			if (s % 60 >= 55) leftColor = WARNING_RED;
 			if (checkBoxRumbleShorthand.isSelected()) {
 				boolean maxDamage = stationClock.inDen() && stationClock.elitesLeft() == 0;
-				right = RumbleBoard.shorthand((int) (elapsed / 60_000), maxDamage) + " groups";
+				right = "(" + RumbleBoard.shorthand((int) (elapsed / 60_000), maxDamage) + ")";
 			}
 		} else if (forageLeft >= 0 && checkBoxForageTimer.isSelected()) {
-			left = "Forage " + clock((forageLeft + 999) / 1000);
+			left = clock((forageLeft + 999) / 1000);
 			if (forageLeft <= FORAGE_WARNING_MS) leftColor = WARNING_RED;
 			if (toPlank > 0) {
 				right = plankText(toPlank);
 				rightColor = WARNING_RED;
 			}
 		} else if (lairLeft > 0 && lairLeft <= StationClock.LAIR_ROUND_AFTER_FRAY_MS) {
-			left = "Lair " + clock((lairLeft + 999) / 1000);
+			left = clock((lairLeft + 999) / 1000);
 			if (lairLeft <= 15_000) leftColor = WARNING_RED;
 		} else if (dnavEnds > now) {
-			left = "Stations " + clock((dnavEnds - now + 999) / 1000);
+			left = clock((dnavEnds - now + 999) / 1000);
 			right = labelWolvesLeft.getText();
 			rightColor = labelWolvesLeft.getForeground();
 		}
@@ -405,7 +405,8 @@ final class WoodhallowTools {
 		boolean board = elapsed >= 0 && checkBoxRumbleBoard.isSelected();
 		boolean shorthand = elapsed >= 0 && checkBoxRumbleShorthand.isSelected();
 		boolean foraging = elapsed < 0 && forageLeft >= 0 && checkBoxForageTimer.isSelected();
-		boolean show = board || shorthand || foraging || plankAlert;
+		// The Rumble tab is the board: with the board off, the timer and shorthand are on the Scan row only.
+		boolean show = board || foraging || plankAlert;
 		String title = plankAlert ? "Plank!" : foraging ? "Forage" : "Rumble";
 		int index = tabbedPane.indexOfComponent(panelRumble);
 		if (show && index < 0) {
@@ -463,7 +464,7 @@ final class WoodhallowTools {
 			String groups = RumbleBoard.shorthand(minute, maxDamage);
 			if (!groups.equals(rumbleGroups)) {
 				rumbleGroups = groups;
-				labelRumbleShorthand.setText(groups + " groups");
+				labelRumbleShorthand.setText(groups);
 			}
 		}
 		if (now - lastForecastTick >= 1000) {
