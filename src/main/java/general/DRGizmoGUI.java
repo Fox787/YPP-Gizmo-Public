@@ -38,7 +38,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	public static final String[] OCEANS = new String[] {"Cerulean", "Emerald", "Meridian", "Obsidian", "No Ocean"};
 
-	public static final String AUTOCOPY = "autocopy", COPYSCANTOVESSEL = "copyscantovessel", AUTOREAD = "autoread", BROKENRECORDALERT = "brokenrecordalert",
+	public static final String AUTOCOPY = "autocopy", COPYSCANTOVESSEL = "copyscantovessel", COPYSCORETOVESSEL = "copyscoretovessel", AUTOREAD = "autoread", BROKENRECORDALERT = "brokenrecordalert",
 			DEBUG = "debug", IGNOREAI = "ignoreai",
 
 			SCANWRITEDATE = "scanwritedate", SCANUSETABS = "scanusetabs", SCANOCEAN = "scanocean",
@@ -83,7 +83,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JButton buttonOutputChest;
 	private JButton buttonOutputCombined;
 	private JButton buttonOutputCarpAvg;
-	private JCheckBox checkBoxAutoCopy, checkBoxCopyScanToVessel, checkBoxBrokenRecordAlert;
+	private JCheckBox checkBoxAutoCopy, checkBoxCopyScanToVessel, checkBoxCopyScoreToVessel, checkBoxBrokenRecordAlert;
 	private JCheckBox checkBoxDebug, checkBoxIgnoreAI;
 	private JLabel labelDRCount;
 
@@ -174,6 +174,24 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			cur.append(line);
 		}
 		if (cur.length() > 0) out.add(cur.toString());
+		return out;
+	}
+
+	/** The text as /ve messages of whole lines, each within the chat limit (a longer line is cut). */
+	static java.util.List<String> vesselPieces(String text) {
+		int room = ReportClipboard.CHAT_LIMIT - ReportClipboard.VESSEL_COMMAND.length();
+		java.util.List<String> out = new java.util.ArrayList<>();
+		StringBuilder cur = new StringBuilder();
+		for (String line : text.strip().split("\\r?\\n")) {
+			if (line.length() > room) line = line.substring(0, room);
+			if (cur.length() > 0 && cur.length() + 1 + line.length() > room) {
+				out.add(ReportClipboard.VESSEL_COMMAND + cur);
+				cur.setLength(0);
+			}
+			if (cur.length() > 0) cur.append('\n');
+			cur.append(line);
+		}
+		if (cur.length() > 0) out.add(ReportClipboard.VESSEL_COMMAND + cur);
 		return out;
 	}
 
@@ -589,9 +607,12 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxAutoCopy.addItemListener(ev -> {
 			if (!checkBoxAutoCopy.isSelected()) { reportClipboard.replace(List.of()); updateScanCopyHotkey(); }
 		});
-		checkBoxCopyScanToVessel = new JCheckBox("Copy scans as /ve");
-		checkBoxCopyScanToVessel.setToolTipText("With Auto-copy enabled, format duty reports for vessel chat.");
+		checkBoxCopyScanToVessel = new JCheckBox("Copy as /ve");
+		checkBoxCopyScanToVessel.setToolTipText("With Auto-copy on, a scan is copied as vessel chat messages (/ve, up to 240 characters each).");
 		checkBoxCopyScanToVessel.addItemListener(ev -> { reportClipboard.replace(List.of()); updateScanCopyHotkey(); });
+		checkBoxCopyScoreToVessel = new JCheckBox("Copy as /ve");
+		checkBoxCopyScoreToVessel.setToolTipText("With Auto-copy on, Score All is copied as vessel chat messages (/ve, up to 240 characters each).");
+		checkBoxCopyScoreToVessel.addItemListener(ev -> { reportClipboard.replace(List.of()); updateScanCopyHotkey(); });
 		checkBoxGlobalScanCopy = liveOption("Global Ctrl+P for scan copies", "globalscancopy");
 		checkBoxGlobalScanCopy.setToolTipText("When a scan is copied in several pieces, Ctrl+P anywhere copies the next one."
 				+ " Sending the piece in chat still works too. Other apps also receive Ctrl+P.");
@@ -605,7 +626,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxDebug.setToolTipText("Show debug messages in the Output tab");
 		scanning.add(checkBoxAutoScan);
 		scanning.add(checkBoxAutoCopy);
-		scanning.add(checkBoxCopyScanToVessel);
 		scanning.add(checkBoxGlobalScanCopy);
 		scanning.add(checkBoxIgnoreAI);
 		scanning.add(checkBoxShowExtraButtons);
@@ -656,7 +676,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxScan2ScorePerMinute.setToolTipText("Include score per minute on each pirate's line");
 		addOutputFormat(scan, comboBoxScanOcean, new JCheckBox[]{checkBoxScanWriteDate, checkBoxScanUseTabs,
 				checkBoxScan2Station, checkBoxScan2Pirate, checkBoxScan2Rating, checkBoxScan2TokenScore,
-				checkBoxScanStationHeaders, checkBoxScan2TokenArray}, checkBoxScan2SheetCombo, checkBoxScan2ScorePerMinute);
+				checkBoxScanStationHeaders, checkBoxScan2TokenArray}, checkBoxScan2SheetCombo, checkBoxScan2ScorePerMinute,
+				checkBoxCopyScanToVessel);
 
 		JPanel score = options.section("Score All format", "scoreFormat", false);
 		scorePreview = addOutputPreview(score);
@@ -674,7 +695,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxScore2SheetCombo = new JCheckBox("Score + counts (one cell)");
 		addOutputFormat(score, comboBoxScoreOcean, new JCheckBox[]{checkBoxScoreWriteDate, checkBoxScoreUseTabs,
 				checkBoxScore2Station, checkBoxScore2Pirate, checkBoxScore2Rating, checkBoxScore2TokenScore,
-				checkBoxScoreStationHeaders, checkBoxScore2TokenArray}, checkBoxScore2SheetCombo);
+				checkBoxScoreStationHeaders, checkBoxScore2TokenArray}, checkBoxScore2SheetCombo, checkBoxCopyScoreToVessel);
 	}
 
 	private static JTextArea addOutputPreview(JPanel panel) {
@@ -1470,9 +1491,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 				//copy
 				if (checkBoxAutoCopy.isSelected()) {
-					StringSelection selection = new StringSelection(dataString);
-				    Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-				    clipboard.setContents(selection, selection);
+					if (checkBoxCopyScoreToVessel.isSelected()) {
+						// Vessel chat pieces, next one on Ctrl+P or once the chat log shows this one was sent.
+						stationClock.drainOwnChat();
+						reportClipboard.replace(vesselPieces(dataString));
+						checkSent();
+					} else {
+						reportClipboard.replace(List.of());
+						updateScanCopyHotkey();
+						copyToClipboard(dataString);
+					}
 				}
 			} else {
 				printStatus("Scoring Failed", false);
@@ -1910,6 +1938,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxIgnoreAI.setSelected(currentPrefs.getBoolean(IGNOREAI, false));
 		checkBoxAutoCopy.setSelected(currentPrefs.getBoolean(AUTOCOPY, false));
 		checkBoxCopyScanToVessel.setSelected(currentPrefs.getBoolean(COPYSCANTOVESSEL, true));
+		checkBoxCopyScoreToVessel.setSelected(currentPrefs.getBoolean(COPYSCORETOVESSEL, true));
 		checkBoxBrokenRecordAlert.setSelected(currentPrefs.getBoolean(BROKENRECORDALERT, true));
 
 		// Scan options
@@ -1965,6 +1994,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			// Save all settings (same as buttonSavePrefs but to currentPrefs)
 			currentPrefs.putBoolean(AUTOCOPY, checkBoxAutoCopy.isSelected());
 			currentPrefs.putBoolean(COPYSCANTOVESSEL, checkBoxCopyScanToVessel.isSelected());
+			currentPrefs.putBoolean(COPYSCORETOVESSEL, checkBoxCopyScoreToVessel.isSelected());
 			currentPrefs.putBoolean(BROKENRECORDALERT, checkBoxBrokenRecordAlert.isSelected());
 			currentPrefs.putBoolean(DEBUG, checkBoxDebug.isSelected());
 			currentPrefs.putBoolean(IGNOREAI, checkBoxIgnoreAI.isSelected());
