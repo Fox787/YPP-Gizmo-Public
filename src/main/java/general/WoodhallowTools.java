@@ -24,7 +24,14 @@ final class WoodhallowTools {
 	private final JCheckBox checkBoxForageTimer, checkBoxForageSound, checkBoxPlankSound, checkBoxRumbleSound, checkBoxLairSound;
 	// The row next to the Scan button: the running timer on the left, the shorthand (or wolves left) on the right.
 	private final JCheckBox checkBoxScanRow, checkBoxExtendedDnav;
-	private final JLabel scanTimer = new JLabel(" "), scanShorthand = new JLabel(" ");
+	private final JLabel scanTimer = fitted(), scanShorthand = fitted();
+
+	/** A label no wider than its text, so the Scan row's glue keeps it on the right (HTML text would stretch). */
+	private static JLabel fitted() {
+		return new JLabel(" ") {
+			@Override public Dimension getMaximumSize() { return getPreferredSize(); }
+		};
+	}
 	private long dnavEnds;
 	static final long FORAGE_WARNING_MS = 30_000;
 	static final long PLANK_REPEAT_MS = 6500;   // PP_Timer's gap between "plank swabbie" voice lines
