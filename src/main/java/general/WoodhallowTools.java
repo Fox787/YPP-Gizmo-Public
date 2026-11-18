@@ -47,10 +47,10 @@ final class WoodhallowTools {
 	private Component tabBeforeRumble;
 	/** Between Score All and Scan: the Dnav box during stations, the Next Dnav forecast between them. */
 	private final JPanel dnavArea = new JPanel() {
-		// Always as tall as the Next Dnav box, so the window doesn't jump when it shows or hides.
+		// With nothing to show, a third of the Next Dnav box's height stays as a gap; otherwise what it holds.
 		@Override public Dimension getPreferredSize() {
 			Dimension d = super.getPreferredSize();
-			if (rumbleForecast != null) d.height = Math.max(d.height, rumbleForecast.getPreferredSize().height);
+			if (rumbleForecast != null) d.height = Math.max(d.height, rumbleForecast.getPreferredSize().height / 3);
 			return d;
 		}
 	};
