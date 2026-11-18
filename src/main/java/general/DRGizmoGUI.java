@@ -389,6 +389,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	static final class SharpTextArea extends JTextArea {
 		private boolean redrawQueued;
 
+		// A blinking caret repaints twice a second while the window is focused, and each repaint queues
+		// the sharpen redraw below: that is what flickered (only when Gizmo was the active window).
+		// A steady caret still shows where you are, without the repaints.
+		SharpTextArea() { getCaret().setBlinkRate(0); }
+
+		@Override public void updateUI() {
+			super.updateUI();
+			if (getCaret() != null) getCaret().setBlinkRate(0);
+		}
+
 		@Override
 		protected void paintComponent(Graphics g) {
 			Object hints = Toolkit.getDefaultToolkit().getDesktopProperty("awt.font.desktophints");
