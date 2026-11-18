@@ -102,6 +102,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			};
 
 	private static JTextArea textAreaOutput, textAreaTests;
+	/** The Output tab's background (the highlighted duty report colour), also used by the Options examples. */
+	static final Color OUTPUT_BACKGROUND = new Color(169, 185, 193);
 	private JButton buttonOutputClear;
 	public JButton buttonDRTreeRemove;
 	private JButton buttonDRTreeClear;
@@ -906,9 +908,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	private static JTextArea addOutputPreview(JPanel panel) {
-		JTextArea preview = new JTextArea(4, 0);
+		// Looks like the Output tab: same text area, font and background.
+		JTextArea preview = new SharpTextArea();
+		preview.setRows(4);
 		preview.setEditable(false);
-		preview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, preview.getFont().getSize()));
+		preview.setBackground(OUTPUT_BACKGROUND);
 		preview.setMargin(new Insets(4, 5, 4, 5));
 		preview.setLineWrap(true);
 		preview.setWrapStyleWord(true);
@@ -1285,7 +1289,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			} catch (UnsupportedLookAndFeelException e) {}
 
 			textAreaOutput = new SharpTextArea();
-			textAreaOutput.setBackground(new Color(169, 185, 193)); //highlighted dr color
+			textAreaOutput.setBackground(OUTPUT_BACKGROUND);
 			//textAreaOutput.setBackground(new Color(140, 162, 172)); //non-highlighted dr color
 			textAreaOutput.addCaretListener(new CaretListener() {
 				public void caretUpdate(CaretEvent arg0) {
@@ -2164,7 +2168,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			java.awt.geom.AffineTransform tx = gc == null ? null : gc.getDefaultTransform();
 			printStatus("Display check: repaint manager " + RepaintManager.currentManager(this).getClass().getName()
 					+ ", screen scale " + (tx == null ? "?" : tx.getScaleX() + "x")
-					+ ", uiScale " + System.getProperty("sun.java2d.uiScale", "unset"), false);
+					+ ", uiScale " + System.getProperty("sun.java2d.uiScale", "unset"), true);
 		});
 	}
 
