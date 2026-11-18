@@ -154,10 +154,6 @@ final class WoodhallowTools {
 		} else if (forageLeft >= 0 && checkBoxForageTimer.isSelected()) {
 			left = clock((forageLeft + 999) / 1000);
 			if (forageLeft <= FORAGE_WARNING_MS) leftColor = WARNING_RED;
-			if (toPlank > 0) {
-				right = plankText(toPlank);
-				rightColor = WARNING_RED;
-			}
 		} else if (lairLeft > 0 && lairLeft <= StationClock.LAIR_ROUND_AFTER_FRAY_MS) {
 			left = clock((lairLeft + 999) / 1000);
 			if (lairLeft <= 15_000) leftColor = WARNING_RED;
@@ -424,8 +420,8 @@ final class WoodhallowTools {
 		long elapsed = rumbleClock.elapsed(now);
 		long forageLeft = rumbleClock.forageLeft(now);
 		playTimerSounds(now, elapsed, forageLeft);
-		// Cursed Isles: more pirates + mercs aboard than the next fray takes. Shown during the forage;
-		// after it, until the next fray starts, it fills the tab and the voice line repeats.
+		// Cursed Isles: more pirates + mercs aboard than the next fray takes. Not shown during the forage;
+		// once it ends, until the next fray starts, it fills the tab and the voice line repeats.
 		MercPlank plank = rumbleClock.plank();
 		int toPlank = elapsed < 0 && plank.betweenFrays() ? plank.toPlank() : 0;
 		boolean plankAlert = toPlank > 0 && forageLeft < 0;
@@ -464,15 +460,13 @@ final class WoodhallowTools {
 						+ (plank.pirates() + plank.mercs() - toPlank));
 				labelRumbleShorthand.setVisible(false);
 			} else {
-				// Time left to forage, counting down from 2:00; red in the last 30 seconds. A merc that will
-				// need planking once it's over shows on the right.
+				// Time left to forage, counting down from 2:00; red in the last 30 seconds. The plank
+				// warning waits for the forage to end, with its voice line.
 				long s = (forageLeft + 999) / 1000;
 				labelRumble.setText(String.format("%d:%02d", s / 60, s % 60));
 				labelRumble.setForeground(forageLeft <= FORAGE_WARNING_MS ? WARNING_RED : labelWolvesLeftColor);
 				labelRumble.setToolTipText("Time left to forage; red in the last 30 seconds");
-				labelRumbleShorthand.setVisible(toPlank > 0);
-				labelRumbleShorthand.setText(plankText);
-				labelRumbleShorthand.setForeground(WARNING_RED);
+				labelRumbleShorthand.setVisible(false);
 			}
 			return;
 		}
