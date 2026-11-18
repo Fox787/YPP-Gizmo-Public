@@ -12,10 +12,10 @@ import java.nio.file.StandardCopyOption;
 
 /**
  * Plays Gizmo's alert sounds, bundled in the jar under /sounds:
- *   werewolves_clear.wav  the last werewolf of the wave has been turned back
- *   rumble_warning.wav    Thalassa's rumble warning, also used for 30 s left of stations and of foraging
- *   plank_swabbie.wav     the "plank swabbie" voice line
- *   lair_warning.wav      the vampire lair's 15-seconds-left warning (from Puzzle Practice, converted to WAV)
+ *   werewolves_clear.wav       the last werewolf of the wave has been turned back
+ *   werewolves_30_seconds.wav  the rumble's warning 5 s before each minute
+ *   rumble_warning.wav         Thalassa's warning: 30 s left of stations or foraging, 15 s left of a lair round
+ *   plank_swabbie.wav          the "plank swabbie" voice line
  *
  * Gizmo runs inside the game's Java process, so a sound played here counts as the game's audio, and
  * Discord's "stream with sound" sends it to viewers. Discord captures the game's whole process tree, so
@@ -28,11 +28,13 @@ import java.nio.file.StandardCopyOption;
  */
 public final class Sounds {
 
-	/** From PP_Timer / Thalassa (converted to WAV): the "plank swabbie" voice line and the rumble warning. */
-	public static final String PLANK = "plank_swabbie.wav", RUMBLE_WARNING = "rumble_warning.wav";
-	/** The 30-seconds-left warning (stations and foraging) is the same sound as the rumble warning. */
-	public static final String CLEAR = "werewolves_clear.wav", THIRTY_SECONDS = RUMBLE_WARNING;
-	public static final String LAIR_WARNING = "lair_warning.wav";
+	public static final String CLEAR = "werewolves_clear.wav";
+	/** The rumble's 5-seconds-before-the-minute warning: the short ping. */
+	public static final String RUMBLE_WARNING = "werewolves_30_seconds.wav";
+	/** From PP_Timer / Thalassa (converted to WAV): the "plank swabbie" voice line and the time-left warning. */
+	public static final String PLANK = "plank_swabbie.wav", THIRTY_SECONDS = "rumble_warning.wav";
+	/** The lair's 15-seconds-left warning is the same sound as the 30-seconds-left one. */
+	public static final String LAIR_WARNING = THIRTY_SECONDS;
 
 	private Sounds() { }
 

@@ -96,10 +96,10 @@ final class WoodhallowTools {
 		checkBoxForageTimer = option(section, prefs, "Cursed Isles: forage timer", "foragetimer", true);
 		checkBoxForageTimer.setToolTipText("Time left to forage, in a Forage tab; red in the last 30 seconds");
 		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
-		checkBoxForageSound.setToolTipText("The rumble warning sound at 30 seconds left to forage");
+		checkBoxForageSound.setToolTipText("Thalassa's warning sound at 30 seconds left to forage");
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
 		checkBoxLairSound = option(section, prefs, "Lair: 15 s warning sound", "lairsound", true);
-		checkBoxLairSound.setToolTipText("The vampire warning when the chat says \"Ye hear the sound of rustling in coffins.\" (15 seconds left of the round)");
+		checkBoxLairSound.setToolTipText("Thalassa's warning sound when the chat says \"Ye hear the sound of rustling in coffins.\" (15 seconds left of the round)");
 		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
 		// Chat log: mercs and pirates leaving the vessel, for the plank check.
 		clock.setOnLiveMessage(rumbleClock.plank()::chat);
@@ -530,8 +530,8 @@ final class WoodhallowTools {
 
 	/**
 	 * Woodhallow and lair alerts, from the chat log's own messages: a rising chime on "...turned back
-	 * the last werewolf!", the rumble warning on "The wolf-kin gather! 30 seconds!", and the vampire
-	 * warning on the lair's "Ye hear the sound of rustling in coffins." (15 s left of the round).
+	 * the last werewolf!", and Thalassa's warning on "The wolf-kin gather! 30 seconds!" and on the
+	 * lair's "Ye hear the sound of rustling in coffins." (15 s left of the round).
 	 */
 	private void playWerewolfSounds(long now) {
 		// Only live messages (the chat log is also read back at startup).
