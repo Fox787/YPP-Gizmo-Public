@@ -104,18 +104,13 @@ final class WoodhallowTools {
 		scanShorthand.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.3f));
 	}
 
-	/**
-	 * Adds the timer and the shorthand beside it ("1:00 (15-16)"), centred in the Scan button's row: the
-	 * space after the row's last component balances the Scan button's width.
-	 */
+	/** Adds the timer and the shorthand beside it ("1:00 (15-16)"), right-aligned in the Scan button's row. */
 	void addToScanRow(JPanel row) {
-		int scanWidth = row.getPreferredSize().width;
 		row.add(Box.createHorizontalGlue());
 		row.add(scanTimer);
 		row.add(Box.createHorizontalStrut(5));
 		row.add(scanShorthand);
-		row.add(Box.createHorizontalGlue());
-		row.add(Box.createHorizontalStrut(scanWidth));
+		row.add(Box.createHorizontalStrut(6));
 	}
 
 	private static String clock(long seconds) { return String.format("%d:%02d", seconds / 60, seconds % 60); }
