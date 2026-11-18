@@ -5,7 +5,7 @@ import java.util.TreeMap;
 
 /**
  * Solo-nav strategy for a Duty Nav round, by the number of werewolves at the start of stations.
- * From the community Woodhallow sheet's "meta" tab, "Strat 1" column (as updated 12 Nov 2026;
+ * From the community Woodhallow sheet's "meta" tab, "Strat 1" column (as of 18 Nov 2026;
  * "(?)" marks the ones the sheet isn't sure of):
  * docs.google.com/spreadsheets/d/1_fV796jU1h1udHrK909HLz_PWqoaYvSF9MkIxYnm7bE
  * Counts the sheet leaves blank have no entry.
@@ -19,11 +19,11 @@ public final class SoloNavStrategy {
 		STRAT_1.put(5, "Booch, 2 Trips");
 		STRAT_1.put(6, "3 Trips");
 		STRAT_1.put(7, "Booch, 3 Trips");
-		STRAT_1.put(8, "Booch, 3 Trips");
-		STRAT_1.put(9, "(?) Booch, 4 Trips, Single");
+		STRAT_1.put(8, "Booch, 3 Trips, Single");
+		STRAT_1.put(9, "(?) 4 Trips");
 		STRAT_1.put(10, "Booch, 4 Trips");
 		STRAT_1.put(11, "Booch, 4 Trips, Single");
-		STRAT_1.put(13, "(?) Booch, 5 Trips");
+		STRAT_1.put(13, "Booch, 5 Trips");
 		STRAT_1.put(15, "(?) Booch, 6 Trips");
 		STRAT_1.put(16, "(?) Booch, 6 Trips, Single");
 		STRAT_1.put(18, "(?) Booch, 7 Trips");
