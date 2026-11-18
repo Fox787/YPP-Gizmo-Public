@@ -85,11 +85,10 @@ class CursedIslesTest {
 	}
 
 	@Test
-	void instaShorthandIsTheFewestGroupsReachingTheWhiteLineAndTheTop() {
-		// Minute 2: 8 groups send 9 rows, 9 send 11 (past the 10-row white line); 13 send all 20.
-		assertEquals(9, RumbleBoard.instaGroups(2, RumbleBoard.WHITE_INSTA_ROWS));
-		assertEquals(13, RumbleBoard.instaGroups(2, RumbleBoard.RED_INSTA_ROWS));
-		assertEquals("<html><font color=#ffffff>(9)</font> (13)</html>", RumbleBoard.instaShorthand(2));
-		for (int m = 0; m <= 15; m++) assertTrue(RumbleBoard.instaGroups(m, RumbleBoard.RED_INSTA_ROWS) > 0);
+	void woodhallowShorthandIsTheWhiteNameInstaThenTheRange() {
+		// Minute 1: 9 groups send 7 rows, 10 send 11 (past the 10-row white line); the range is 12-13.
+		assertEquals(10, RumbleBoard.instaGroups(1, RumbleBoard.WHITE_INSTA_ROWS));
+		assertEquals("<html><font color=#ffffff>(10)</font> (12-13)</html>", RumbleBoard.instaShorthand(1, false));
+		for (int m = 0; m <= 15; m++) assertTrue(RumbleBoard.instaGroups(m, RumbleBoard.WHITE_INSTA_ROWS) > 0);
 	}
 }

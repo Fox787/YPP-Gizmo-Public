@@ -127,11 +127,11 @@ public final class RumbleBoard extends JComponent {
 	}
 
 	/**
-	 * Insta knockouts at Woodhallow. A punch as tall as the rows left free on the target's board fills it.
-	 * White-named werewolves deal max damage, so 10 of the 20 rows are blocked (the white dotted line):
-	 * 10 rows takes one out. Red-named (elite) werewolves deal none, so it takes the full 20.
+	 * Insta knockout on a white name at Woodhallow. A punch as tall as the rows left free on the target's
+	 * board fills it. White-named werewolves deal max damage, so 10 of the 20 rows are blocked (the white
+	 * dotted line): 10 rows takes one out.
 	 */
-	static final int WHITE_INSTA_ROWS = 20 - MAX_DAMAGE_ROWS, RED_INSTA_ROWS = 20;
+	static final int WHITE_INSTA_ROWS = 20 - MAX_DAMAGE_ROWS;
 
 	/** The fewest groups that send at least this many rows this minute; -1 if none does. */
 	public static int instaGroups(int minute, int rows) {
@@ -140,10 +140,13 @@ public final class RumbleBoard extends JComponent {
 		return -1;
 	}
 
-	/** "(white insta) (red insta)" as HTML: the white one in white, the red one in the label's own colour. */
-	public static String instaShorthand(int minute) {
+	/**
+	 * Woodhallow's shorthand as HTML: "(white-name insta) (recommended range)", the insta in white and the
+	 * range in the label's own colour.
+	 */
+	public static String instaShorthand(int minute, boolean maxDamage) {
 		return "<html><font color=#ffffff>(" + instaGroups(minute, WHITE_INSTA_ROWS) + ")</font> ("
-				+ instaGroups(minute, RED_INSTA_ROWS) + ")</html>";
+				+ shorthand(minute, maxDamage) + ")</html>";
 	}
 
 	/** Rows sent by charging this many groups (the nearest smaller listed count if not listed). */
