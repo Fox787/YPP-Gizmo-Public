@@ -695,19 +695,28 @@ final class WoodhallowTools {
 		int crew = stationClock.crew();
 		if (crew <= 0) return false;              // known from the first "still standin'"
 		int deaths = stationClock.frayDeaths();
-		// Team pace: the navigators' werewolf points in the last duty report over the last station period
-		// (assumes each navigator played for the whole station period).
+		// Team pace: each navigator's werewolf points in the last duty report per minute on Nav, as if
+		// they navigate the whole of the next stations. A pirate who also foraged is timed by their own
+		// time on Nav when it's known; otherwise the whole station period is assumed.
 		double team = 0;
 		StationClock.Period lp = stationClock.lastEnded(System.currentTimeMillis());
 		long len = reportedPeriod == null || lp == null || Math.abs(reportedPeriod.start - lp.start) > 5000
 				? 0 : reportedPeriod.end - reportedPeriod.start;
 		if (lastReport != null && len > 0 && lastReport.data.containsKey("Navigating"))
 			for (DRIndividualData d : lastReport.data.get("Navigating").values())
-				team += DnavForecast.navPoints(d.getTokens()) / (len / 60000.0);
+				team += DnavForecast.navPoints(d.getTokens()) / (navMs(d.getName(), len) / 60000.0);
 		DnavForecast f = DnavForecast.during(fray, crew, deaths, team);
 		// The game rounds the werewolf count at random by its fraction, so give both strategies with odds.
 		rumbleForecast.show(f, DnavPanel.strategies(f.odds));
 		return true;
+	}
+
+	/** How long this pirate was on Nav in the reported period: their measured time if known, else the whole period. */
+	private long navMs(String pirate, long periodMs) {
+		for (ActivityTracker.Row row : reportedPeriod.rows)
+			if ("Navigating".equals(row.station) && row.pirate.equals(pirate) && row.hasRate())
+				return Math.min(row.ms, periodMs);
+		return periodMs;
 	}
 
 	/**
