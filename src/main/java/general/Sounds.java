@@ -38,7 +38,7 @@ public final class Sounds {
 
 	/** The bundled sound with its samples scaled to the volume (16- or 8-bit PCM), as a WAV file's bytes. */
 	static byte[] scaled(String name, int vol) throws Exception {
-		try (InputStream raw = Sounds.class.getResourceAsStream("/sounds/" + name)) {
+		try (InputStream raw = resource(name)) {
 			if (raw == null) return null;
 			AudioInputStream in = AudioSystem.getAudioInputStream(new BufferedInputStream(raw));
 			javax.sound.sampled.AudioFormat f = in.getFormat();
@@ -62,6 +62,15 @@ public final class Sounds {
 					javax.sound.sampled.AudioFileFormat.Type.WAVE, out);
 			return out.toByteArray();
 		}
+	}
+
+	/**
+	 * A bundled sound. A build that copies resources puts them at /sounds/; the IntelliJ artifact, whose
+	 * source root is src/, keeps their folder, so in Gizmo.jar they are at /main/resources/sounds/.
+	 */
+	static InputStream resource(String name) {
+		InputStream in = Sounds.class.getResourceAsStream("/sounds/" + name);
+		return in != null ? in : Sounds.class.getResourceAsStream("/main/resources/sounds/" + name);
 	}
 
 	public static void play(String name) {
