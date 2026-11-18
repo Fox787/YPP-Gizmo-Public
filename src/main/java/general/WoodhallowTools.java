@@ -44,7 +44,9 @@ final class WoodhallowTools {
 	private Color labelWolvesLeftColor;
 	private RumbleBoard rumbleBoard;
 	private DnavPanel rumbleForecast;
-	private Component tabBeforeDnav, tabBeforeRumble;
+	private Component tabBeforeRumble;
+	/** Between Score All and Scan: the Dnav box during stations, the Next Dnav forecast between them. */
+	private final JPanel dnavArea = new JPanel();
 
 	private long clearPlayedFor, warningPlayedFor, dnavPeriodStart = Long.MIN_VALUE;
 	private long lastDnavTick;
@@ -203,7 +205,7 @@ final class WoodhallowTools {
 				lastDnavTick = now;
 				playWerewolfSounds(now);
 				updateDnav(now);
-				// Not while stations are open: the Dnav tab has the current wave then.
+				// Not while stations are open: the Dnav box has the current wave then.
 				boolean forecast = dnavEnds <= now && updateForecast();
 				if (forecast != rumbleForecast.isVisible()) rumbleForecast.setVisible(forecast);
 			}
@@ -230,7 +232,9 @@ final class WoodhallowTools {
 	private void createDnavTab() {
 		panelDnav = new JPanel();
 		panelDnav.setLayout(new BoxLayout(panelDnav, BoxLayout.Y_AXIS));
-		panelDnav.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+		panelDnav.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("Dnav"),
+				BorderFactory.createEmptyBorder(0, 3, 2, 3)));
+		panelDnav.setVisible(false);
 		labelWolvesLeft = new JLabel(" ");
 		labelWolvesLeft.setToolTipText("Choose the wolf count source under Options > Woodhallow & Rumble");
 		labelWolvesLeft.setFont(labelWolvesLeft.getFont().deriveFont(Font.BOLD, 20f));
@@ -388,8 +392,20 @@ final class WoodhallowTools {
 		rumbleForecast.setVisible(false);
 	}
 
-	/** The "Next Dnav" box, for the main window: shown at Woodhallow between stations, from the first fray. */
-	JComponent forecastPanel() { return rumbleForecast; }
+	/**
+	 * The main window's Dnav area: the Dnav box (wolves left, solo strategy, starting count) while stations
+	 * are open, and the Next Dnav forecast between stations at Woodhallow, from the first fray.
+	 */
+	JComponent forecastPanel() {
+		if (dnavArea.getComponentCount() == 0) {
+			dnavArea.setLayout(new BoxLayout(dnavArea, BoxLayout.Y_AXIS));
+			panelDnav.setAlignmentX(Component.LEFT_ALIGNMENT);
+			rumbleForecast.setAlignmentX(Component.LEFT_ALIGNMENT);
+			dnavArea.add(panelDnav);
+			dnavArea.add(rumbleForecast);
+		}
+		return dnavArea;
+	}
 
 	private void updateRumble(long now) {
 		long elapsed = rumbleClock.elapsed(now);
@@ -539,28 +555,15 @@ final class WoodhallowTools {
 		}
 	}
 
-	/** Adds and selects the Dnav tab during stations; removes it after, returning to the previous tab. */
+	/** Shows the Dnav box (in the main window, where Next Dnav sits) during stations; hides it after. */
 	private void setDnavTab(boolean show) {
-		int idx = tabbedPane.indexOfComponent(panelDnav);
-		if (show && idx < 0) {
-			tabBeforeDnav = userTab();
-			tabbedPane.addTab("Dnav", panelDnav);
-			tabbedPane.setSelectedComponent(panelDnav);
-		} else if (!show && idx >= 0) {
-			removeAutoTab(panelDnav, tabBeforeDnav);
-		}
+		if (panelDnav.isVisible() != show) panelDnav.setVisible(show);
 	}
 
-	/**
-	 * The tab the user chose: the selected one, or, if that is the Rumble or Dnav tab Gizmo
-	 * opened, the tab it remembered from before. So when the Dnav tab opens while the Rumble tab is
-	 * still up (stations start as the rumble ends), both go back to the user's tab, not to each other.
-	 */
+	/** The tab the user chose: the selected one, or, if that is the Rumble tab Gizmo opened, the tab from before. */
 	private Component userTab() {
 		Component c = tabbedPane.getSelectedComponent();
-		if (c == panelRumble) return tabBeforeRumble;
-		if (c == panelDnav) return tabBeforeDnav;
-		return c;
+		return c == panelRumble ? tabBeforeRumble : c;
 	}
 
 	/** Removes an automatic tab; if it was showing, goes back to the user's tab (or the first tab). */
