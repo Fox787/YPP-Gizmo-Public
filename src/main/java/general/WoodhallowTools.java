@@ -47,7 +47,7 @@ final class WoodhallowTools {
 	private Component tabBeforeDnav, tabBeforeRumble;
 
 	private long clearPlayedFor, warningPlayedFor, dnavPeriodStart = Long.MIN_VALUE;
-	private long lastDnavTick, lastForecastTick;
+	private long lastDnavTick;
 	private long rumbleSecond = -1;
 	private String rumbleGroups;
 	private Timer timer;
@@ -203,6 +203,9 @@ final class WoodhallowTools {
 				lastDnavTick = now;
 				playWerewolfSounds(now);
 				updateDnav(now);
+				// Not while stations are open: the Dnav tab has the current wave then.
+				boolean forecast = dnavEnds <= now && updateForecast();
+				if (forecast != rumbleForecast.isVisible()) rumbleForecast.setVisible(forecast);
 			}
 		});
 		timer.start();
@@ -380,11 +383,13 @@ final class WoodhallowTools {
 		panelRumble = new JPanel(new BorderLayout(0, 2));
 		panelRumble.add(rumbleTop, BorderLayout.NORTH);
 		panelRumble.add(rumbleBoard, BorderLayout.CENTER);
-		// At Woodhallow: the next Dnav stations' forecast and solo strategy, under the board.
+		// At Woodhallow: the next Dnav stations' forecast and solo strategy, in the main window (forecastPanel()).
 		rumbleForecast = new DnavPanel(baseFont);
 		rumbleForecast.setVisible(false);
-		panelRumble.add(rumbleForecast, BorderLayout.SOUTH);
 	}
+
+	/** The "Next Dnav" box, for the main window: shown at Woodhallow between stations, from the first fray. */
+	JComponent forecastPanel() { return rumbleForecast; }
 
 	private void updateRumble(long now) {
 		long elapsed = rumbleClock.elapsed(now);
@@ -410,7 +415,6 @@ final class WoodhallowTools {
 		String title = plankAlert ? "Plank!" : foraging ? "Forage" : "Rumble";
 		int index = tabbedPane.indexOfComponent(panelRumble);
 		if (show && index < 0) {
-			lastForecastTick = 0;
 			tabBeforeRumble = userTab();
 			tabbedPane.addTab(title, panelRumble);
 			tabbedPane.setSelectedComponent(panelRumble);
@@ -424,7 +428,6 @@ final class WoodhallowTools {
 			rumbleSecond = -1;
 			rumbleGroups = null;
 			rumbleBoard.setVisible(false);
-			rumbleForecast.setVisible(false);
 			if (plankAlert) {
 				labelRumble.setText(plankText);
 				labelRumble.setForeground(WARNING_RED);
@@ -466,10 +469,6 @@ final class WoodhallowTools {
 				rumbleGroups = groups;
 				labelRumbleShorthand.setText(groups);
 			}
-		}
-		if (now - lastForecastTick >= 1000) {
-			lastForecastTick = now;
-			rumbleForecast.setVisible(updateForecast());
 		}
 	}
 

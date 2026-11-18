@@ -7,7 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * The Rumble tab's "Next Dnav" box: short labels, numbers in fixed spots, hover text on each.
+ * The main window's "Next Dnav" box (under the Symbols label): short labels, numbers in fixed spots, hover text on each.
  *   Wolves 10      Fray 3
  *   Score  16      Need 3.88   Now -1.68
  *   Time   4:37    Left -2:38
@@ -16,7 +16,7 @@ import java.util.Map;
  */
 public final class DnavPanel extends JPanel {
 
-	private static final Color GREY = new Color(0x808080), RED = new Color(0xe03030), GREEN = new Color(0x2e9e40);
+	private static final Color GREY = new Color(0x808080), LABEL = Color.WHITE, RED = new Color(0xe03030), GREEN = new Color(0x2e9e40);
 
 	private final TitledBorder title = new TitledBorder(null, "Next Dnav", TitledBorder.LEADING, TitledBorder.TOP, null, null);
 	private final JLabel wolves = value(), fray = value(), score = value(), need = value(), now = value(), time = value(), left = value();
@@ -73,7 +73,7 @@ public final class DnavPanel extends JPanel {
 	}
 
 	private static JLabel value() { return new JLabel("-"); }
-	private static JLabel name(String s) { JLabel l = new JLabel(s); l.setForeground(GREY); return l; }
+	private static JLabel name(String s) { JLabel l = new JLabel(s); l.setForeground(LABEL); return l; }
 	private static void tip(String t, JLabel... ls) { for (JLabel l : ls) l.setToolTipText(t); }
 
 	/** Shows the forecast and the solo strategies with their chances (most likely first). */

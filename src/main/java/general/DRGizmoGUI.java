@@ -2101,8 +2101,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelScan.add(buttonScan);
 			woodhallowTools.addToScanRow(panelScan);
 
-		JPanel scanStatus = new JPanel();
+		// Between Score All and Scan: the Symbols label, and under it the Next Dnav forecast at Woodhallow.
+		JPanel scanStatus = new JPanel(new BorderLayout());
 		panelGeneral.add(scanStatus, BorderLayout.CENTER);
+		scanStatus.add(woodhallowTools.forecastPanel(), BorderLayout.SOUTH);
 			startLogPolling();
 			woodhallowTools.start();
 			addWindowListener(new java.awt.event.WindowAdapter() {
@@ -2119,8 +2121,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			new javax.swing.Timer(AUTOSCAN_TICK_MS, ev -> autoScanTick()).start();
 
 			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
-			labelSymbols = new JLabel("Symbols: waiting");
-			scanStatus.add(labelSymbols);
+			labelSymbols = new JLabel("Symbols: waiting", SwingConstants.CENTER);
+			scanStatus.add(labelSymbols, BorderLayout.CENTER);
 			new javax.swing.Timer(2000, ev -> {
 				java.util.List<String> seen = activityTracker.snapshot();
 				int withSymbol = 0;
