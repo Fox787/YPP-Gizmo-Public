@@ -27,7 +27,8 @@ public final class GameLog {
 		public String vesselName;
 	}
 
-	private static final Pattern CLIENT = Pattern.compile("Client object ([\\w-]+) \\(");
+	// "Client object Ozpin (o:..."; since 2026/11/18 the client writes "Ozpin$ (o:...", so allow marks after the name.
+	private static final Pattern CLIENT = Pattern.compile("Client object ([\\w-]+)[^\\s(]* \\(");
 	private static final Pattern OCEAN = Pattern.compile("Configuring client \\[ocean=(\\w+)");
 	private static final Pattern VESSEL_CHANGE = Pattern.compile("Vessel change \\[ovid=(-?\\d+), nvid=(-?\\d+)\\]");
 	private static final Pattern VESSEL_NAME = Pattern.compile("vessel=([^(\\[\\]]+)\\((\\d+) ");

@@ -40,6 +40,9 @@ class LogFlowTest {
 		Files.writeString(own, "Client object Reconnected (\n");
 		assertEquals("Reconnected", tail.poll(own).pirate);
 		assertNull(tail.poll(own).vesselId);
+		// The client's line since 2026/11/18 has a "$" after the name.
+		Files.writeString(own, "2026/11/18 12:55:06:134 INFO ih.doLog: Client object Ozpin$ (o:221185 u:6951433).\n");
+		assertEquals("Ozpin", tail.poll(own).pirate);
 	}
 
 	@Test
