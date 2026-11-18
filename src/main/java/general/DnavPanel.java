@@ -25,6 +25,7 @@ public final class DnavPanel extends JPanel {
 	private final JLabel[] strat = {new JLabel(), new JLabel()};
 	private final JLabel[] stratPct = {new JLabel(), new JLabel()};
 	private final Color normal;
+	private String shown;
 
 	public DnavPanel(Font font) {
 		super(new GridBagLayout());
@@ -78,6 +79,11 @@ public final class DnavPanel extends JPanel {
 
 	/** Shows the forecast and the solo strategies with their chances (most likely first). */
 	public void show(DnavForecast f, Map<String, Double> strategies) {
+		// Called every second: change nothing (so nothing repaints) unless the forecast did.
+		String key = f.nextFray + "|" + f.werewolves + "|" + f.needed + "|" + f.stationsMs + "|" + f.teamRate + "|" + f.clearMs
+				+ "|" + f.rawPack + "|" + f.odds + "|" + strategies;
+		if (key.equals(shown)) return;
+		shown = key;
 		title.setTitle("Next Dnav");
 		wolves.setText(String.valueOf(f.werewolves));
 		StringBuilder odds = new StringBuilder();

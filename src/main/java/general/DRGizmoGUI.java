@@ -405,17 +405,40 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		private final javax.swing.Timer sharpenLater = new javax.swing.Timer(400, e -> redrawDirect());
 		{ sharpenLater.setRepeats(false); }
 
+		/**
+		 * The window's surface isn't double-buffered: painting the text area straight onto it shows the
+		 * background first and then the text line by line, which flickers (a recording catches frames with
+		 * lines missing). So paint into an image at the screen's scale and put that on the window at once.
+		 */
 		private void redrawDirect() {
 			if (!isShowing()) return;
 			Graphics wg = getGraphics();   // the window's own surface, already at screen scale
 			if (wg == null) return;
 			try {
 				Rectangle vis = getVisibleRect();
+				if (vis.isEmpty()) return;
 				wg.setClip(vis);
 				Object hints = Toolkit.getDefaultToolkit().getDesktopProperty("awt.font.desktophints");
-				if (hints instanceof java.util.Map && wg instanceof Graphics2D)
-					((Graphics2D) wg).addRenderingHints((java.util.Map<?, ?>) hints);
-				super.paintComponent(wg);   // not this.paintComponent: no further redraw is queued
+				if (!(wg instanceof Graphics2D w2)) {
+					super.paintComponent(wg);
+					return;
+				}
+				java.awt.geom.AffineTransform screen = w2.getTransform();
+				double sx = Math.abs(screen.getScaleX()), sy = Math.abs(screen.getScaleY());
+				int pw = (int) Math.ceil(vis.width * sx), ph = (int) Math.ceil(vis.height * sy);
+				java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(pw, ph, java.awt.image.BufferedImage.TYPE_INT_RGB);
+				Graphics2D ig = image.createGraphics();
+				try {
+					if (hints instanceof java.util.Map) ig.addRenderingHints((java.util.Map<?, ?>) hints);
+					ig.scale(sx, sy);
+					ig.translate(-vis.x, -vis.y);
+					ig.setClip(vis);
+					super.paintComponent(ig);   // not this.paintComponent: no further redraw is queued
+				} finally {
+					ig.dispose();
+				}
+				// One copy, pixel for pixel at the screen's scale.
+				w2.drawImage(image, vis.x, vis.y, vis.width, vis.height, null);
 			} finally {
 				wg.dispose();
 			}
