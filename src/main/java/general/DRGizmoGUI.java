@@ -182,7 +182,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JLabel labelRecordStatus;
 	private final Map<String, JPanel> recordPanels = new LinkedHashMap<>();
 	private String logPirate; // Accessed by the log worker only.
-	private JLabel labelSymbols;
 	private RunLog runLog;
 	private StationClock stationClock;
 	/** Auto scan for every activity (Den, CI, Lair) or none; off means scanning by hand. */
@@ -2134,10 +2133,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelScan.add(buttonScan);
 			woodhallowTools.addToScanRow(panelScan);
 
-		// Between Score All and Scan: the Symbols label, and under it the Next Dnav forecast at Woodhallow.
-		JPanel scanStatus = new JPanel(new BorderLayout());
-		panelGeneral.add(scanStatus, BorderLayout.CENTER);
-		scanStatus.add(woodhallowTools.forecastPanel(), BorderLayout.SOUTH);
+		// Between Score All and Scan: the Dnav / Next Dnav area, which keeps its space when empty.
+		panelGeneral.add(woodhallowTools.forecastPanel(), BorderLayout.CENTER);
 			startLogPolling();
 			woodhallowTools.start();
 			addWindowListener(new java.awt.event.WindowAdapter() {
@@ -2152,19 +2149,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 			// Auto scan checks every second (it only reads the duty report window once a trigger is armed).
 			new javax.swing.Timer(AUTOSCAN_TICK_MS, ev -> autoScanTick()).start();
-
-			// Live check that the symbols over heads are being read: count, and the list in the tooltip.
-			labelSymbols = new JLabel("Symbols: waiting", SwingConstants.CENTER);
-			scanStatus.add(labelSymbols, BorderLayout.CENTER);
-			new javax.swing.Timer(2000, ev -> {
-				java.util.List<String> seen = activityTracker.snapshot();
-				int withSymbol = 0;
-				for (String s : seen) if (!s.contains("[0]")) withSymbol++;
-				labelSymbols.setText(!activityTracker.sceneTrackingEnabled() ? "Symbols: scene reading off"
-						: seen.isEmpty() ? "Symbols: waiting"
-						: "Symbols: " + seen.size() + " pirates, " + withSymbol + " with a symbol");
-				labelSymbols.setToolTipText(seen.isEmpty() ? null : "<html>" + String.join("<br>", seen) + "</html>");
-			}).start();
 
 		JPanel panelScore = new JPanel();
 		panelGeneral.add(panelScore, BorderLayout.NORTH);

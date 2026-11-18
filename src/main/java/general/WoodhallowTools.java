@@ -23,7 +23,7 @@ final class WoodhallowTools {
 	// Cursed Isles forage timer (Thalassa's), merc plank warning (PP_Timer's), and the rumble minute warning.
 	private final JCheckBox checkBoxForageTimer, checkBoxForageSound, checkBoxPlankSound, checkBoxRumbleSound;
 	// The row next to the Scan button: the running timer on the left, the shorthand (or wolves left) on the right.
-	private final JCheckBox checkBoxScanRow;
+	private final JCheckBox checkBoxScanRow, checkBoxExtendedDnav;
 	private final JLabel scanTimer = new JLabel(" "), scanShorthand = new JLabel(" ");
 	private long dnavEnds;
 	static final long FORAGE_WARNING_MS = 30_000;
@@ -46,7 +46,14 @@ final class WoodhallowTools {
 	private DnavPanel rumbleForecast;
 	private Component tabBeforeRumble;
 	/** Between Score All and Scan: the Dnav box during stations, the Next Dnav forecast between them. */
-	private final JPanel dnavArea = new JPanel();
+	private final JPanel dnavArea = new JPanel() {
+		// Always as tall as the Next Dnav box, so the window doesn't jump when it shows or hides.
+		@Override public Dimension getPreferredSize() {
+			Dimension d = super.getPreferredSize();
+			if (rumbleForecast != null) d.height = Math.max(d.height, rumbleForecast.getPreferredSize().height);
+			return d;
+		}
+	};
 
 	private long clearPlayedFor, warningPlayedFor, dnavPeriodStart = Long.MIN_VALUE;
 	private long lastDnavTick;
@@ -96,11 +103,15 @@ final class WoodhallowTools {
 		clock.setOnLiveMessage(rumbleClock.plank()::chat);
 		checkBoxRatingsExport = option(section, prefs, "Export dr_ratings.jsonl", "drratingsexport", true);
 		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
+		checkBoxExtendedDnav = option(section, prefs, "Extended Dnav (solo strategies in Next Dnav)", "extendeddnav", false);
+		checkBoxExtendedDnav.setToolTipText("Also show the solo navigation strategies, with their chances, under the Next Dnav forecast");
 		checkBoxScanRow = option(section, prefs, "Timers next to the Scan button", "scanrowtimers", true);
 		checkBoxScanRow.setToolTipText("Rumble, forage, vampire lair and Dnav station timers beside the Scan button, with the shorthand or wolves left on the right");
 		addVolume(section, prefs);
 		createDnavTab();
 		createRumbleTab();
+		rumbleForecast.setExtended(checkBoxExtendedDnav.isSelected());
+		checkBoxExtendedDnav.addActionListener(ev -> rumbleForecast.setExtended(checkBoxExtendedDnav.isSelected()));
 		Font font = scanTimer.getFont();
 		scanTimer.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.3f));
 		scanShorthand.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.3f));

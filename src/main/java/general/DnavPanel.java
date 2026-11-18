@@ -11,7 +11,7 @@ import java.util.Map;
  *   Wolves 10      Fray 3
  *   Score  16      Need 3.88   Now -1.68
  *   Time   4:37    Left -2:38
- *   Booch, 4 Trips          90%
+ *   Booch, 4 Trips          90%   (these two lines only with the Extended Dnav option)
  *   Booch, 4 Trips, Single  10%   (grey)
  */
 public final class DnavPanel extends JPanel {
@@ -26,6 +26,15 @@ public final class DnavPanel extends JPanel {
 	private final JLabel[] stratPct = {new JLabel(), new JLabel()};
 	private final Color normal;
 	private String shown;
+	/** The two solo strategy lines are the "Extended Dnav" option (off by default: most crews don't solo nav). */
+	private boolean extended;
+
+	public void setExtended(boolean on) {
+		extended = on;
+		shown = null;   // the next show() lays the lines out again
+		if (!on) for (int i = 0; i < 2; i++) { strat[i].setVisible(false); stratPct[i].setVisible(false); }
+		revalidate();
+	}
 
 	public DnavPanel(Font font) {
 		super(new GridBagLayout());
@@ -109,7 +118,7 @@ public final class DnavPanel extends JPanel {
 		}
 		int i = 0;
 		for (Map.Entry<String, Double> e : strategies.entrySet()) {
-			if (i > 1) break;
+			if (i > 1 || !extended) break;
 			strat[i].setText(e.getKey());
 			stratPct[i].setText(strategies.size() > 1 ? String.format("%.0f%%", e.getValue() * 100) : "");
 			strat[i].setToolTipText(i == 0 ? "Most likely solo strategy (sheet's Strat 1)" : "Less likely: the werewolf count rounds the other way");
