@@ -1,0 +1,67 @@
+Building Gizmo
+==============
+
+You need a Java Development Kit (JDK), version 17 or newer. The global copy shortcut uses
+the bundled lib/jnativehook-2.2.2.jar. The other jars in lib/ are only for unit tests.
+
+Windows (PowerShell)
+--------------------
+    powershell -ExecutionPolicy Bypass -File build.ps1
+or, if your JDK is somewhere else:
+    powershell -ExecutionPolicy Bypass -File build.ps1 -Jdk "C:\path\to\jdk"
+
+The result is dist\Gizmo.jar.
+For an existing installation whose runtime package is gizmobeta, preserve its settings and
+saved reports with: powershell -ExecutionPolicy Bypass -File build.ps1 -PackageRoot gizmobeta
+
+Any system, by hand
+-------------------
+From the project root, compile into a clean out directory and include the bundled sounds:
+    javac --release 16 -g -encoding UTF-8 -cp lib/jnativehook-2.2.2.jar -d out $(find src/main/java -name "*.java")
+    (cd out && jar xf ../lib/jnativehook-2.2.2.jar com/github/kwhat/jnativehook)
+    jar cfm Gizmo.jar src/META-INF/MANIFEST.MF -C out . -C src/main/resources .
+
+Installing
+----------
+1. Close Puzzle Pirates. (Replacing the jar while the game runs breaks it until a restart.)
+2. Copy dist\Gizmo.jar into the game's app folder, replacing the previous Gizmo.jar.
+   The standard Windows location is:
+       %LOCALAPPDATA%\Puzzle Pirates\app\
+3. In that folder, use a single Gizmo agent entry in extra.txt:
+       -javaagent:Gizmo.jar
+4. Start the game. The Gizmo window opens once you are logged in.
+
+Settings
+--------
+Options > Scan & output:
+- "Wolf count from scene" reads the active Woodhallow scene, with no need to open Ahoy.
+  When off, "Wolf count from chat only" selects chat instead of visible Ahoy text.
+- "Global Ctrl+P for scan copies" advances queued vessel-chat scans from any application.
+  A separate helper JVM observes the shortcut; it does not consume it, so other applications
+  can also respond (for example, opening Print). Chat-log confirmation always remains available.
+  Global detection supports Windows, macOS (with input permission), and X11 Linux. Wayland,
+  missing permissions or helper failures fall back to chat logs. The helper runs only while
+  more scans are queued. It records no typed text.
+- Measured station visits shorter than two seconds are excluded from scoring and copied scans.
+  Exactly two seconds qualifies. Unmeasured visits remain eligible; raw run logs retain the data.
+
+Options > Rumble & sounds has separate den, vampire lair and CI warning switches. Warnings
+use 30 seconds before the forage/haul deadline, including the vampire scene's live haul timer.
+If the scene cannot be read, lairs use chat timing, with the coffin-rustling cue (15 seconds)
+as a last fallback. "Plank merc reminder" starts disabled and uses
+Thalassa's original recording and CI thresholds after forage (4, 3, 3, 2, then 2 crew; thralls
+excluded). It reminds you only when a merc is still present and the crew exceeds that limit.
+
+Gizmo uses the standard Gizmo Java preferences for profiles and saved duty reports.
+In Options > Booty & files, set the folder your chat logs are saved to (the game's chat log
+setting). Station timing, score per minute and the booty export's chat details need it.
+You can point Data folder at an existing export directory to continue using those files.
+
+What it writes
+--------------
+Under the configured Data folder, in <ocean>\:
+    booty_divisions_<pirate>.jsonl      one line per booty division
+    runs\run_<start>_<pirate>.jsonl     one line per duty report, with station timings
+and a readable N.txt per booty division in the "Text copies" folder set in Options.
+The Data folder defaults to a Gizmo folder inside your chat log folder. Until a chat log
+folder is known, Gizmo uses exported_data in the game's app folder.

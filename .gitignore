@@ -1,0 +1,10 @@
+out/
+dist/
+*.class
+*.jar
+!lib/*.jar
+.idea/
+.vscode/
+*.iml
+out-src/
+/*-source.zip

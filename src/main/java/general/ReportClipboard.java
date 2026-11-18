@@ -7,7 +7,10 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-/** Advances the clipboard after the pirate's chat log confirms the previous piece was sent. */
+/**
+ * Advances the clipboard after the pirate's chat log confirms the previous piece was sent, or at once
+ * when the global Ctrl+P hotkey asks for the next piece.
+ */
 final class ReportClipboard {
 	static final int CHAT_LIMIT = 240;
 	static final String VESSEL_COMMAND = "/ve ";
@@ -24,6 +27,12 @@ final class ReportClipboard {
 
 	boolean hasPending() {
 		return !pending.isEmpty();
+	}
+
+	/** Ctrl+P: copy the next piece now, without waiting for the chat log to show the last one was sent. */
+	void advance(LocalDateTime now, Consumer<String> copy) {
+		waitingFor = null;
+		update(List.of(), now, copy);
 	}
 
 	void update(List<ChatLog.Line> sent, LocalDateTime now, Consumer<String> copy) {

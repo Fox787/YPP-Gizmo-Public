@@ -1,0 +1,11 @@
+JNativeHook 2.2.2
+https://github.com/kwhat/jnativehook
+Unmodified library and native binaries from Maven Central, distributed under LGPL 2.1.
+License texts are included beside this notice. A replacement library can be placed in lib/
+and bundled using build.ps1. Source: https://github.com/kwhat/jnativehook/tree/2.2.2
+SHA-256 of lib/jnativehook-2.2.2.jar:
+2c7904423bc680af02d9ea9557ae233c35199e302d072773a9d0304b568acd41
+
+Plank merc reminder recording
+Converted without changing the audio from the user's Thalassa plank_swabbie.mp3 asset.
+The reminder thresholds follow Thalassa commit 59a97ca, src/main.py plank_swabbie_check.

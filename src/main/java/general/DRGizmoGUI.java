@@ -142,6 +142,22 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	static final int AUTOSCAN_TICK_MS = 1000;
 
 	private final ReportClipboard reportClipboard = new ReportClipboard();
+	private JCheckBox checkBoxGlobalScanCopy;
+	/** Ctrl+P anywhere copies the next queued piece; runs only while pieces are queued. */
+	private final GlobalCopyHotkey scanCopyHotkey = new GlobalCopyHotkey(this::copyNextPiece, message -> printStatus(message, true));
+
+	private void copyNextPiece() {
+		reportClipboard.advance(java.time.LocalDateTime.now(), DRGizmoGUI::copyToClipboard);
+		updateScanCopyHotkey();
+		printStatus(reportClipboard.hasPending()
+				? "Copied the next list; Ctrl+P copies the one after, or send this one"
+				: "Copied the last list", true);
+	}
+
+	private void updateScanCopyHotkey() {
+		scanCopyHotkey.setActive(reportClipboard.hasPending() && checkBoxGlobalScanCopy != null
+				&& checkBoxGlobalScanCopy.isSelected());
+	}
 
 	/** The text as one piece if it fits in a chat message, else whole lines packed into pieces that each fit. */
 	static java.util.List<String> splitForChat(String text) {
@@ -171,6 +187,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			reportClipboard.update(stationClock.drainOwnChat(), java.time.LocalDateTime.now(),
 					DRGizmoGUI::copyToClipboard);
 		}
+		updateScanCopyHotkey();
 	}
 
 	/** Auto scan is on and this is an activity it covers (RecordChecker.DEN / CI / LAIR). */
@@ -260,16 +277,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			if (round != null) data.setLairRound(round.arrival(), round.end());
 		}
 
-		// Save the original report so it can be rescored with other profile settings.
-		addDRToTree(data);
-		try {
-			PrefObj.putObject(prefs, TREEDATA, drTreeToPersistantData());
-			printStatus("Tree Saved", true);
-		} catch (IOException | BackingStoreException | ClassNotFoundException e) {
-			printStatus("Saving Tree Failed: " + e.getMessage(), true);
-		}
-
-		calculateReportScore(data);
+		DRGroupData scanned = data;
+		calculateReportScore(scanned);
 		// Score per minute first, so it can go on the same lines as the report. Only Wolves Den
 		// reports are timed; CI and Lair reports print just the options the player ticked.
 		boolean isDen = RecordChecker.DEN.equals(RecordChecker.activityOf(data));
@@ -301,6 +310,19 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				printStatus("Duty report export failed: " + e, false);
 			}
 		}
+		// Measured visits under two seconds don't count: leave them out of the saved tree (kept with
+		// its original token weights for rescoring), the output and the copies. Run files keep them.
+		data = ActivityTracker.scoredReport(scanned, timed);
+		addDRToTree(data);
+		try {
+			PrefObj.putObject(prefs, TREEDATA, drTreeToPersistantData());
+			printStatus("Tree Saved", true);
+		} catch (IOException | BackingStoreException | ClassNotFoundException e) {
+			printStatus("Saving Tree Failed: " + e.getMessage(), true);
+		}
+		data = ActivityTracker.scoredReport(scanned, timed);
+		calculateReportScore(data);
+
 		boolean inline = isDen && checkBoxScan2ScorePerMinute.isSelected();
 		String dataString = formatScanOutput(data, inline ? rates : null);
 		printStatus(dataString, false);
@@ -565,11 +587,15 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxAutoScan.setToolTipText("Scan the duty report automatically after a Den, Cursed Isles or Vampire Lair round.");
 		checkBoxAutoCopy = new JCheckBox("Auto-copy");
 		checkBoxAutoCopy.addItemListener(ev -> {
-			if (!checkBoxAutoCopy.isSelected()) reportClipboard.replace(List.of());
+			if (!checkBoxAutoCopy.isSelected()) { reportClipboard.replace(List.of()); updateScanCopyHotkey(); }
 		});
 		checkBoxCopyScanToVessel = new JCheckBox("Copy scans as /ve");
 		checkBoxCopyScanToVessel.setToolTipText("With Auto-copy enabled, format duty reports for vessel chat.");
-		checkBoxCopyScanToVessel.addItemListener(ev -> reportClipboard.replace(List.of()));
+		checkBoxCopyScanToVessel.addItemListener(ev -> { reportClipboard.replace(List.of()); updateScanCopyHotkey(); });
+		checkBoxGlobalScanCopy = liveOption("Global Ctrl+P for scan copies", "globalscancopy");
+		checkBoxGlobalScanCopy.setToolTipText("When a scan is copied in several pieces, Ctrl+P anywhere copies the next one."
+				+ " Sending the piece in chat still works too. Other apps also receive Ctrl+P.");
+		checkBoxGlobalScanCopy.addItemListener(ev -> updateScanCopyHotkey());
 		checkBoxIgnoreAI = new JCheckBox("Hide NPCs");
 		checkBoxIgnoreAI.addActionListener(ev -> updateOutputPreviews());
 		checkBoxShowExtraButtons = liveOption("Extra output buttons", SHOWEXTRABUTTONS);
@@ -580,6 +606,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		scanning.add(checkBoxAutoScan);
 		scanning.add(checkBoxAutoCopy);
 		scanning.add(checkBoxCopyScanToVessel);
+		scanning.add(checkBoxGlobalScanCopy);
 		scanning.add(checkBoxIgnoreAI);
 		scanning.add(checkBoxShowExtraButtons);
 		scanning.add(checkBoxDebug);

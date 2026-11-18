@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ActivityTrackerTest {
@@ -36,5 +37,46 @@ class ActivityTrackerTest {
 		assertTrue(ActivityTracker.blocks(period, " ", false).get(0).startsWith("Jice "));
 		String json = RunLog.toJson(period, "Jice", "Emerald", Path.of("run.jsonl"), "woodhallow");
 		assertTrue(json.contains("\"score_per_minute\":6.52"));
+	}
+
+	@Test
+	void leavesOutOnlyVisitsUnderTwoSeconds() {
+		for (long visit : new long[]{1_999, 2_000, 4_999}) {
+			StationClock clock = new StationClock();
+			clock.message("6 o' 6 still standin'! To yer stations!", 100_000);
+			clock.message("The wolf-kin gather! 30 seconds!", 190_000);
+			ActivityTracker tracker = new ActivityTracker(null, clock);
+			tracker.setSelf("Pirate");
+			tracker.ownPuzzle("NaviObject", 101_000);
+			tracker.ownPuzzle("ForageObject", 220_000 - visit);
+			DRGroupData report = new DRGroupData();
+			report.setActivity(RecordChecker.DEN);
+			report.put("Navigating", "Pirate", "Frenetic", new int[]{1, 0, 0}, 1);
+			report.put("Foraging", "Pirate", "Slow", new int[]{1, 0, 0}, 1);
+			tracker.report(report, 220_000);
+			ActivityTracker.Period period = tracker.lastPeriod();
+			assertEquals(visit, period.rows.get(1).ms);
+			boolean counts = visit >= 2_000;
+			assertEquals(counts, ActivityTracker.rates(period).containsKey("Foraging"));
+			assertEquals(counts, String.join("\n", ActivityTracker.blocks(period, " ")).contains("Foraging"));
+			assertEquals(counts, String.join("\n", ActivityTracker.chatMessages(report, period, false)).contains("Forage"));
+			DRGroupData scored = ActivityTracker.scoredReport(report, period);
+			assertEquals(counts, scored.data.containsKey("Foraging"));
+			assertTrue(scored.data.get("Navigating").containsKey("Pirate"));
+			assertTrue(report.data.get("Foraging").containsKey("Pirate"));   // the scanned report is untouched
+			String json = RunLog.toJson(period, "Pirate", "Emerald", Path.of("run.jsonl"), "woodhallow");
+			if (!counts) assertTrue(json.contains("\"seconds\":1.999,\"score_per_minute\":null"));
+		}
+	}
+
+	@Test
+	void unknownTimesStillCopy() {
+		ActivityTracker.Row row = new ActivityTracker.Row();
+		row.station = "Navigating";
+		row.pirate = "Pirate";
+		ActivityTracker.Period period = new ActivityTracker.Period();
+		period.rows.add(row);
+		assertFalse(row.tooBrief());
+		assertTrue(ActivityTracker.chatMessages(new DRGroupData(), period, false).get(0).contains("Pirate 0 (-)"));
 	}
 }
