@@ -96,7 +96,7 @@ final class WoodhallowTools {
 		checkBoxForageTimer = option(section, prefs, "Cursed Isles: forage timer", "foragetimer", true);
 		checkBoxForageTimer.setToolTipText("Time left to forage, in a Forage tab; red in the last 30 seconds");
 		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
-		checkBoxForageSound.setToolTipText("Three pulses at 30 seconds left to forage");
+		checkBoxForageSound.setToolTipText("The rumble warning sound at 30 seconds left to forage");
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
 		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
 		// Chat log: mercs and pirates leaving the vessel, for the plank check.

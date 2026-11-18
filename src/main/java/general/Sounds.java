@@ -11,9 +11,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Plays Thalassa's Woodhallow alert sounds, bundled in the jar under /sounds:
- *   werewolves_clear.wav       the last werewolf of the wave has been turned back
- *   werewolves_30_seconds.wav  30 seconds left of stations
+ * Plays Gizmo's alert sounds, bundled in the jar under /sounds:
+ *   werewolves_clear.wav  the last werewolf of the wave has been turned back
+ *   rumble_warning.wav    Thalassa's rumble warning, also used for 30 s left of stations and of foraging
+ *   plank_swabbie.wav     the "plank swabbie" voice line
  *
  * Gizmo runs inside the game's Java process, so a sound played here counts as the game's audio, and
  * Discord's "stream with sound" sends it to viewers. Discord captures the game's whole process tree, so
@@ -26,9 +27,10 @@ import java.nio.file.StandardCopyOption;
  */
 public final class Sounds {
 
-	public static final String CLEAR = "werewolves_clear.wav", THIRTY_SECONDS = "werewolves_30_seconds.wav";
 	/** From PP_Timer / Thalassa (converted to WAV): the "plank swabbie" voice line and the rumble warning. */
 	public static final String PLANK = "plank_swabbie.wav", RUMBLE_WARNING = "rumble_warning.wav";
+	/** The 30-seconds-left warning (stations and foraging) is the same sound as the rumble warning. */
+	public static final String CLEAR = "werewolves_clear.wav", THIRTY_SECONDS = RUMBLE_WARNING;
 
 	private Sounds() { }
 
