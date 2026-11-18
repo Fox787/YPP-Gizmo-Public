@@ -2137,6 +2137,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		panelGeneral.add(woodhallowTools.forecastPanel(), BorderLayout.CENTER);
 			startLogPolling();
 			woodhallowTools.start();
+			// With Debug on, say how each sound was played (and so whether Discord's stream can hear it).
+			Sounds.setReporter(message -> SwingUtilities.invokeLater(() -> printStatus("Sound " + message, true)));
+			Sounds.prepare();
 			addWindowListener(new java.awt.event.WindowAdapter() {
 				@Override public void windowClosing(java.awt.event.WindowEvent ev) { woodhallowTools.stop(); }
 				@Override public void windowClosed(java.awt.event.WindowEvent ev) { woodhallowTools.stop(); }
