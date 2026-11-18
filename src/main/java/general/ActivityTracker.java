@@ -267,12 +267,14 @@ public final class ActivityTracker {
 
 		/** A measured visit under two seconds: left out of scoring, the saved tree and copied lists. */
 		public boolean tooBrief() { return ms > 0 && ms < MIN_SCORE_MS; }
-		/** A measured visit of at least two seconds, which gets a score per minute. */
-		public boolean hasRate() { return ms >= MIN_SCORE_MS; }
+		/** A measured visit of at least five seconds, the shortest that gets a score per minute. */
+		public boolean hasRate() { return ms >= MIN_RATE_MS; }
 	}
 
 	/** Visits shorter than this are left out of scoring; exactly two seconds still counts. */
 	static final long MIN_SCORE_MS = 2_000;
+	/** Visits from 2 s up to this still score, but show "-" for score per minute. */
+	static final long MIN_RATE_MS = 5_000;
 
 	/** One scanned duty report (station period). */
 	public static final class Period {
@@ -360,7 +362,7 @@ public final class ActivityTracker {
 				row.score = d.getTokenScore();
 				row.woodhallowNav = woodhallow && code == NAV;
 				row.ms = time;
-				row.exact = row.ms > 0 && (singleStation || local);
+				row.exact = row.hasRate() && (singleStation || local);
 				period.rows.add(row);
 			}
 		}

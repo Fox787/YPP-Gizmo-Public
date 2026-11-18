@@ -41,7 +41,7 @@ class ActivityTrackerTest {
 
 	@Test
 	void leavesOutOnlyVisitsUnderTwoSeconds() {
-		for (long visit : new long[]{1_999, 2_000, 4_999}) {
+		for (long visit : new long[]{1_999, 2_000, 4_999, 5_000}) {
 			StationClock clock = new StationClock();
 			clock.message("6 o' 6 still standin'! To yer stations!", 100_000);
 			clock.message("The wolf-kin gather! 30 seconds!", 190_000);
@@ -56,10 +56,13 @@ class ActivityTrackerTest {
 			tracker.report(report, 220_000);
 			ActivityTracker.Period period = tracker.lastPeriod();
 			assertEquals(visit, period.rows.get(1).ms);
-			boolean counts = visit >= 2_000;
-			assertEquals(counts, ActivityTracker.rates(period).containsKey("Foraging"));
-			assertEquals(counts, String.join("\n", ActivityTracker.blocks(period, " ")).contains("Foraging"));
-			assertEquals(counts, String.join("\n", ActivityTracker.chatMessages(report, period, false)).contains("Forage"));
+			boolean counts = visit >= 2_000, rated = visit >= 5_000;
+			assertEquals(rated, ActivityTracker.rates(period).containsKey("Foraging"));
+			String blocks = String.join("\n", ActivityTracker.blocks(period, " "));
+			String chat = String.join("\n", ActivityTracker.chatMessages(report, period, false));
+			assertEquals(counts, blocks.contains("Foraging"));
+			assertEquals(counts, chat.contains("Forage"));
+			assertEquals(counts && !rated, chat.contains("Pirate 1 (-)"));   // 2-5 s: scored, no rate
 			DRGroupData scored = ActivityTracker.scoredReport(report, period);
 			assertEquals(counts, scored.data.containsKey("Foraging"));
 			assertTrue(scored.data.get("Navigating").containsKey("Pirate"));
