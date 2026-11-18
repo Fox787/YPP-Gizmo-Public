@@ -148,8 +148,11 @@ final class WoodhallowTools {
 			left = clock(s);
 			if (s % 60 >= 55) leftColor = WARNING_RED;
 			if (checkBoxRumbleShorthand.isSelected()) {
+				int minute = (int) (elapsed / 60_000);
 				boolean maxDamage = stationClock.inDen() && stationClock.elitesLeft() == 0;
-				right = "(" + RumbleBoard.shorthand((int) (elapsed / 60_000), maxDamage) + ")";
+				// Woodhallow: the groups for an insta on a white name and on a red name; elsewhere the range.
+				right = stationClock.inDen() ? RumbleBoard.instaShorthand(minute)
+						: "(" + RumbleBoard.shorthand(minute, maxDamage) + ")";
 			}
 		} else if (forageLeft >= 0 && checkBoxForageTimer.isSelected()) {
 			left = clock((forageLeft + 999) / 1000);
@@ -387,7 +390,7 @@ final class WoodhallowTools {
 		labelRumble.setToolTipText("Time into the rumble; red in the last 5 seconds before the punch sizes change");
 		labelRumbleShorthand = new JLabel(" ");
 		labelRumbleShorthand.setFont(bigFont);
-		labelRumbleShorthand.setToolTipText("Recommended number of groups to charge this minute");
+		labelRumbleShorthand.setToolTipText("<html>Groups to charge this minute: the recommended range,<br>or at Woodhallow: (in white) an insta on a white name, then an insta on a red name</html>");
 		shorthandColor = labelRumbleShorthand.getForeground();
 		JPanel rumbleTop = new JPanel(new BorderLayout(8, 0));
 		rumbleTop.add(labelRumble, BorderLayout.WEST);
@@ -487,7 +490,7 @@ final class WoodhallowTools {
 		}
 		labelRumbleShorthand.setVisible(shorthand);
 		if (shorthand) {
-			String groups = RumbleBoard.shorthand(minute, maxDamage);
+			String groups = woodhallow ? RumbleBoard.instaShorthand(minute) : RumbleBoard.shorthand(minute, maxDamage);
 			if (!groups.equals(rumbleGroups)) {
 				rumbleGroups = groups;
 				labelRumbleShorthand.setText(groups);

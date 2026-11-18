@@ -8,9 +8,9 @@ import java.util.Map;
 
 /**
  * The main window's "Next Dnav" box (under the Symbols label): short labels, numbers in fixed spots, hover text on each.
- *   Wolves 10      Fray 3
- *   Score  16      Need 3.88   Now -1.68
- *   Time   4:37    Left -2:38
+ *   Wolves 10      Score 16
+ *   Need   3.88    Now   -1.68
+ *   Time   4:37    Left  -2:38
  *   Booch, 4 Trips          90%   (these two lines only with the Extended Dnav option)
  *   Booch, 4 Trips, Single  10%   (grey)
  */
@@ -41,8 +41,8 @@ public final class DnavPanel extends JPanel {
 		setBorder(BorderFactory.createCompoundBorder(title, BorderFactory.createEmptyBorder(0, 3, 2, 3)));
 		normal = UIManager.getColor("Label.foreground") != null ? UIManager.getColor("Label.foreground") : Color.BLACK;
 		JLabel[][] grid = {
-				{wolvesL, wolves, null, null, null, null},
-				{scoreL, score, needL, need, nowL, now},
+				{wolvesL, wolves, scoreL, score, null, null},
+				{needL, need, nowL, now, null, null},
 				{timeL, time, leftL, left, null, null}};
 		for (int r = 0; r < grid.length; r++)
 			for (int c = 0; c < 6; c++) {

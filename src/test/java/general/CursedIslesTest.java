@@ -83,4 +83,13 @@ class CursedIslesTest {
 		assertNotNull(rumble);
 		assertTrue(plank.length > 44 && rumble.length > 44);
 	}
+
+	@Test
+	void instaShorthandIsTheFewestGroupsReachingTheWhiteLineAndTheTop() {
+		// Minute 2: 8 groups send 9 rows, 9 send 11 (past the 10-row white line); 13 send all 20.
+		assertEquals(9, RumbleBoard.instaGroups(2, RumbleBoard.WHITE_INSTA_ROWS));
+		assertEquals(13, RumbleBoard.instaGroups(2, RumbleBoard.RED_INSTA_ROWS));
+		assertEquals("<html><font color=#ffffff>(9)</font> (13)</html>", RumbleBoard.instaShorthand(2));
+		for (int m = 0; m <= 15; m++) assertTrue(RumbleBoard.instaGroups(m, RumbleBoard.RED_INSTA_ROWS) > 0);
+	}
 }

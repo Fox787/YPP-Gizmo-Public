@@ -126,6 +126,26 @@ public final class RumbleBoard extends JComponent {
 		return first == last ? String.valueOf(first) : first + "-" + last;
 	}
 
+	/**
+	 * Insta knockouts at Woodhallow. A punch as tall as the rows left free on the target's board fills it.
+	 * White-named werewolves deal max damage, so 10 of the 20 rows are blocked (the white dotted line):
+	 * 10 rows takes one out. Red-named (elite) werewolves deal none, so it takes the full 20.
+	 */
+	static final int WHITE_INSTA_ROWS = 20 - MAX_DAMAGE_ROWS, RED_INSTA_ROWS = 20;
+
+	/** The fewest groups that send at least this many rows this minute; -1 if none does. */
+	public static int instaGroups(int minute, int rows) {
+		for (Map.Entry<Integer, int[]> e : TABLE.get(Math.max(0, Math.min(15, minute))).entrySet())
+			if (e.getValue()[1] >= rows) return e.getKey();
+		return -1;
+	}
+
+	/** "(white insta) (red insta)" as HTML: the white one in white, the red one in the label's own colour. */
+	public static String instaShorthand(int minute) {
+		return "<html><font color=#ffffff>(" + instaGroups(minute, WHITE_INSTA_ROWS) + ")</font> ("
+				+ instaGroups(minute, RED_INSTA_ROWS) + ")</html>";
+	}
+
 	/** Rows sent by charging this many groups (the nearest smaller listed count if not listed). */
 	private static int rowsFor(Map<Integer, int[]> row, int groups) {
 		Map.Entry<Integer, int[]> e = ((TreeMap<Integer, int[]>) row).floorEntry(groups);
