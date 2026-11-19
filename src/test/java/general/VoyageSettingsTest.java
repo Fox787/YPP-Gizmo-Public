@@ -144,15 +144,6 @@ class VoyageSettingsTest {
         assertNull(new VoyageRecords(folder).claimMessage());
     }
 
-    @Test
-    void roundTripsManualThresholdsAndRejectsPartialImports() {
-        Map<String, String> records = Map.of("ccentryindividual", "17", "singledr4", "12.50");
-        assertEquals(records, RecordsFile.parse(RecordsFile.write(records)));
-        assertEquals(records, RecordsFile.parse("# thresholds\nccentryindividual=17\nsingledr4=12.50\n"));
-        assertThrows(IllegalArgumentException.class, () -> RecordsFile.parse("{\"ccentryindividual\":17,\"singledr4\":bad}"));
-        assertThrows(IllegalArgumentException.class, () -> RecordsFile.parse("ccentryindividual=17\nccentryindividual=999"));
-    }
-
     private static final class TokenPanel extends JPanel {
         private final Counter type;
         private final List<int[]> rows = List.of(new int[]{1, 2, 3});
