@@ -30,6 +30,7 @@ final class GameScene {
 	private static final Pattern LEAVE = Pattern.compile("Removing chat display for leaving scene \\[scene=(?:\\w+\\.)*(\\w+):");
 
 	private volatile String activity;          // the activity of the scene the client is in, or null
+	private volatile String sceneClass;        // simple class name of the scene the client is in, or null
 	private volatile String leftActivity;      // the last activity scene left
 	private volatile long leftAt, changedAt;   // game log times (ms), 0 if none seen
 
@@ -48,7 +49,8 @@ final class GameScene {
 		if (!line.contains("chat display for ")) return;
 		Matcher enter = ENTER.matcher(line);
 		if (enter.find()) {
-			activity = activityOf(enter.group(1));
+			sceneClass = enter.group(1);
+			activity = activityOf(sceneClass);
 			changedAt = at;
 			return;
 		}
@@ -60,6 +62,7 @@ final class GameScene {
 				leftAt = at;
 			}
 			activity = null;
+			sceneClass = null;
 			changedAt = at;
 		}
 	}
@@ -70,6 +73,12 @@ final class GameScene {
 		if (current != null) return current;
 		return leftActivity != null && now - leftAt <= LEFT_GRACE_MS ? leftActivity : null;
 	}
+
+	/**
+	 * True in a building (a parlor), where rumbles are PvP matches, not voyage frays: the Den is
+	 * WerewolfIsleSceneObject, rumbles at sea YoSceneObject, parlor matches BuildingSceneObject.
+	 */
+	boolean inBuilding() { return "BuildingSceneObject".equals(sceneClass); }
 
 	/** When the game log last showed a scene change (ms), 0 if none since Gizmo started reading it. */
 	long changedAt() { return changedAt; }

@@ -42,6 +42,19 @@ class GameSceneTest {
 	}
 
 	@Test
+	void parlorRumblesStartNoTimerButVoyageOnesDo() {
+		String ready = "2026/11/20 01:56:52:228 INFO ih.doLog: Reporting ready data.BoxingObject:664054(Ozpin, Sisli):0.";
+		RumbleClock clock = new RumbleClock();
+		clock.feed(String.format(ENTER, "BuildingSceneObject"), 1_000);
+		clock.feed(ready, 2_000);
+		assertEquals(-1, clock.elapsed(3_000));
+		clock.feed(String.format(LEAVE, "BuildingSceneObject"), 4_000);
+		clock.feed(String.format(ENTER, "WerewolfIsleSceneObject"), 5_000);
+		clock.feed(ready, 6_000);
+		assertEquals(true, clock.elapsed(7_000) >= 0);
+	}
+
+	@Test
 	void otherLinesAndScenesTagNothing() {
 		GameScene scene = new GameScene();
 		scene.feed("2026/11/16 10:36:02:868 INFO ih.doLog: Got updated scene model [placeId=45555]", 1_000);

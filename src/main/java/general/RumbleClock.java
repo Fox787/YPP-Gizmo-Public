@@ -172,7 +172,8 @@ public final class RumbleClock {
 		if (ready.find()) {
 			String object = ready.group(1);
 			if ("BoxingObject".equals(object)) {
-				if (startedAt == 0) startedAt = lineTime(line, now);
+				// Parlor rumbles are PvP: no fray timer or punch-size board for them.
+				if (startedAt == 0 && !scene.inBuilding()) startedAt = lineTime(line, now);
 				forageEndsAt = 0;
 			} else {
 				startedAt = 0;
