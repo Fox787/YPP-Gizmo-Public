@@ -111,7 +111,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JButton buttonScan;
 	private JButton buttonScore;
 	private JButton buttonTestsWho;
-	private JButton buttonTestsBootyDiv;
 	private JButton buttonOutputNew;
 	private JButton buttonOutputAvg;
 	private JButton buttonTestsClear;
@@ -2105,11 +2104,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				buttonTestsWho.setPreferredSize(new Dimension(80, 23));
 				panelTestsButtonsPanel.add(buttonTestsWho);
 
-				buttonTestsBootyDiv = new JButton("Scan Divvy");
-				buttonTestsBootyDiv.addActionListener(this);
-				buttonTestsBootyDiv.setPreferredSize(new Dimension(80, 23));
-				panelTestsButtonsPanel.add(buttonTestsBootyDiv);
-
 				Component hGlue_1_1 = Box.createHorizontalGlue();
 				panelTestsButtonsPanel.add(hGlue_1_1);
 
@@ -2513,16 +2507,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 
 
-		if (e.getSource().equals(buttonTestsBootyDiv)) {
-			printTestStatus("you tried to scan for booty division but i haven't made that yet", false);
-			printStatus("backup: you tried to scan for booty division but i haven't made that yet", false);
-
-			//String s = new DRGizmo(window, textAreaTests, checkBoxDebug.isSelected()).scanRecursiveSearcher("class com.threerings.piracy.info.client.WhoInfoView");
-			//printTestStatus(s, false);
-			new DRGizmo(window, textAreaTests, checkBoxDebug.isSelected()).scanAllNodes();
-
-			return;
-		}
 
 
 
