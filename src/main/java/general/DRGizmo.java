@@ -847,78 +847,6 @@ public class DRGizmo {
 	
 	
 	
-	/**
-	 * this processes a "Who's online" given the right branch
-	 * @param branch
-	 */
-	private void processWhoBranch(Container branch) {
-		if (branch.getComponentCount() == 0) {
-			printStatus("nothing to process", true);
-			return;
-		}
-		
-		
-	}
-	
-	/**
-	 * this processes a duty report given the right container
-	 * todo make this method eat a twocolumnpanel instead of a difficult to track jpanel near the twocolumnpanel
-	 * @param branch
-	 */
-	@SuppressWarnings("unchecked")
-	private void processBranch(Container branch) {
-		if (branch.getComponentCount() == 0) {
-			printStatus("nothing to process", true);
-			return;
-		}
-
-		printStatus("branches to process:", true);
-		for (int j = 0; j < branch.getComponentCount(); j++) {
-			printStatus(j + ": " + branch.getComponent(j).getClass().toString(), true);
-		}
-		for (int i = 0; i < branch.getComponentCount(); i++) {
-			printStatus("branch " + i + ": " + branch.getComponent(i).getClass().toString(), true);
-			Container station = (Container) descend(branch, i);
-			Component stationLabel = descendNodes(station, new int[] {0, 1, 0});
-			/*
-			Component stationLabel = descend(station, 0);
-			stationLabel = descend(stationLabel, 1);
-			stationLabel = descend(stationLabel, 0);
-			*/
-			String stationName = ((JLabel) stationLabel).getText(); 
-			printStatus(stationName, true);
-			for (int j = 1; j < station.getComponentCount(); j++) {
-				Component pirateData = descend(station, j);
-				pirateData = descend(pirateData, 1);
-				Component nameLabel = descend(pirateData, 0);
-				String name = ((JLabel) nameLabel).getText();
-				printStatus(name, true);
-				Component drLabel = descend(pirateData, 1);
-				Object innerLabel = getField(drLabel, "_label", Object.class);
-				String dr = getField(innerLabel, "b", String.class);
-				printStatus(dr, true);
-				int[] tokens = null;
-				Component tokenPanel = descend(pirateData, 2);
-				if (tokenPanel != null) {
-					ArrayList<int[]> tokensArrayList = getField(tokenPanel, "_rows", ArrayList.class);
-					tokens = new int[tokensArrayList.get(0).length];
-					
-					//tokensArrayList has an array for every row of tokens
-					for (int[] array : tokensArrayList) {
-						for (int k = 0; k < array.length; k++) {
-							tokens[k] += array[k];
-						}
-					}
-
-					printStatus(Arrays.toString(tokens), true);
-				}
-				//printStatus(name + " " + dr + " " + Arrays.toString(tokens));
-				data.put(stationName, name, dr, tokens, getTotalScore(stationName, tokens));
-				//printStatus(name + " " + dr + " " + Arrays.toString(tokens));
-			}
-		}
-	}
-	
 	private void printAllNodes(Component parent, int depth, StringBuilder path) {
 		
 		Component[] children = ((Container) parent).getComponents();
@@ -959,27 +887,5 @@ public class DRGizmo {
 		if (!(parent instanceof Container)) return null;
 		if (childNum >= ((Container) parent).getComponentCount()) return null;
 		return ((Container) parent).getComponent(childNum);
-	}
-	
-	private <T> T getField(Object o, String fieldName, Class<T> clazz) {
-		Class<?> c = o.getClass();
-		try {
-			while (!c.equals(Object.class)) {
-				final Field[] fields = c.getDeclaredFields();
-				for (int i = 0; i < fields.length; ++i) {
-					if (fieldName.equals(fields[i].getName())) {
-						fields[i].setAccessible(true);
-						Object ret = fields[i].get(o);
-						try {
-							return clazz.cast(ret);
-						} catch (ClassCastException e) {
-							return null;
-						}
-					}
-				}
-				c = c.getSuperclass();
-			}
-		} catch (Exception ignored) {}
-		return null;
 	}
 }
