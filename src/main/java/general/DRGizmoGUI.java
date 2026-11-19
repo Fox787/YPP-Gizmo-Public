@@ -831,6 +831,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		scroll.getVerticalScrollBar().setUnitIncrement(22);
 		recordsTab = scroll;
 		checkBoxBrokenRecordAlert = new JCheckBox("Record alerts");
+		// Saved as soon as it changes: the Records tab has no Save button of its own.
+		checkBoxBrokenRecordAlert.addActionListener(ev -> {
+			if (currentPrefs != null) currentPrefs.putBoolean(BROKENRECORDALERT, checkBoxBrokenRecordAlert.isSelected());
+		});
 		records.add(checkBoxBrokenRecordAlert);
 		records.add(Box.createVerticalStrut(3));
 
