@@ -384,7 +384,8 @@ public final class ActivityTracker {
 		lastReportKey = key;
 		lastPeriod = period;
 		StringBuilder sb = new StringBuilder();
-		for (String block : blocks(period, " ")) sb.append(block).append("\n\n");
+		// No blank line between stations, as in the scan output.
+		for (String block : blocks(period, " ")) sb.append(block).append("\n");
 		lastReportText = sb.toString().trim();
 		return lastReportText;
 	}
