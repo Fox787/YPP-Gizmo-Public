@@ -105,7 +105,7 @@ final class WoodhallowTools {
 		checkBoxWarningSound = option(section, prefs, "30-second warning", "warningsound", true);
 		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
 		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
-		checkBoxForageTimer = option(section, prefs, "Cursed Isles: forage timer", "foragetimer", true);
+		checkBoxForageTimer = option(section, prefs, "Forage timer (Cursed Isles, Woodhallow's lair)", "foragetimer", true);
 		checkBoxForageTimer.setToolTipText("Time left to forage, in a blue bar above the tabs; red in the last 30 seconds");
 		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
 		checkBoxForageSound.setToolTipText("Thalassa's warning sound at 30 seconds left to forage");
@@ -476,12 +476,15 @@ final class WoodhallowTools {
 			Sounds.play(Sounds.PLANK);
 		}
 		String plankText = plankText(toPlank);
-		updateScanRow(now, elapsed, forageLeft, toPlank, plankAlert);
+		// Shown: the Cursed Isles forage (game log), else Woodhallow's last period (chat). Sounds stay on
+		// the Cursed Isles one; the Den's 30-second warning already plays from chat.
+		long shownForageLeft = forageLeft >= 0 ? forageLeft : denForageLeft(now);
+		updateScanRow(now, elapsed, shownForageLeft, toPlank, plankAlert);
 
 		boolean board = elapsed >= 0 && checkBoxRumbleBoard.isSelected();
 		boolean shorthand = elapsed >= 0 && checkBoxRumbleShorthand.isSelected();
-		boolean foraging = elapsed < 0 && forageLeft >= 0 && checkBoxForageTimer.isSelected();
-		updateForageBar(forageLeft, foraging, plankAlert, plankText, plank, toPlank);
+		boolean foraging = elapsed < 0 && shownForageLeft >= 0 && checkBoxForageTimer.isSelected();
+		updateForageBar(shownForageLeft, foraging, plankAlert, plankText, plank, toPlank);
 		// The Rumble tab is the board: with the board off, the timer and shorthand are on the Scan row only.
 		int index = tabbedPane.indexOfComponent(panelRumble);
 		if (board && index < 0) {
@@ -550,6 +553,17 @@ final class WoodhallowTools {
 		labelForage.setToolTipText(tip);
 		Color background = red ? WARNING_RED : FORAGE_BLUE;
 		if (!background.equals(forageBar.getBackground())) forageBar.setBackground(background);
+	}
+
+	/**
+	 * Woodhallow's last period ("Plunder the lair!"), which is all foraging and has no Dnav: milliseconds
+	 * left, from the chat log's period, or -1 when it isn't on. The game log has no forage line for it.
+	 */
+	private long denForageLeft(long now) {
+		StationClock.Period period = stationClock.current();
+		if (period == null || !period.lair || !stationClock.inDen()) return -1;
+		long ends = stationClock.expectedEnd(period);
+		return ends > now && now - period.start < 360_000 ? ends - now : -1;
 	}
 
 	private static String nz(String strategy) { return strategy == null ? "not on the sheet" : strategy; }
