@@ -646,6 +646,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		createRecordOptions(options);
 		woodhallowTools = new WoodhallowTools(window, tabs, globalPrefs, stationClock, activityTracker,
 				options.section("Woodhallow & Rumble", "rumble", false));
+		woodhallowTools.setStatus(text -> printStatus(text, false));
 		createFileOptions(options);
 
 		return options;

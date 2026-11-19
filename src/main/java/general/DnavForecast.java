@@ -18,6 +18,8 @@ public final class DnavForecast {
 	public double teamRate;
 	/** When the team would reach the needed score, from stations opening; 0 if no pace. */
 	public long clearMs;
+	/** The wave's real size in werewolves (unrounded, see DnavPlan), and the points it takes to clear it. */
+	public double realWerewolves, neededPoints;
 
 	/**
 	 * The game rounds the count at random by its fraction: 14.1 is 14 nine times in ten and 15 one
@@ -105,8 +107,11 @@ public final class DnavForecast {
 		f.rawPack = packRaw(people, f.nextFray);
 		f.odds = werewolfOdds(people, f.nextFray);
 		f.werewolves = f.odds.keySet().iterator().next();
-		f.needed = dnavNeeded(f.werewolves);
-		double neededPoints = f.werewolves * POINTS_PER_WEREWOLF;
+		// The work is the wave's exact size, whatever count it shows (DnavPlan).
+		f.realWerewolves = DnavPlan.werewolves(people, f.nextFray);
+		f.neededPoints = DnavPlan.needed(people, f.nextFray);
+		f.needed = (int) Math.ceil(f.neededPoints / POINTS_PER_SCORE - 1e-9);
+		double neededPoints = f.neededPoints;
 		f.stationsMs = stationsMs(people, deaths, fray);
 		f.teamRate = teamPointsPerMin / POINTS_PER_SCORE;
 		if (teamPointsPerMin > 0) f.clearMs = Math.round(neededPoints / teamPointsPerMin * 60_000);
@@ -121,7 +126,7 @@ public final class DnavForecast {
 	/** Score per minute the whole team needs to finish with 30 s to spare. */
 	public double needRate() {
 		long target = stationsMs - 30_000;
-		return target > 0 ? werewolves * POINTS_PER_WEREWOLF / POINTS_PER_SCORE / (target / 60_000.0) : 0;
+		return target > 0 ? neededPoints / POINTS_PER_SCORE / (target / 60_000.0) : 0;
 	}
 
 }

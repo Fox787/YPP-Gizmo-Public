@@ -90,6 +90,12 @@ final class WoodhallowTools {
 	private List<Integer> ahoyChoices = List.of();
 	private DRGroupData lastReport;
 	private ActivityTracker.Period reportedPeriod;
+	/** What the Next Dnav box last showed, for the Dnav report. */
+	private DnavForecast lastForecast;
+	private Map<String, String> lastForecastLines = Map.of();
+	/** One line per second during stations: what each wolf count source said (for the Dnav report). */
+	private final java.util.ArrayDeque<String> wolfSamples = new java.util.ArrayDeque<>();
+	private String lastDnavShown = "";
 
 	WoodhallowTools(Window game, JTabbedPane tabs, Preferences prefs, StationClock clock, ActivityTracker tracker,
 					JPanel section) {
@@ -114,7 +120,11 @@ final class WoodhallowTools {
 		checkBoxRatingsExport = option(section, prefs, "Export dr_ratings.jsonl", "drratingsexport", true);
 		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
 		checkBoxExtendedDnav = option(section, prefs, "Extended Dnav (solo strategies in Next Dnav)", "extendeddnav", false);
-		checkBoxExtendedDnav.setToolTipText("Also show the solo navigation strategies, with their chances, under the Next Dnav forecast");
+		checkBoxExtendedDnav.setToolTipText("Also show the two fastest solo lines (with and without a Booch) under the Next Dnav forecast");
+		addSeconds(section, prefs, "Solo triple (s)", "dnavtriplesec", 40, v -> tripleSeconds = v,
+				"How long you take to build a triple; picks the fastest solo line");
+		addSeconds(section, prefs, "Solo end single (s)", "dnavsinglesec", 12, v -> singleSeconds = v,
+				"How long a single takes at the very end of a solo line");
 		addVolume(section, prefs);
 		createDnavTab();
 		createRumbleTab();
@@ -265,6 +275,38 @@ final class WoodhallowTools {
 		section.add(grid);
 	}
 
+	/** Seconds per triple and per end single for the solo line (DnavPlan). */
+	private volatile int tripleSeconds = 40, singleSeconds = 12;
+
+	private static void addSeconds(JPanel section, Preferences prefs, String label, String key, int defaultValue,
+								   java.util.function.IntConsumer apply, String tip) {
+		int value = Math.max(1, Math.min(300, prefs.getInt(key, defaultValue)));
+		apply.accept(value);
+		JSpinner spinner = new JSpinner(new SpinnerNumberModel(value, 1, 300, 1));
+		spinner.setToolTipText(tip);
+		spinner.addChangeListener(ev -> {
+			int v = (Integer) spinner.getValue();
+			apply.accept(v);
+			prefs.putInt(key, v);
+		});
+		JLabel name = new JLabel(label);
+		name.setLabelFor(spinner);
+		name.setToolTipText(tip);
+		JPanel row = new JPanel(new BorderLayout(6, 0));
+		row.setAlignmentX(Component.LEFT_ALIGNMENT);
+		row.add(name, BorderLayout.CENTER);
+		row.add(spinner, BorderLayout.EAST);
+		row.setMaximumSize(new Dimension(Integer.MAX_VALUE, spinner.getPreferredSize().height));
+		section.add(row);
+	}
+
+	/** The two solo lines for the Dnav before {@code fray}: the fastest, then the fastest with the other Booch choice. */
+	private List<DnavPlan.Line> plan(int fray) {
+		int crew = stationClock.crew();
+		if (crew <= 0 || fray < 2 || fray > 6) return List.of();
+		return DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds);
+	}
+
 	private static void addVolume(JPanel section, Preferences prefs) {
 		Sounds.setVolume(prefs.getInt("soundvolume", 100));
 		JLabel label = new JLabel("Volume " + Sounds.volume() + "%");
@@ -302,6 +344,8 @@ final class WoodhallowTools {
 				lastDnavTick = now;
 				playWerewolfSounds(now);
 				updateDnav(now);
+				boolean den = stationClock.inDen() || stationClock.current() != null && now - stationClock.current().start < 900_000;
+				if (buttonDnavProblem.isVisible() != den) { buttonDnavProblem.setVisible(den); dnavArea.revalidate(); }
 				// Not while stations are open: the Dnav box has the current wave then.
 				boolean forecast = dnavEnds <= now && updateForecast();
 				if (forecast != rumbleForecast.isVisible()) rumbleForecast.setVisible(forecast);
@@ -435,22 +479,40 @@ final class WoodhallowTools {
 		Map<Integer, Double> odds = half < 0
 				? DnavForecast.werewolfOdds(Math.max(1, stationClock.crew()), stationClock.frayNumber()) : Map.of();
 		List<Integer> choices = half < 0 ? odds.keySet().stream().sorted().toList() : List.of(2 * half, 2 * half + 1);
+		int[] seen = {-2, -2};
 		WolfCount.Reading reading = wolfCount.read(() -> {
-					int fromScene = denWolves.read(game);
-					return fromScene >= 0 ? fromScene : AhoyWolfCount.read(game);
+					int fromScene = seen[0] = denWolves.read(game);
+					return fromScene >= 0 ? fromScene : (seen[1] = AhoyWolfCount.read(game));
 				},
 				chat, period.start, now, choices);
+		wolfSamples.addLast(String.format(java.util.Locale.ROOT,
+				"%s  t+%5.1fs  chat=%d (half %d, changed t+%.1fs)  %s=%s  shown=%d  start=%d%s",
+				timeOfDay(now), (now - period.start) / 1000.0, chat.remaining(), chat.atHalf(),
+				chat.changedAt() > 0 ? (chat.changedAt() - period.start) / 1000.0 : -1.0,
+				"island", seen[0] + (seen[1] == -2 ? "" : " ahoy=" + seen[1]),
+				reading.remaining(), reading.starting(), manualStartingWolves >= 0 ? " (clicked " + manualStartingWolves + ")" : ""));
+		if (wolfSamples.size() > 1200) wolfSamples.removeFirst();
 
 		ahoyRow.setVisible(reading.starting() < 0);
 		if (ahoyRow.isVisible()) updateStartingChoices(choices);
 		int startingWolves = reading.starting() >= 0 ? reading.starting() : manualStartingWolves;
-		String strategy = startingWolves >= 0 ? nz(SoloNavStrategy.forWerewolves(startingWolves))
-				: half >= 0 ? twoStrategies(2 * half, 2 * half + 1) : strategiesWithOdds(odds);
+		// The work is the wave's exact size from the crew and fray, whatever count it shows (DnavPlan).
+		List<DnavPlan.Line> lines = plan(stationClock.frayNumber());
+		String strategy = lines.isEmpty() ? (startingWolves >= 0 ? nz(SoloNavStrategy.forWerewolves(startingWolves))
+				: half >= 0 ? twoStrategies(2 * half, 2 * half + 1) : strategiesWithOdds(odds))
+				: lines.get(0).name() + " (" + lines.get(0).time() + ")"
+				+ (lines.size() > 1 ? "\nor " + lines.get(1).name() + " (" + lines.get(1).time() + ")" : "");
 		if (!("Solo: " + strategy).equals(labelStrategy.getText())) {
 			labelStrategy.setText("Solo: " + strategy);
 			panelDnav.revalidate();
 		}
 		showPace(reading, startingWolves, half, period.start, ends);
+		lastDnavShown = labelWolvesLeft.getText() + " | Solo: " + strategy.replace('\n', ' ');
+	}
+
+	private static String timeOfDay(long ms) {
+		return java.time.LocalTime.ofInstant(java.time.Instant.ofEpochMilli(ms), java.time.ZoneId.systemDefault())
+				.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
 	}
 
 	private void updateStartingChoices(List<Integer> choices) {
@@ -552,8 +614,92 @@ final class WoodhallowTools {
 			rumbleForecast.setAlignmentX(Component.LEFT_ALIGNMENT);
 			dnavArea.add(panelDnav);
 			dnavArea.add(rumbleForecast);
+			buttonDnavProblem.setAlignmentX(Component.LEFT_ALIGNMENT);
+			buttonDnavProblem.setMargin(new Insets(1, 6, 1, 6));
+			buttonDnavProblem.setToolTipText("Saves everything Gizmo knows about this Dnav (times to the millisecond, wolf counts,"
+					+ " chat, plan) to the data folder's dnav_reports, to compare with your video");
+			buttonDnavProblem.addActionListener(ev -> reportDnavProblem());
+			buttonDnavProblem.setVisible(false);
+			dnavArea.add(buttonDnavProblem);
 		}
 		return dnavArea;
+	}
+
+	private final JButton buttonDnavProblem = new JButton("That didn't work");
+	private java.util.function.Consumer<String> status = text -> { };
+	void setStatus(java.util.function.Consumer<String> status) { this.status = status; }
+
+	/** Writes a plain-text report of the current or last Dnav, to line up with video of it. */
+	private void reportDnavProblem() {
+		long now = System.currentTimeMillis();
+		StringBuilder r = new StringBuilder();
+		java.util.function.Consumer<String> line = t -> r.append(t).append(System.lineSeparator());
+		line.accept("Gizmo Dnav report, clicked " + java.time.LocalDateTime.now() + " (" + now + " ms)");
+		GameLog.Info who = GameLog.read();
+		if (who != null) line.accept("Pirate " + who.pirate + ", ocean " + who.ocean);
+		int crew = stationClock.crew(), fray = stationClock.frayNumber();
+		line.accept("In den " + stationClock.inDen() + ", crew " + crew + ", frays done " + (fray - 1)
+				+ ", next fray " + fray + ", deaths this fray " + stationClock.frayDeaths());
+		StationClock.Period cur = stationClock.current(), last = stationClock.lastEnded(now);
+		for (StationClock.Period p : new StationClock.Period[]{cur, last}) {
+			if (p == null) continue;
+			line.accept((p == cur ? "Current" : "Last ended") + " stations: opened " + timeOfDay(p.start)
+					+ ", expected end " + timeOfDay(stationClock.expectedEnd(p)) + (p.lair ? " (lair)" : ""));
+		}
+		line.accept("");
+		line.accept("Solo settings: triple " + tripleSeconds + " s, end single " + singleSeconds + " s, Booch "
+				+ DnavPlan.BOOCH_SECONDS + " s");
+		for (int f : new int[]{fray - 1, fray}) {
+			if (crew <= 0 || f < 2 || f > 6) continue;
+			line.accept(String.format(java.util.Locale.ROOT, "Dnav before fray %d: pack %.3f x share %.1f = %.3f werewolves,"
+					+ " total %.1f points, clear at %.1f", f, DnavPlan.pack(crew, f), DnavPlan.share(f),
+					DnavPlan.werewolves(crew, f), DnavPlan.total(crew, f), DnavPlan.needed(crew, f)));
+			for (DnavPlan.Line l : plan(f)) {
+				StringBuilder steps = new StringBuilder();
+				double total = DnavPlan.total(crew, f);
+				for (DnavPlan.Step st : l.steps())
+					steps.append(String.format(java.util.Locale.ROOT, "  %s @%ds %d pts (bar %.0f%%)", st.what(), st.seconds(),
+							st.points(), 100 * Math.max(0, total - st.points()) / total));
+				line.accept("  " + l.name() + " " + l.time() + " = " + l.points() + " pts:" + steps);
+			}
+		}
+		if (lastForecast != null)
+			line.accept(String.format(java.util.Locale.ROOT, "Next Dnav box: fray %d, wolves %d %s, need %.2f/min, team %.2f/min,"
+					+ " time %s, clear in %s, lines %s", lastForecast.nextFray, lastForecast.werewolves, lastForecast.odds,
+					lastForecast.needRate(), lastForecast.teamRate, DnavForecast.mmss(lastForecast.stationsMs),
+					DnavForecast.mmss(lastForecast.clearMs), lastForecastLines));
+		line.accept("Dnav box last showed: " + lastDnavShown);
+		line.accept("Wolf count source: the island (DenWolves), else Ahoy; chat when newer");
+		line.accept("");
+		line.accept("== Wolf count, once a second during stations (t = since stations opened)");
+		for (String sample : wolfSamples) line.accept(sample);
+		line.accept("");
+		line.accept("== Your puzzles (game log)");
+		for (String p : activityTracker.recentPuzzles()) line.accept(p);
+		line.accept("");
+		line.accept("== Last duty report scanned");
+		if (lastReport != null) line.accept(lastReport.toString());
+		if (reportedPeriod != null)
+			for (ActivityTracker.Row row : reportedPeriod.rows)
+				line.accept(String.format(java.util.Locale.ROOT, "%s %s score %d tokens %s %.1fs%s", row.station, row.pirate,
+						row.score, java.util.Arrays.toString(row.tokens), row.ms / 1000.0, row.exact ? " exact" : ""));
+		line.accept("");
+		line.accept("== Chat (last messages, oldest first)");
+		for (String m : stationClock.recentMessages()) line.accept(m);
+
+		String name = "dnav_report_" + java.time.LocalDateTime.now()
+				.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".txt";
+		try {
+			java.nio.file.Path dir = GameLog.dataFolder().resolve("dnav_reports");
+			java.nio.file.Files.createDirectories(dir);
+			java.nio.file.Path file = dir.resolve(name);
+			java.nio.file.Files.writeString(file, r.toString(), java.nio.charset.StandardCharsets.UTF_8);
+			status.accept("Dnav report saved: " + file);
+			buttonDnavProblem.setText("Saved");
+			new Timer(3000, ev -> buttonDnavProblem.setText("That didn't work")) {{ setRepeats(false); start(); }};
+		} catch (java.io.IOException | RuntimeException e) {
+			status.accept("Dnav report failed: " + e);
+		}
 	}
 
 	private void updateRumble(long now) {
@@ -706,8 +852,12 @@ final class WoodhallowTools {
 			for (DRIndividualData d : lastReport.data.get("Navigating").values())
 				team += DnavForecast.navPoints(d.getTokens()) / (navMs(d.getName(), len) / 60000.0);
 		DnavForecast f = DnavForecast.during(fray, crew, deaths, team);
-		// The game rounds the werewolf count at random by its fraction, so give both strategies with odds.
-		rumbleForecast.show(f, DnavPanel.strategies(f.odds));
+		// The work is the wave's exact size (DnavPlan), so the solo lines don't depend on the count shown.
+		Map<String, String> lines = new java.util.LinkedHashMap<>();
+		for (DnavPlan.Line l : plan(f.nextFray)) lines.put(l.name(), l.time());
+		lastForecast = f;
+		lastForecastLines = lines;
+		rumbleForecast.show(f, lines);
 		return true;
 	}
 
