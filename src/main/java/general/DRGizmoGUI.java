@@ -54,46 +54,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			TOKENCANNONBALL = "tokencannonball",
 			CHESTSMALL = "chestsmall", CHESTMEDIUM = "chestmedium", CHESTLARGE = "chestlarge",
 
-			CCENTRYINDIVIDUAL = "ccentryindividual",
-			CCENTRY7 = "ccentry7", CCENTRY6 = "ccentry6", CCENTRY5 = "ccentry5", CCENTRY4 = "ccentry4",
-			CCENTRY3 = "ccentry3", CCENTRY2 = "ccentry2", CCENTRY1 = "ccentry1",
-
-			CCFORAGEINDIVIDUAL = "ccforageindividual",
-			CCFORAGE7 = "ccforage7", CCFORAGE6 = "ccforage6", CCFORAGE5 = "ccforage5", CCFORAGE4 = "ccforage4",
-			CCFORAGE3 = "ccforage3", CCFORAGE2 = "ccforage2", CCFORAGE1 = "ccforage1",
-
-			FULLENTRYINDIVIDUAL = "fullentryindividual",
-			FULLENTRY7 = "fullentry7", FULLENTRY6 = "fullentry6", FULLENTRY5 = "fullentry5", FULLENTRY4 = "fullentry4",
-			FULLENTRY3 = "fullentry3", FULLENTRY2 = "fullentry2", FULLENTRY1 = "fullentry1",
-
-			SINGLEDRINDIVIDUAL = "singledrindividual",
-			SINGLEDR7 = "singledr7", SINGLEDR6 = "singledr6", SINGLEDR5 = "singledr5", SINGLEDR4 = "singledr4",
-			SINGLEDR3 = "singledr3", SINGLEDR2 = "singledr2", SINGLEDR1 = "singledr1",
-
-			// Lair records. Crew keys end in the crew size (12, 7, 6, 5, 4).
-			LAIRICS = "lairics", LAIRCHESTS = "lairchests",
-			LAIRTOTALCHESTS = "lairtotalchests", LAIRFRAY = "lairfray", LAIRIC = "lairic",
-			LAIRCARPSCORE = "laircarpscore", LAIRCARPHOLES = "laircarpholes", LAIRVAMPIREPROOF = "lairvampireproof",
-
-			// Wolves records (placeholder).
-			WOLVESFURRBALLS4 = "wolvesfurrballs4",
 			TREEDATA = "treedata";
 
 			private static final String[] GLOBAL_SETTINGS = {
-				// CC Records - these are records, so they should be global
-				CCENTRYINDIVIDUAL, CCENTRY7, CCENTRY6, CCENTRY5, CCENTRY4, CCENTRY3, CCENTRY2, CCENTRY1,
-				CCFORAGEINDIVIDUAL, CCFORAGE7, CCFORAGE6, CCFORAGE5, CCFORAGE4, CCFORAGE3, CCFORAGE2, CCFORAGE1,
-
-				// Score Records - also records, so global
-				SINGLEDRINDIVIDUAL, SINGLEDR7, SINGLEDR6, SINGLEDR5, SINGLEDR4, SINGLEDR3, SINGLEDR2, SINGLEDR1,
-				FULLENTRYINDIVIDUAL, FULLENTRY7, FULLENTRY6, FULLENTRY5, FULLENTRY4, FULLENTRY3, FULLENTRY2, FULLENTRY1,
-
-				// Lair and Wolves records
-				LAIRICS + "12", LAIRICS + "7", LAIRICS + "6", LAIRICS + "5", LAIRICS + "4",
-				LAIRCHESTS + "12", LAIRCHESTS + "7", LAIRCHESTS + "6", LAIRCHESTS + "5", LAIRCHESTS + "4",
-				LAIRTOTALCHESTS, LAIRFRAY, LAIRIC, LAIRCARPSCORE, LAIRCARPHOLES, LAIRVAMPIREPROOF,
-				WOLVESFURRBALLS4,
-
 				// Window size - global
 				"width", "height",
 
@@ -143,22 +106,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JFormattedTextField formattedTextFieldTokenCircle, formattedTextFieldTokenDiamond, formattedTextFieldTokenPlus, formattedTextFieldTokenCross, formattedTextFieldTokenThrall;
 	private JFormattedTextField formattedTextFieldCannonball;
 	private JFormattedTextField formattedTextFieldSmallChest, formattedTextFieldMediumChest, formattedTextFieldLargeChest;
-	private JFormattedTextField formattedTextFieldEntryIndividual, formattedTextFieldEntry7, formattedTextFieldEntry6,
-		formattedTextFieldEntry5, formattedTextFieldEntry4, formattedTextFieldEntry3, formattedTextFieldEntry2, formattedTextFieldEntry1;
-	private JFormattedTextField formattedTextFieldForageIndividual, formattedTextFieldForage7, formattedTextFieldForage6,
-	formattedTextFieldForage5, formattedTextFieldForage4, formattedTextFieldForage3, formattedTextFieldForage2, formattedTextFieldForage1;
-
-	private JFormattedTextField formattedTextFieldSingleDRIndividual, formattedTextFieldSingleDR7, formattedTextFieldSingleDR6,
-			formattedTextFieldSingleDR5, formattedTextFieldSingleDR4, formattedTextFieldSingleDR3, formattedTextFieldSingleDR2, formattedTextFieldSingleDR1;
-	private JFormattedTextField formattedTextFieldFullEntryIndividual, formattedTextFieldFullEntry7, formattedTextFieldFullEntry6,
-			formattedTextFieldFullEntry5, formattedTextFieldFullEntry4, formattedTextFieldFullEntry3, formattedTextFieldFullEntry2, formattedTextFieldFullEntry1;
-
-	/** Records tab: Lair crew records follow RecordChecker.LAIR_CREW_SIZES. */
-	private final JFormattedTextField[] formattedTextFieldLairICs = new JFormattedTextField[RecordChecker.LAIR_CREW_SIZES.length];
-	private final JFormattedTextField[] formattedTextFieldLairChests = new JFormattedTextField[RecordChecker.LAIR_CREW_SIZES.length];
-	private JFormattedTextField formattedTextFieldLairTotalChests, formattedTextFieldLairFray, formattedTextFieldLairIC,
-			formattedTextFieldLairCarpScore, formattedTextFieldLairCarpHoles, formattedTextFieldLairVampireProof;
-	private JFormattedTextField formattedTextFieldWolvesFurrballs4;
 
 	private RadioButtonProfileSelector profileSelector;
 	private Preferences currentPrefs;
@@ -181,6 +128,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JButton buttonGetRecords;
 	private JLabel labelRecordStatus;
 	private final Map<String, JPanel> recordPanels = new LinkedHashMap<>();
+	/** The Records tab: the voyage records (Puzzle Practice), their alerts and actions. */
+	private JComponent recordsTab;
 	private String logPirate; // Accessed by the log worker only.
 	private RunLog runLog;
 	private StationClock stationClock;
@@ -464,76 +413,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		try { return Double.parseDouble(f.getText().replaceAll(",", "").trim()); } catch (NumberFormatException e) { return def; }
 	}
 
-	/** Titled box for a column of records on the Records tab. */
-	private static JPanel recordBox(String title) {
-		JPanel p = new JPanel();
-		p.setAlignmentX(Component.LEFT_ALIGNMENT);
-		p.setAlignmentY(Component.TOP_ALIGNMENT);
-		p.setBorder(new TitledBorder(null, title, TitledBorder.LEADING, TitledBorder.TOP, null, null));
-		p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-		return p;
-	}
-
-	/** Label and whole-number field on one line, added to parent. Each field gets its own formatter. */
-	private static JFormattedTextField recordField(JPanel parent, String label, String tip) {
-		return recordField(parent, label, tip, 92);
-	}
-
-	private static JFormattedTextField recordField(JPanel parent, String label, String tip, int labelWidth) {
-		NumberFormatter f = new NumberFormatter(NumberFormat.getIntegerInstance());
-		f.setValueClass(Integer.class);
-		f.setMinimum(0);
-		f.setAllowsInvalid(true);
-
-		Box row = Box.createHorizontalBox();
-		row.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel l = new JLabel(label);
-		l.setPreferredSize(new Dimension(labelWidth, 20));
-		l.setMinimumSize(new Dimension(labelWidth, 20));
-		l.setMaximumSize(new Dimension(labelWidth, 20));
-		row.add(l);
-
-		JFormattedTextField field = new JFormattedTextField(f);
-		field.setPreferredSize(new Dimension(40, 20));
-		field.setMinimumSize(new Dimension(40, 20));
-		field.setMaximumSize(new Dimension(40, 20));
-		if (tip != null) {
-			l.setToolTipText(tip);
-			field.setToolTipText(tip);
-		}
-		row.add(field);
-		parent.add(row);
-		return field;
-	}
-
-	/** The Lair records as currently typed on the Records tab (blank counts as 0, i.e. not set). */
-	private RecordChecker.LairRecords lairRecords() {
-		RecordChecker.LairRecords r = new RecordChecker.LairRecords();
-		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
-			r.crewICs[i] = intOf(formattedTextFieldLairICs[i], 0);
-			r.crewChests[i] = intOf(formattedTextFieldLairChests[i], 0);
-		}
-		r.totalChests = intOf(formattedTextFieldLairTotalChests, 0);
-		r.fray = intOf(formattedTextFieldLairFray, 0);
-		r.ic = intOf(formattedTextFieldLairIC, 0);
-		r.carpScore = intOf(formattedTextFieldLairCarpScore, 0);
-		r.carpHoles = intOf(formattedTextFieldLairCarpHoles, 0);
-		r.vampireProof = intOf(formattedTextFieldLairVampireProof, 0);
-		return r;
-	}
-
-	/** Prints broken or tied records under a heading naming the activity; nothing when there are none. */
-	private void announceRecords(String activity, String... found) {
-		StringBuilder sb = new StringBuilder();
-		for (String f : found) if (f != null && !f.trim().isEmpty()) sb.append(f.trim()).append(System.getProperty("line.separator"));
-		if (sb.length() == 0) {
-			printStatus("Broken Record Alert (" + activity + "): no records broken", true);
-			return;
-		}
-		printStatus("*** " + activity + " record! ***", false);
-		printStatus(sb.toString().trim(), false);
-	}
-
 	private String recordsOcean() {
 		GameLog.Info identity = GameLog.read();
 		if (identity != null && identity.ocean != null && !identity.ocean.isBlank()) return identity.ocean;
@@ -612,48 +491,14 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private void checkScanRecords(DRGroupData data) {
 		checkDrRecords(data);
 		String activity = RecordChecker.activityOf(data);
-		if (RecordChecker.CI.equals(activity)) {
-			announceRecords("manual CI",
-				data.getBrokenRecords(intOf(formattedTextFieldForageIndividual, 0),
-					intOf(formattedTextFieldForage1, 0), intOf(formattedTextFieldForage2, 0),
-					intOf(formattedTextFieldForage3, 0), intOf(formattedTextFieldForage4, 0),
-					intOf(formattedTextFieldForage5, 0), intOf(formattedTextFieldForage6, 0),
-					intOf(formattedTextFieldForage7, 0)),
-				data.getBrokenRecords(doubleOf(formattedTextFieldSingleDRIndividual, 0),
-					doubleOf(formattedTextFieldSingleDR1, 0), doubleOf(formattedTextFieldSingleDR2, 0),
-					doubleOf(formattedTextFieldSingleDR3, 0), doubleOf(formattedTextFieldSingleDR4, 0),
-					doubleOf(formattedTextFieldSingleDR5, 0), doubleOf(formattedTextFieldSingleDR6, 0),
-					doubleOf(formattedTextFieldSingleDR7, 0)));
-		} else if (RecordChecker.LAIR.equals(activity)) {
-			announceRecords("manual Lair", RecordChecker.lairFray(data, lairRecords()));
-		} else if (activity == null) {
+		if (activity == null) {
 			printStatus("Broken Record Alert: couldn't tell if this report is CI, Lair or Den", true);
 		}
 	}
 
 	/** Score All: checks the entry (every DR in the tree), each activity against its own records. */
 	private void checkEntryRecords(DRPersistantData all) {
-		DRPersistantData ci = RecordChecker.only(all, RecordChecker.CI);
 		DRPersistantData lair = RecordChecker.only(all, RecordChecker.LAIR);
-		boolean onlyCiForage = !ci.isEmpty() && all.groups().stream().allMatch(report ->
-				RecordChecker.CI.equals(RecordChecker.activityOf(report)) && report.data.containsKey(RecordChecker.FORAGE));
-		if (!ci.isEmpty() && !onlyCiForage)
-			printStatus("CI entry checks need a tree containing only Cursed Isles forage reports.", false);
-
-		if (onlyCiForage) {
-			// getBrokenRecords works on copies, so the scores printed above aren't changed.
-			announceRecords("manual CI",
-				ci.getBrokenRecords(intOf(formattedTextFieldEntryIndividual, 0),
-					intOf(formattedTextFieldEntry1, 0), intOf(formattedTextFieldEntry2, 0),
-					intOf(formattedTextFieldEntry3, 0), intOf(formattedTextFieldEntry4, 0),
-					intOf(formattedTextFieldEntry5, 0), intOf(formattedTextFieldEntry6, 0),
-					intOf(formattedTextFieldEntry7, 0)),
-				ci.getBrokenRecords(doubleOf(formattedTextFieldFullEntryIndividual, 0),
-					doubleOf(formattedTextFieldFullEntry1, 0), doubleOf(formattedTextFieldFullEntry2, 0),
-					doubleOf(formattedTextFieldFullEntry3, 0), doubleOf(formattedTextFieldFullEntry4, 0),
-					doubleOf(formattedTextFieldFullEntry5, 0), doubleOf(formattedTextFieldFullEntry6, 0),
-					doubleOf(formattedTextFieldFullEntry7, 0)));
-		}
 		if (!lair.isEmpty()) checkLairEntries(lair);
 	}
 
@@ -671,145 +516,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				continue;
 			}
 			printRecordLines(LairRecordChecks.entry(voyageRecords, rounds, evidence, recordsOcean()));
-			DRPersistantData verified = new DRPersistantData();
-			for (DRGroupData report : rounds) verified.add(report);
-			announceRecords("manual Lair", RecordChecker.lairEntry(verified, lairRecords()));
 		}
 		if (missingEvidence)
 			printStatus("Lair entry checks need a scan of every fray and matching loot in the chat log.", false);
-	}
-
-	/** Score records hold decimals; every other record is a whole number. */
-	private static boolean isDecimalRecord(String key) {
-		return key.startsWith("singledr") || key.startsWith("fullentry");
-	}
-
-	/** Every record on the Records tab by its settings key, in the order shown. */
-	private java.util.LinkedHashMap<String, JFormattedTextField> recordFields() {
-		java.util.LinkedHashMap<String, JFormattedTextField> m = new java.util.LinkedHashMap<>();
-		m.put(CCENTRYINDIVIDUAL, formattedTextFieldEntryIndividual);
-		m.put(CCENTRY7, formattedTextFieldEntry7); m.put(CCENTRY6, formattedTextFieldEntry6);
-		m.put(CCENTRY5, formattedTextFieldEntry5); m.put(CCENTRY4, formattedTextFieldEntry4);
-		m.put(CCENTRY3, formattedTextFieldEntry3); m.put(CCENTRY2, formattedTextFieldEntry2);
-		m.put(CCENTRY1, formattedTextFieldEntry1);
-		m.put(CCFORAGEINDIVIDUAL, formattedTextFieldForageIndividual);
-		m.put(CCFORAGE7, formattedTextFieldForage7); m.put(CCFORAGE6, formattedTextFieldForage6);
-		m.put(CCFORAGE5, formattedTextFieldForage5); m.put(CCFORAGE4, formattedTextFieldForage4);
-		m.put(CCFORAGE3, formattedTextFieldForage3); m.put(CCFORAGE2, formattedTextFieldForage2);
-		m.put(CCFORAGE1, formattedTextFieldForage1);
-		m.put(SINGLEDRINDIVIDUAL, formattedTextFieldSingleDRIndividual);
-		m.put(SINGLEDR7, formattedTextFieldSingleDR7); m.put(SINGLEDR6, formattedTextFieldSingleDR6);
-		m.put(SINGLEDR5, formattedTextFieldSingleDR5); m.put(SINGLEDR4, formattedTextFieldSingleDR4);
-		m.put(SINGLEDR3, formattedTextFieldSingleDR3); m.put(SINGLEDR2, formattedTextFieldSingleDR2);
-		m.put(SINGLEDR1, formattedTextFieldSingleDR1);
-		m.put(FULLENTRYINDIVIDUAL, formattedTextFieldFullEntryIndividual);
-		m.put(FULLENTRY7, formattedTextFieldFullEntry7); m.put(FULLENTRY6, formattedTextFieldFullEntry6);
-		m.put(FULLENTRY5, formattedTextFieldFullEntry5); m.put(FULLENTRY4, formattedTextFieldFullEntry4);
-		m.put(FULLENTRY3, formattedTextFieldFullEntry3); m.put(FULLENTRY2, formattedTextFieldFullEntry2);
-		m.put(FULLENTRY1, formattedTextFieldFullEntry1);
-		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++)
-			m.put(LAIRICS + RecordChecker.LAIR_CREW_SIZES[i], formattedTextFieldLairICs[i]);
-		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++)
-			m.put(LAIRCHESTS + RecordChecker.LAIR_CREW_SIZES[i], formattedTextFieldLairChests[i]);
-		m.put(LAIRTOTALCHESTS, formattedTextFieldLairTotalChests);
-		m.put(LAIRFRAY, formattedTextFieldLairFray);
-		m.put(LAIRIC, formattedTextFieldLairIC);
-		m.put(LAIRCARPSCORE, formattedTextFieldLairCarpScore);
-		m.put(LAIRCARPHOLES, formattedTextFieldLairCarpHoles);
-		m.put(LAIRVAMPIREPROOF, formattedTextFieldLairVampireProof);
-		m.put(WOLVESFURRBALLS4, formattedTextFieldWolvesFurrballs4);
-		return m;
-	}
-
-	/** Saves only the records (they're global, so every profile sees them). */
-	private void saveRecords() {
-		for (java.util.Map.Entry<String, JFormattedTextField> e : recordFields().entrySet()) {
-			if (isDecimalRecord(e.getKey())) globalPrefs.putDouble(e.getKey(), doubleOf(e.getValue(), 0));
-			else globalPrefs.putInt(e.getKey(), intOf(e.getValue(), 0));
-		}
-		try {
-			globalPrefs.flush();
-		} catch (BackingStoreException ex) {
-			printStatus("Error saving records: " + ex.getMessage(), false);
-		}
-	}
-
-	/** Reads a shared records file into the Records tab and saves it. Records not in the file are left as they are. */
-	private void importRecords() {
-		JFileChooser chooser = new JFileChooser();
-		chooser.setDialogTitle("Import Records");
-		chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Records file (.json, .txt)", "json", "txt"));
-		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-		java.io.File file = chooser.getSelectedFile();
-
-		java.util.Map<String, String> read;
-		try {
-			read = RecordsFile.parse(new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8));
-		} catch (IOException | IllegalArgumentException ex) {
-			JOptionPane.showMessageDialog(this, "Couldn't read " + file.getName() + ":\n" + ex.getMessage(),
-					"Import Records", JOptionPane.ERROR_MESSAGE);
-			return;
-		}
-
-		java.util.LinkedHashMap<String, JFormattedTextField> fields = recordFields();
-		java.util.List<String> unknown = new ArrayList<>();
-		int known = 0;
-		for (String key : read.keySet()) {
-			if (!fields.containsKey(key)) {
-				unknown.add(key);
-				continue;
-			}
-			double value = Double.parseDouble(read.get(key));
-			if (value < 0 || (!isDecimalRecord(key) && value > Integer.MAX_VALUE)) {
-				JOptionPane.showMessageDialog(this, "Out-of-range record: " + key, "Import Records", JOptionPane.ERROR_MESSAGE);
-				return;
-			}
-			known++;
-		}
-		if (known == 0) {
-			JOptionPane.showMessageDialog(this, file.getName() + " has no records Gizmo knows.",
-					"Import Records", JOptionPane.WARNING_MESSAGE);
-			return;
-		}
-		int ok = JOptionPane.showConfirmDialog(this, "Import " + known + " records from " + file.getName()
-				+ "?\nThis replaces those thresholds on the Manual records tab.", "Import Records", JOptionPane.OK_CANCEL_OPTION);
-		if (ok != JOptionPane.OK_OPTION) return;
-
-		for (java.util.Map.Entry<String, String> e : read.entrySet()) {
-			JFormattedTextField f = fields.get(e.getKey());
-			if (f == null) continue;
-			double v = Double.parseDouble(e.getValue());
-			if (isDecimalRecord(e.getKey())) f.setValue(v);
-			else f.setValue((int) Math.round(v));
-		}
-		saveRecords();
-		printStatus("Imported " + known + " records from " + file.getName(), false);
-		if (!unknown.isEmpty()) printStatus("Not recognised, skipped: " + String.join(", ", unknown), false);
-	}
-
-	/** Writes every record on the Records tab to a file others can import. */
-	private void exportRecords() {
-		JFileChooser chooser = new JFileChooser();
-		chooser.setDialogTitle("Export Records");
-		chooser.setSelectedFile(new java.io.File("gizmo-records.json"));
-		if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
-		java.io.File file = chooser.getSelectedFile();
-		if (file.exists() && JOptionPane.showConfirmDialog(this, file.getName() + " already exists. Replace it?",
-				"Export Records", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
-
-		java.util.LinkedHashMap<String, String> out = new java.util.LinkedHashMap<>();
-		for (java.util.Map.Entry<String, JFormattedTextField> e : recordFields().entrySet()) {
-			if (isDecimalRecord(e.getKey()))
-				out.put(e.getKey(), new java.math.BigDecimal(doubleOf(e.getValue(), 0)).setScale(2, RoundingMode.HALF_UP).toPlainString());
-			else
-				out.put(e.getKey(), String.valueOf(intOf(e.getValue(), 0)));
-		}
-		try {
-			java.nio.file.Files.write(file.toPath(), RecordsFile.write(out).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-			printStatus("Records exported to " + file.getAbsolutePath(), false);
-		} catch (IOException ex) {
-			printStatus("Export failed: " + ex.getMessage(), false);
-		}
 	}
 
 	private JComponent folderRow(String name, JTextField field, JButton browse) {
@@ -1109,8 +818,18 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		files.add(folderRow("Data folder", textFieldDataFolder, buttonDataBrowse));
 	}
 
+	/** Builds the Records tab's content; the per-voyage boxes fold open like the Options sections. */
 	private void createRecordOptions(OptionsPanel options) {
-		JPanel records = options.section("Voyage records", "records", false);
+		JPanel records = new JPanel();
+		records.setLayout(new BoxLayout(records, BoxLayout.Y_AXIS));
+		records.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+		JPanel top = new JPanel(new BorderLayout());
+		top.add(records, BorderLayout.NORTH);
+		JScrollPane scroll = new JScrollPane(top, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		scroll.setBorder(BorderFactory.createEmptyBorder());
+		scroll.getVerticalScrollBar().setUnitIncrement(22);
+		recordsTab = scroll;
 		checkBoxBrokenRecordAlert = new JCheckBox("Record alerts");
 		records.add(checkBoxBrokenRecordAlert);
 		records.add(Box.createVerticalStrut(3));
@@ -1304,7 +1023,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		doubleFormatter.setAllowsInvalid(true);
 
 		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
-		getContentPane().add(tabbedPane, BorderLayout.CENTER);
+		// The forage bar (WoodhallowTools) goes above the tabs once it exists, so it shows on any tab.
+		JPanel tabsArea = new JPanel(new BorderLayout());
+		tabsArea.add(tabbedPane, BorderLayout.CENTER);
+		getContentPane().add(tabsArea, BorderLayout.CENTER);
 
 		JPanel panelOutput = new JPanel();
 		panelOutput.setDoubleBuffered(false);
@@ -1484,598 +1206,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			activityTracker = new ActivityTracker(window, stationClock);
 			runLog = new RunLog(globalPrefs);
 			tabbedPane.addTab("Options", createOptions(tabbedPane, integerFormatter));
-
-			// Records tab: one box per activity. Broken Record Alert checks the box for the activity scanned.
-			JPanel panelRecords = new JPanel();
-			tabbedPane.addTab("Manual records", null, panelRecords, null);
-			panelRecords.setLayout(new BorderLayout(0, 0));
-
-				JScrollPane scrollPaneRecords = new JScrollPane();
-				panelRecords.add(scrollPaneRecords, BorderLayout.CENTER);
-
-				JPanel panelRecords_2 = new JPanel();
-				scrollPaneRecords.setViewportView(panelRecords_2);
-				panelRecords_2.setLayout(new BoxLayout(panelRecords_2, BoxLayout.Y_AXIS));
-
-				JButton buttonImportRecords = new JButton("Import");
-				buttonImportRecords.setToolTipText("Fill in the records from a shared records file");
-				buttonImportRecords.addActionListener(ev -> importRecords());
-				JButton buttonExportRecords = new JButton("Export");
-				buttonExportRecords.setToolTipText("Write these records to a file others can import");
-				buttonExportRecords.addActionListener(ev -> exportRecords());
-				JButton buttonSaveRecords = new JButton("Save");
-				buttonSaveRecords.setToolTipText("Save the records (Save Prefs on the Options tab saves them too)");
-				buttonSaveRecords.addActionListener(ev -> {
-					saveRecords();
-					printStatus("Records saved", false);
-				});
-				JPanel panelRecordsButtons = new JPanel();
-				panelRecordsButtons.setLayout(new BoxLayout(panelRecordsButtons, BoxLayout.X_AXIS));
-				panelRecordsButtons.add(buttonImportRecords);
-				panelRecordsButtons.add(buttonExportRecords);
-				panelRecordsButtons.add(Box.createHorizontalGlue());
-				panelRecordsButtons.add(buttonSaveRecords);
-				panelRecords.add(panelRecordsButtons, BorderLayout.SOUTH);
-
-			JPanel panelRecordsCI = new JPanel();
-			panelRecordsCI.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelRecordsCI.setBorder(new TitledBorder(null, "CI", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelRecordsCI.setLayout(new BoxLayout(panelRecordsCI, BoxLayout.Y_AXIS));
-			panelRecords_2.add(panelRecordsCI);
-
-			JPanel panelCCRecords = new JPanel();
-			panelCCRecords.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelCCRecords.setBorder(new TitledBorder(null, "CC Records", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelRecordsCI.add(panelCCRecords);
-			panelCCRecords.setLayout(new BoxLayout(panelCCRecords, BoxLayout.X_AXIS));
-
-				JPanel panelForageEntry = new JPanel();
-				panelForageEntry.setBorder(new TitledBorder(null, "Full Entry", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-				panelCCRecords.add(panelForageEntry);
-				panelForageEntry.setLayout(new BoxLayout(panelForageEntry, BoxLayout.Y_AXIS));
-
-				Box horizontalBoxEntryIndividual = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntryIndividual);
-
-				JLabel lblNewLabelEntryIndividual = new JLabel("Individual");
-				lblNewLabelEntryIndividual.setPreferredSize(new Dimension(60, 20));
-				lblNewLabelEntryIndividual.setMinimumSize(new Dimension(60, 20));
-				lblNewLabelEntryIndividual.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntryIndividual.add(lblNewLabelEntryIndividual);
-
-				formattedTextFieldEntryIndividual = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntryIndividual.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntryIndividual.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntryIndividual.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntryIndividual.add(formattedTextFieldEntryIndividual);
-
-				Box horizontalBoxEntry7 = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntry7);
-
-				JLabel labelEntry7 = new JLabel("7 Man");
-				labelEntry7.setPreferredSize(new Dimension(60, 20));
-				labelEntry7.setMinimumSize(new Dimension(60, 20));
-				labelEntry7.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntry7.add(labelEntry7);
-
-				formattedTextFieldEntry7 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntry7.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntry7.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntry7.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntry7.add(formattedTextFieldEntry7);
-
-				Box horizontalBoxEntry6 = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntry6);
-
-				JLabel labelEntry6 = new JLabel("6 Man");
-				labelEntry6.setPreferredSize(new Dimension(60, 20));
-				labelEntry6.setMinimumSize(new Dimension(60, 20));
-				labelEntry6.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntry6.add(labelEntry6);
-
-				formattedTextFieldEntry6 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntry6.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntry6.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntry6.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntry6.add(formattedTextFieldEntry6);
-
-				Box horizontalBoxEntry5 = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntry5);
-
-				JLabel labelEntry5 = new JLabel("5 Man");
-				labelEntry5.setPreferredSize(new Dimension(60, 20));
-				labelEntry5.setMinimumSize(new Dimension(60, 20));
-				labelEntry5.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntry5.add(labelEntry5);
-
-				formattedTextFieldEntry5 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntry5.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntry5.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntry5.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntry5.add(formattedTextFieldEntry5);
-
-				Box horizontalBoxEntry4 = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntry4);
-
-				JLabel labelEntry4 = new JLabel("4 Man");
-				labelEntry4.setPreferredSize(new Dimension(60, 20));
-				labelEntry4.setMinimumSize(new Dimension(60, 20));
-				labelEntry4.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntry4.add(labelEntry4);
-
-				formattedTextFieldEntry4 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntry4.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntry4.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntry4.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntry4.add(formattedTextFieldEntry4);
-
-				Box horizontalBoxEntry3 = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntry3);
-
-				JLabel labelEntry3 = new JLabel("3 Man");
-				labelEntry3.setPreferredSize(new Dimension(60, 20));
-				labelEntry3.setMinimumSize(new Dimension(60, 20));
-				labelEntry3.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntry3.add(labelEntry3);
-
-				formattedTextFieldEntry3 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntry3.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntry3.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntry3.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntry3.add(formattedTextFieldEntry3);
-
-				Box horizontalBoxEntry2 = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntry2);
-
-				JLabel labelEntry2 = new JLabel("2 Man");
-				labelEntry2.setPreferredSize(new Dimension(60, 20));
-				labelEntry2.setMinimumSize(new Dimension(60, 20));
-				labelEntry2.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntry2.add(labelEntry2);
-
-				formattedTextFieldEntry2 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntry2.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntry2.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntry2.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntry2.add(formattedTextFieldEntry2);
-
-				Box horizontalBoxEntry1 = Box.createHorizontalBox();
-				panelForageEntry.add(horizontalBoxEntry1);
-
-				JLabel labelEntry1 = new JLabel("1 Man");
-				labelEntry1.setPreferredSize(new Dimension(60, 20));
-				labelEntry1.setMinimumSize(new Dimension(60, 20));
-				labelEntry1.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxEntry1.add(labelEntry1);
-
-				formattedTextFieldEntry1 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldEntry1.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldEntry1.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldEntry1.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxEntry1.add(formattedTextFieldEntry1);
-
-			JPanel panelSingleForage = new JPanel();
-			panelSingleForage.setBorder(new TitledBorder(null, "Single DR", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelCCRecords.add(panelSingleForage, 0);	// left, matching Score Records (Single DR | Full Entry)
-			panelSingleForage.setLayout(new BoxLayout(panelSingleForage, BoxLayout.Y_AXIS));
-
-				Box horizontalBoxForageIndividual = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForageIndividual);
-
-				JLabel lblNewLabelForageIndividual = new JLabel("Individual");
-				lblNewLabelForageIndividual.setPreferredSize(new Dimension(60, 20));
-				lblNewLabelForageIndividual.setMinimumSize(new Dimension(60, 20));
-				lblNewLabelForageIndividual.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForageIndividual.add(lblNewLabelForageIndividual);
-
-				formattedTextFieldForageIndividual = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForageIndividual.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForageIndividual.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForageIndividual.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForageIndividual.add(formattedTextFieldForageIndividual);
-
-				Box horizontalBoxForage7 = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForage7);
-
-				JLabel labelForage7 = new JLabel("7 Man");
-				labelForage7.setPreferredSize(new Dimension(60, 20));
-				labelForage7.setMinimumSize(new Dimension(60, 20));
-				labelForage7.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForage7.add(labelForage7);
-
-				formattedTextFieldForage7 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForage7.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForage7.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForage7.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForage7.add(formattedTextFieldForage7);
-
-				Box horizontalBoxForage6 = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForage6);
-
-				JLabel labelForage6 = new JLabel("6 Man");
-				labelForage6.setPreferredSize(new Dimension(60, 20));
-				labelForage6.setMinimumSize(new Dimension(60, 20));
-				labelForage6.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForage6.add(labelForage6);
-
-				formattedTextFieldForage6 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForage6.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForage6.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForage6.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForage6.add(formattedTextFieldForage6);
-
-				Box horizontalBoxForage5 = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForage5);
-
-				JLabel labelForage5 = new JLabel("5 Man");
-				labelForage5.setPreferredSize(new Dimension(60, 20));
-				labelForage5.setMinimumSize(new Dimension(60, 20));
-				labelForage5.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForage5.add(labelForage5);
-
-				formattedTextFieldForage5 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForage5.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForage5.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForage5.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForage5.add(formattedTextFieldForage5);
-
-				Box horizontalBoxForage4 = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForage4);
-
-				JLabel labelForage4 = new JLabel("4 Man");
-				labelForage4.setPreferredSize(new Dimension(60, 20));
-				labelForage4.setMinimumSize(new Dimension(60, 20));
-				labelForage4.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForage4.add(labelForage4);
-
-				formattedTextFieldForage4 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForage4.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForage4.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForage4.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForage4.add(formattedTextFieldForage4);
-
-				Box horizontalBoxForage3 = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForage3);
-
-				JLabel labelForage3 = new JLabel("3 Man");
-				labelForage3.setPreferredSize(new Dimension(60, 20));
-				labelForage3.setMinimumSize(new Dimension(60, 20));
-				labelForage3.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForage3.add(labelForage3);
-
-				formattedTextFieldForage3 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForage3.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForage3.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForage3.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForage3.add(formattedTextFieldForage3);
-
-				Box horizontalBoxForage2 = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForage2);
-
-				JLabel labelForage2 = new JLabel("2 Man");
-				labelForage2.setPreferredSize(new Dimension(60, 20));
-				labelForage2.setMinimumSize(new Dimension(60, 20));
-				labelForage2.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForage2.add(labelForage2);
-
-				formattedTextFieldForage2 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForage2.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForage2.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForage2.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForage2.add(formattedTextFieldForage2);
-
-				Box horizontalBoxForage1 = Box.createHorizontalBox();
-				panelSingleForage.add(horizontalBoxForage1);
-
-				JLabel labelForage1 = new JLabel("1 Man");
-				labelForage1.setPreferredSize(new Dimension(60, 20));
-				labelForage1.setMinimumSize(new Dimension(60, 20));
-				labelForage1.setMaximumSize(new Dimension(60, 20));
-				horizontalBoxForage1.add(labelForage1);
-
-				formattedTextFieldForage1 = new JFormattedTextField(integerFormatter);
-				formattedTextFieldForage1.setPreferredSize(new Dimension(30, 20));
-				formattedTextFieldForage1.setMinimumSize(new Dimension(30, 20));
-				formattedTextFieldForage1.setMaximumSize(new Dimension(30, 20));
-				horizontalBoxForage1.add(formattedTextFieldForage1);
-
-			JPanel panelScoreRecords = new JPanel();
-			panelScoreRecords.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelScoreRecords.setBorder(new TitledBorder(null, "Score Records", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelRecordsCI.add(panelScoreRecords);
-			panelScoreRecords.setLayout(new BoxLayout(panelScoreRecords, BoxLayout.X_AXIS));
-
-			JPanel panelSingleDR = new JPanel();
-			panelSingleDR.setBorder(new TitledBorder(null, "Single DR", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelScoreRecords.add(panelSingleDR);
-			panelSingleDR.setLayout(new BoxLayout(panelSingleDR, BoxLayout.Y_AXIS));
-
-				Box horizontalBoxEntrySingle = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxEntrySingle);
-
-				JLabel lblNewLabelSingleDRIndividual = new JLabel("Individ");
-				lblNewLabelSingleDRIndividual.setPreferredSize(new Dimension(40, 20));
-				lblNewLabelSingleDRIndividual.setMinimumSize(new Dimension(40, 20));
-				lblNewLabelSingleDRIndividual.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxEntrySingle.add(lblNewLabelSingleDRIndividual);
-
-				formattedTextFieldSingleDRIndividual = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDRIndividual.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDRIndividual.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDRIndividual.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxEntrySingle.add(formattedTextFieldSingleDRIndividual);
-
-				Box horizontalBoxDR7 = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxDR7);
-
-				JLabel labelDR7 = new JLabel("7 Man");
-				labelDR7.setPreferredSize(new Dimension(40, 20));
-				labelDR7.setMinimumSize(new Dimension(40, 20));
-				labelDR7.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxDR7.add(labelDR7);
-
-				formattedTextFieldSingleDR7 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDR7.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR7.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR7.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxDR7.add(formattedTextFieldSingleDR7);
-
-				Box horizontalBoxDR6 = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxDR6);
-
-				JLabel labelDR6 = new JLabel("6 Man");
-				labelDR6.setPreferredSize(new Dimension(40, 20));
-				labelDR6.setMinimumSize(new Dimension(40, 20));
-				labelDR6.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxDR6.add(labelDR6);
-
-				formattedTextFieldSingleDR6 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDR6.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR6.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR6.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxDR6.add(formattedTextFieldSingleDR6);
-
-				Box horizontalBoxDR5 = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxDR5);
-
-				JLabel labelDR5 = new JLabel("5 Man");
-				labelDR5.setPreferredSize(new Dimension(40, 20));
-				labelDR5.setMinimumSize(new Dimension(40, 20));
-				labelDR5.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxDR5.add(labelDR5);
-
-				formattedTextFieldSingleDR5 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDR5.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR5.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR5.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxDR5.add(formattedTextFieldSingleDR5);
-
-				Box horizontalBoxDR4 = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxDR4);
-
-				JLabel labelDR4 = new JLabel("4 Man");
-				labelDR4.setPreferredSize(new Dimension(40, 20));
-				labelDR4.setMinimumSize(new Dimension(40, 20));
-				labelDR4.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxDR4.add(labelDR4);
-
-				formattedTextFieldSingleDR4 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDR4.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR4.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR4.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxDR4.add(formattedTextFieldSingleDR4);
-
-				Box horizontalBoxDR3 = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxDR3);
-
-				JLabel labelDR3 = new JLabel("3 Man");
-				labelDR3.setPreferredSize(new Dimension(40, 20));
-				labelDR3.setMinimumSize(new Dimension(40, 20));
-				labelDR3.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxDR3.add(labelDR3);
-
-				formattedTextFieldSingleDR3 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDR3.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR3.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR3.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxDR3.add(formattedTextFieldSingleDR3);
-
-				Box horizontalBoxDR2 = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxDR2);
-
-				JLabel labelDR2 = new JLabel("2 Man");
-				labelDR2.setPreferredSize(new Dimension(40, 20));
-				labelDR2.setMinimumSize(new Dimension(40, 20));
-				labelDR2.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxDR2.add(labelDR2);
-
-				formattedTextFieldSingleDR2 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDR2.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR2.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR2.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxDR2.add(formattedTextFieldSingleDR2);
-
-				Box horizontalBoxDR1 = Box.createHorizontalBox();
-				panelSingleDR.add(horizontalBoxDR1);
-
-				JLabel labelDR1 = new JLabel("1 Man");
-				labelDR1.setPreferredSize(new Dimension(40, 20));
-				labelDR1.setMinimumSize(new Dimension(40, 20));
-				labelDR1.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxDR1.add(labelDR1);
-
-				formattedTextFieldSingleDR1 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldSingleDR1.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR1.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldSingleDR1.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxDR1.add(formattedTextFieldSingleDR1);
-
-			JPanel panelFullEntry = new JPanel();
-			panelFullEntry.setBorder(new TitledBorder(null, "Full Entry", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelScoreRecords.add(panelFullEntry);
-			panelFullEntry.setLayout(new BoxLayout(panelFullEntry, BoxLayout.Y_AXIS));
-
-				Box horizontalBoxFullEntryIndividual = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntryIndividual);
-
-				JLabel lblNewLabelFullEntryIndividual = new JLabel("Individ");
-				lblNewLabelFullEntryIndividual.setPreferredSize(new Dimension(40, 20));
-				lblNewLabelFullEntryIndividual.setMinimumSize(new Dimension(40, 20));
-				lblNewLabelFullEntryIndividual.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntryIndividual.add(lblNewLabelFullEntryIndividual);
-
-				formattedTextFieldFullEntryIndividual = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntryIndividual.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntryIndividual.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntryIndividual.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntryIndividual.add(formattedTextFieldFullEntryIndividual);
-
-				Box horizontalBoxFullEntry7 = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntry7);
-
-				JLabel labelFullEntry7 = new JLabel("7 Man");
-				labelFullEntry7.setPreferredSize(new Dimension(40, 20));
-				labelFullEntry7.setMinimumSize(new Dimension(40, 20));
-				labelFullEntry7.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntry7.add(labelFullEntry7);
-
-				formattedTextFieldFullEntry7 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntry7.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry7.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry7.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntry7.add(formattedTextFieldFullEntry7);
-
-				Box horizontalBoxFullEntry6 = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntry6);
-
-				JLabel labelFullEntry6 = new JLabel("6 Man");
-				labelFullEntry6.setPreferredSize(new Dimension(40, 20));
-				labelFullEntry6.setMinimumSize(new Dimension(40, 20));
-				labelFullEntry6.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntry6.add(labelFullEntry6);
-
-				formattedTextFieldFullEntry6 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntry6.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry6.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry6.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntry6.add(formattedTextFieldFullEntry6);
-
-				Box horizontalBoxFullEntry5 = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntry5);
-
-				JLabel labelFullEntry5 = new JLabel("5 Man");
-				labelFullEntry5.setPreferredSize(new Dimension(40, 20));
-				labelFullEntry5.setMinimumSize(new Dimension(40, 20));
-				labelFullEntry5.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntry5.add(labelFullEntry5);
-
-				formattedTextFieldFullEntry5 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntry5.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry5.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry5.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntry5.add(formattedTextFieldFullEntry5);
-
-				Box horizontalBoxFullEntry4 = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntry4);
-
-				JLabel labelFullEntry4 = new JLabel("4 Man");
-				labelFullEntry4.setPreferredSize(new Dimension(40, 20));
-				labelFullEntry4.setMinimumSize(new Dimension(40, 20));
-				labelFullEntry4.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntry4.add(labelFullEntry4);
-
-				formattedTextFieldFullEntry4 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntry4.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry4.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry4.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntry4.add(formattedTextFieldFullEntry4);
-
-				Box horizontalBoxFullEntry3 = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntry3);
-
-				JLabel labelFullEntry3 = new JLabel("3 Man");
-				labelFullEntry3.setPreferredSize(new Dimension(40, 20));
-				labelFullEntry3.setMinimumSize(new Dimension(40, 20));
-				labelFullEntry3.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntry3.add(labelFullEntry3);
-
-				formattedTextFieldFullEntry3 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntry3.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry3.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry3.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntry3.add(formattedTextFieldFullEntry3);
-
-				Box horizontalBoxFullEntry2 = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntry2);
-
-				JLabel labelFullEntry2 = new JLabel("2 Man");
-				labelFullEntry2.setPreferredSize(new Dimension(40, 20));
-				labelFullEntry2.setMinimumSize(new Dimension(40, 20));
-				labelFullEntry2.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntry2.add(labelFullEntry2);
-
-				formattedTextFieldFullEntry2 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntry2.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry2.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry2.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntry2.add(formattedTextFieldFullEntry2);
-
-				Box horizontalBoxFullEntry1 = Box.createHorizontalBox();
-				panelFullEntry.add(horizontalBoxFullEntry1);
-
-				JLabel labelFullEntry1 = new JLabel("1 Man");
-				labelFullEntry1.setPreferredSize(new Dimension(40, 20));
-				labelFullEntry1.setMinimumSize(new Dimension(40, 20));
-				labelFullEntry1.setMaximumSize(new Dimension(40, 20));
-				horizontalBoxFullEntry1.add(labelFullEntry1);
-
-				formattedTextFieldFullEntry1 = new JFormattedTextField(doubleFormatter);
-				formattedTextFieldFullEntry1.setPreferredSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry1.setMinimumSize(new Dimension(50, 20));
-				formattedTextFieldFullEntry1.setMaximumSize(new Dimension(50, 20));
-				horizontalBoxFullEntry1.add(formattedTextFieldFullEntry1);
-
-
-			JPanel panelRecordsLair = new JPanel();
-			panelRecordsLair.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelRecordsLair.setBorder(new TitledBorder(null, "Lair", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelRecordsLair.setLayout(new BoxLayout(panelRecordsLair, BoxLayout.Y_AXIS));
-			panelRecords_2.add(panelRecordsLair);
-
-				JPanel panelLairCrew = new JPanel();
-				panelLairCrew.setAlignmentX(Component.LEFT_ALIGNMENT);
-				panelLairCrew.setLayout(new BoxLayout(panelLairCrew, BoxLayout.X_AXIS));
-				panelRecordsLair.add(panelLairCrew);
-
-				// Crew records for one entry (Score All), by how many pirates were in it.
-				JPanel panelLairICs = recordBox("Most ICs");
-				panelLairICs.setToolTipText("Most ICs by the crew in one entry - Score All");
-				panelLairCrew.add(panelLairICs);
-				JPanel panelLairChests = recordBox("Most Chests");
-				panelLairChests.setToolTipText("Most chests (all types) by the crew in one entry - Score All");
-				panelLairCrew.add(panelLairChests);
-				for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
-					String crew = RecordChecker.LAIR_CREW_SIZES[i] + " Pirates";
-					formattedTextFieldLairICs[i] = recordField(panelLairICs, crew, "ICs in one entry with " + crew, 62);
-					formattedTextFieldLairChests[i] = recordField(panelLairChests, crew, "Chests in one entry with " + crew, 62);
-				}
-
-				JPanel panelLairIndividual = recordBox("Individual");
-				panelRecordsLair.add(panelLairIndividual);
-				formattedTextFieldLairTotalChests = recordField(panelLairIndividual, "Total Chests", "Most chests (all types) by one pirate in one entry - Score All");
-				formattedTextFieldLairFray = recordField(panelLairIndividual, "Fray Record", "Most chests (all types) by one pirate in one fray - Scan");
-				formattedTextFieldLairIC = recordField(panelLairIndividual, "IC Record", "Most ICs by one pirate in one entry - Score All");
-				formattedTextFieldLairCarpScore = recordField(panelLairIndividual, "Carp Score", "Highest carp score in one fray - Scan");
-				formattedTextFieldLairCarpHoles = recordField(panelLairIndividual, "Carp Holes", "Most carp holes (all three numbers) in one fray - Scan");
-				formattedTextFieldLairVampireProof = recordField(panelLairIndividual, "Vampire Proof", "Most vampire proof in one fray - Scan");
-
-			JPanel panelRecordsWolves = new JPanel();
-			panelRecordsWolves.setAlignmentX(Component.LEFT_ALIGNMENT);
-			panelRecordsWolves.setBorder(new TitledBorder(null, "Wolves", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-			panelRecordsWolves.setLayout(new BoxLayout(panelRecordsWolves, BoxLayout.Y_AXIS));
-			panelRecords_2.add(panelRecordsWolves);
-
-				formattedTextFieldWolvesFurrballs4 = recordField(panelRecordsWolves, "4 Furrballs", "Placeholder: not checked yet");
+			tabsArea.add(woodhallowTools.forageBar(), BorderLayout.NORTH);
+			tabbedPane.addTab("Records", null, recordsTab, "Voyage records from Puzzle Practice, and record alerts");
 
 				JPanel panelTests = new JPanel();
 				if (DRGizmoMain.DEVELOPERS) {
@@ -2787,58 +1919,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		formattedTextFieldMediumChest.setValue(currentPrefs.getInt(CHESTMEDIUM, 2));
 		formattedTextFieldLargeChest.setValue(currentPrefs.getInt(CHESTLARGE, 3));
 
-		// GLOBAL SETTINGS - CC Records (Entry)
-		formattedTextFieldEntryIndividual.setValue(globalPrefs.getInt(CCENTRYINDIVIDUAL, 0));
-		formattedTextFieldEntry7.setValue(globalPrefs.getInt(CCENTRY7, 0));
-		formattedTextFieldEntry6.setValue(globalPrefs.getInt(CCENTRY6, 0));
-		formattedTextFieldEntry5.setValue(globalPrefs.getInt(CCENTRY5, 0));
-		formattedTextFieldEntry4.setValue(globalPrefs.getInt(CCENTRY4, 0));
-		formattedTextFieldEntry3.setValue(globalPrefs.getInt(CCENTRY3, 0));
-		formattedTextFieldEntry2.setValue(globalPrefs.getInt(CCENTRY2, 0));
-		formattedTextFieldEntry1.setValue(globalPrefs.getInt(CCENTRY1, 0));
-
-		// GLOBAL SETTINGS - CC Records (Forage)
-		formattedTextFieldForageIndividual.setValue(globalPrefs.getInt(CCFORAGEINDIVIDUAL, 0));
-		formattedTextFieldForage7.setValue(globalPrefs.getInt(CCFORAGE7, 0));
-		formattedTextFieldForage6.setValue(globalPrefs.getInt(CCFORAGE6, 0));
-		formattedTextFieldForage5.setValue(globalPrefs.getInt(CCFORAGE5, 0));
-		formattedTextFieldForage4.setValue(globalPrefs.getInt(CCFORAGE4, 0));
-		formattedTextFieldForage3.setValue(globalPrefs.getInt(CCFORAGE3, 0));
-		formattedTextFieldForage2.setValue(globalPrefs.getInt(CCFORAGE2, 0));
-		formattedTextFieldForage1.setValue(globalPrefs.getInt(CCFORAGE1, 0));
-
-		// GLOBAL SETTINGS - Score Records (Single DR)
-		formattedTextFieldSingleDRIndividual.setValue(globalPrefs.getDouble(SINGLEDRINDIVIDUAL, 0));
-		formattedTextFieldSingleDR7.setValue(globalPrefs.getDouble(SINGLEDR7, 0));
-		formattedTextFieldSingleDR6.setValue(globalPrefs.getDouble(SINGLEDR6, 0));
-		formattedTextFieldSingleDR5.setValue(globalPrefs.getDouble(SINGLEDR5, 0));
-		formattedTextFieldSingleDR4.setValue(globalPrefs.getDouble(SINGLEDR4, 0));
-		formattedTextFieldSingleDR3.setValue(globalPrefs.getDouble(SINGLEDR3, 0));
-		formattedTextFieldSingleDR2.setValue(globalPrefs.getDouble(SINGLEDR2, 0));
-		formattedTextFieldSingleDR1.setValue(globalPrefs.getDouble(SINGLEDR1, 0));
-
-		// GLOBAL SETTINGS - Score Records (Full Entry)
-		formattedTextFieldFullEntryIndividual.setValue(globalPrefs.getDouble(FULLENTRYINDIVIDUAL, 0));
-		formattedTextFieldFullEntry7.setValue(globalPrefs.getDouble(FULLENTRY7, 0));
-		formattedTextFieldFullEntry6.setValue(globalPrefs.getDouble(FULLENTRY6, 0));
-		formattedTextFieldFullEntry5.setValue(globalPrefs.getDouble(FULLENTRY5, 0));
-		formattedTextFieldFullEntry4.setValue(globalPrefs.getDouble(FULLENTRY4, 0));
-		formattedTextFieldFullEntry3.setValue(globalPrefs.getDouble(FULLENTRY3, 0));
-		formattedTextFieldFullEntry2.setValue(globalPrefs.getDouble(FULLENTRY2, 0));
-		formattedTextFieldFullEntry1.setValue(globalPrefs.getDouble(FULLENTRY1, 0));
-
-		// GLOBAL SETTINGS - Lair and Wolves records (0 = not set)
-		for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
-			formattedTextFieldLairICs[i].setValue(globalPrefs.getInt(LAIRICS + RecordChecker.LAIR_CREW_SIZES[i], 0));
-			formattedTextFieldLairChests[i].setValue(globalPrefs.getInt(LAIRCHESTS + RecordChecker.LAIR_CREW_SIZES[i], 0));
-		}
-		formattedTextFieldLairTotalChests.setValue(globalPrefs.getInt(LAIRTOTALCHESTS, 0));
-		formattedTextFieldLairFray.setValue(globalPrefs.getInt(LAIRFRAY, 0));
-		formattedTextFieldLairIC.setValue(globalPrefs.getInt(LAIRIC, 0));
-		formattedTextFieldLairCarpScore.setValue(globalPrefs.getInt(LAIRCARPSCORE, 0));
-		formattedTextFieldLairCarpHoles.setValue(globalPrefs.getInt(LAIRCARPHOLES, 0));
-		formattedTextFieldLairVampireProof.setValue(globalPrefs.getInt(LAIRVAMPIREPROOF, 0));
-		formattedTextFieldWolvesFurrballs4.setValue(globalPrefs.getInt(WOLVESFURRBALLS4, 0));
 		updateOutputPreviews();
 	}
 
@@ -2894,59 +1974,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			currentPrefs.putInt(CHESTSMALL, Integer.parseInt(formattedTextFieldSmallChest.getText().replaceAll(",", "")));
 			currentPrefs.putInt(CHESTMEDIUM, Integer.parseInt(formattedTextFieldMediumChest.getText().replaceAll(",", "")));
 			currentPrefs.putInt(CHESTLARGE, Integer.parseInt(formattedTextFieldLargeChest.getText().replaceAll(",", "")));
-
-			// GLOBAL SETTINGS - CC Records (Entry)
-			globalPrefs.putInt(CCENTRYINDIVIDUAL, Integer.parseInt(formattedTextFieldEntryIndividual.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCENTRY7, Integer.parseInt(formattedTextFieldEntry7.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCENTRY6, Integer.parseInt(formattedTextFieldEntry6.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCENTRY5, Integer.parseInt(formattedTextFieldEntry5.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCENTRY4, Integer.parseInt(formattedTextFieldEntry4.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCENTRY3, Integer.parseInt(formattedTextFieldEntry3.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCENTRY2, Integer.parseInt(formattedTextFieldEntry2.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCENTRY1, Integer.parseInt(formattedTextFieldEntry1.getText().replaceAll(",", "")));
-
-			// GLOBAL SETTINGS - CC Records (Forage)
-			globalPrefs.putInt(CCFORAGEINDIVIDUAL, Integer.parseInt(formattedTextFieldForageIndividual.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCFORAGE7, Integer.parseInt(formattedTextFieldForage7.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCFORAGE6, Integer.parseInt(formattedTextFieldForage6.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCFORAGE5, Integer.parseInt(formattedTextFieldForage5.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCFORAGE4, Integer.parseInt(formattedTextFieldForage4.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCFORAGE3, Integer.parseInt(formattedTextFieldForage3.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCFORAGE2, Integer.parseInt(formattedTextFieldForage2.getText().replaceAll(",", "")));
-			globalPrefs.putInt(CCFORAGE1, Integer.parseInt(formattedTextFieldForage1.getText().replaceAll(",", "")));
-
-			// GLOBAL SETTINGS - Score Records (Single DR)
-			globalPrefs.putDouble(SINGLEDRINDIVIDUAL, Double.parseDouble(formattedTextFieldSingleDRIndividual.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(SINGLEDR7, Double.parseDouble(formattedTextFieldSingleDR7.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(SINGLEDR6, Double.parseDouble(formattedTextFieldSingleDR6.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(SINGLEDR5, Double.parseDouble(formattedTextFieldSingleDR5.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(SINGLEDR4, Double.parseDouble(formattedTextFieldSingleDR4.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(SINGLEDR3, Double.parseDouble(formattedTextFieldSingleDR3.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(SINGLEDR2, Double.parseDouble(formattedTextFieldSingleDR2.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(SINGLEDR1, Double.parseDouble(formattedTextFieldSingleDR1.getText().replaceAll(",", "")));
-
-			// GLOBAL SETTINGS - Score Records (Full Entry)
-			globalPrefs.putDouble(FULLENTRYINDIVIDUAL, Double.parseDouble(formattedTextFieldFullEntryIndividual.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(FULLENTRY7, Double.parseDouble(formattedTextFieldFullEntry7.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(FULLENTRY6, Double.parseDouble(formattedTextFieldFullEntry6.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(FULLENTRY5, Double.parseDouble(formattedTextFieldFullEntry5.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(FULLENTRY4, Double.parseDouble(formattedTextFieldFullEntry4.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(FULLENTRY3, Double.parseDouble(formattedTextFieldFullEntry3.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(FULLENTRY2, Double.parseDouble(formattedTextFieldFullEntry2.getText().replaceAll(",", "")));
-			globalPrefs.putDouble(FULLENTRY1, Double.parseDouble(formattedTextFieldFullEntry1.getText().replaceAll(",", "")));
-
-			// GLOBAL SETTINGS - Lair and Wolves records
-			for (int i = 0; i < RecordChecker.LAIR_CREW_SIZES.length; i++) {
-				globalPrefs.putInt(LAIRICS + RecordChecker.LAIR_CREW_SIZES[i], intOf(formattedTextFieldLairICs[i], 0));
-				globalPrefs.putInt(LAIRCHESTS + RecordChecker.LAIR_CREW_SIZES[i], intOf(formattedTextFieldLairChests[i], 0));
-			}
-			globalPrefs.putInt(LAIRTOTALCHESTS, intOf(formattedTextFieldLairTotalChests, 0));
-			globalPrefs.putInt(LAIRFRAY, intOf(formattedTextFieldLairFray, 0));
-			globalPrefs.putInt(LAIRIC, intOf(formattedTextFieldLairIC, 0));
-			globalPrefs.putInt(LAIRCARPSCORE, intOf(formattedTextFieldLairCarpScore, 0));
-			globalPrefs.putInt(LAIRCARPHOLES, intOf(formattedTextFieldLairCarpHoles, 0));
-			globalPrefs.putInt(LAIRVAMPIREPROOF, intOf(formattedTextFieldLairVampireProof, 0));
-			globalPrefs.putInt(WOLVESFURRBALLS4, intOf(formattedTextFieldWolvesFurrballs4, 0));
 
 			// GLOBAL SETTINGS - Window size
 			globalPrefs.putInt("width", getWidth());

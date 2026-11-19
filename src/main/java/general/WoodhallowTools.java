@@ -38,6 +38,11 @@ final class WoodhallowTools {
 	private long forageWarnedFor, plankPlayedAt, rumbleWarnedMinute = -1;
 	private Color shorthandColor;
 	private static final Color WARNING_RED = new Color(0xe03030);
+	/** The forage bar's colour (white text), red in the last 30 seconds and for the plank alert. */
+	private static final Color FORAGE_BLUE = new Color(0x2f5f9e);
+	/** Above the tabs, whichever is open: the Cursed Isles forage countdown, then the plank alert. */
+	private JPanel forageBar;
+	private JLabel labelForage, labelForageDetail;
 
 	/** Whether timed Woodhallow periods are appended to dr_ratings.jsonl in the data folder. */
 	boolean exportRatings() { return scorePerMinute() && checkBoxRatingsExport.isSelected(); }
@@ -101,7 +106,7 @@ final class WoodhallowTools {
 		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
 		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
 		checkBoxForageTimer = option(section, prefs, "Cursed Isles: forage timer", "foragetimer", true);
-		checkBoxForageTimer.setToolTipText("Time left to forage, in a Forage tab; red in the last 30 seconds");
+		checkBoxForageTimer.setToolTipText("Time left to forage, in a blue bar above the tabs; red in the last 30 seconds");
 		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
 		checkBoxForageSound.setToolTipText("Thalassa's warning sound at 30 seconds left to forage");
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
@@ -414,10 +419,25 @@ final class WoodhallowTools {
 		panelRumble = new JPanel(new BorderLayout(0, 2));
 		panelRumble.add(rumbleTop, BorderLayout.NORTH);
 		panelRumble.add(rumbleBoard, BorderLayout.CENTER);
+		// The forage bar: the Rumble tab's top line (big timer left, detail right), in a coloured strip.
+		labelForage = new JLabel(" ");
+		labelForage.setFont(timerFont);
+		labelForage.setForeground(Color.WHITE);
+		labelForageDetail = new JLabel(" ");
+		labelForageDetail.setFont(bigFont);
+		labelForageDetail.setForeground(Color.WHITE);
+		forageBar = new JPanel(new BorderLayout(8, 0));
+		forageBar.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+		forageBar.add(labelForage, BorderLayout.WEST);
+		forageBar.add(labelForageDetail, BorderLayout.EAST);
+		forageBar.setVisible(false);
 		// At Woodhallow: the next Dnav stations' forecast and solo strategy, in the main window (forecastPanel()).
 		rumbleForecast = new DnavPanel(baseFont);
 		rumbleForecast.setVisible(false);
 	}
+
+	/** The forage bar, for the main window to put above the tabs. Hidden unless foraging or planking. */
+	JComponent forageBar() { return forageBar; }
 
 	/**
 	 * The main window's Dnav area: the Dnav box (wolves left, solo strategy, starting count) while stations
@@ -453,39 +473,19 @@ final class WoodhallowTools {
 		boolean board = elapsed >= 0 && checkBoxRumbleBoard.isSelected();
 		boolean shorthand = elapsed >= 0 && checkBoxRumbleShorthand.isSelected();
 		boolean foraging = elapsed < 0 && forageLeft >= 0 && checkBoxForageTimer.isSelected();
+		updateForageBar(forageLeft, foraging, plankAlert, plankText, plank, toPlank);
 		// The Rumble tab is the board: with the board off, the timer and shorthand are on the Scan row only.
-		boolean show = board || foraging || plankAlert;
-		String title = plankAlert ? "Plank!" : foraging ? "Forage" : "Rumble";
 		int index = tabbedPane.indexOfComponent(panelRumble);
-		if (show && index < 0) {
+		if (board && index < 0) {
 			tabBeforeRumble = userTab();
-			tabbedPane.addTab(title, panelRumble);
+			tabbedPane.addTab("Rumble", panelRumble);
 			tabbedPane.setSelectedComponent(panelRumble);
-		} else if (show && !title.equals(tabbedPane.getTitleAt(index))) {
-			tabbedPane.setTitleAt(index, title);
-		} else if (!show && index >= 0) {
+		} else if (!board && index >= 0) {
 			removeAutoTab(panelRumble, tabBeforeRumble);
 		}
-		if (!show) return;
-		if (plankAlert || foraging) {
+		if (!board) {
 			rumbleSecond = -1;
 			rumbleGroups = null;
-			rumbleBoard.setVisible(false);
-			if (plankAlert) {
-				labelRumble.setText(plankText);
-				labelRumble.setForeground(WARNING_RED);
-				labelRumble.setToolTipText(plank.pirates() + " pirates and " + plank.mercs() + " mercs aboard; the next fray takes "
-						+ (plank.pirates() + plank.mercs() - toPlank));
-				labelRumbleShorthand.setVisible(false);
-			} else {
-				// Time left to forage, counting down from 2:00; red in the last 30 seconds. The plank
-				// warning waits for the forage to end, with its voice line.
-				long s = (forageLeft + 999) / 1000;
-				labelRumble.setText(String.format("%d:%02d", s / 60, s % 60));
-				labelRumble.setForeground(forageLeft <= FORAGE_WARNING_MS ? WARNING_RED : labelWolvesLeftColor);
-				labelRumble.setToolTipText("Time left to forage; red in the last 30 seconds");
-				labelRumbleShorthand.setVisible(false);
-			}
 			return;
 		}
 		labelRumble.setToolTipText("Time into the rumble; red in the last 5 seconds before the punch sizes change");
@@ -511,6 +511,37 @@ final class WoodhallowTools {
 				labelRumbleShorthand.setText(groups);
 			}
 		}
+	}
+
+	/**
+	 * The forage bar, above whichever tab is open: blue with the time left to forage (2:00 down), red in
+	 * the last 30 seconds; after the forage, red with the plank alert while it lasts. Hidden otherwise.
+	 */
+	private void updateForageBar(long forageLeft, boolean foraging, boolean plankAlert, String plankText,
+			MercPlank plank, int toPlank) {
+		boolean show = foraging || plankAlert;
+		if (forageBar.isVisible() != show) forageBar.setVisible(show);
+		if (!show) return;
+		String time, detail, tip;
+		boolean red;
+		if (plankAlert) {
+			time = plankText;
+			detail = plank.pirates() + " pirates, " + plank.mercs() + " mercs";
+			tip = plank.pirates() + " pirates and " + plank.mercs() + " mercs aboard; the next fray takes "
+					+ (plank.pirates() + plank.mercs() - toPlank);
+			red = true;
+		} else {
+			time = clock((forageLeft + 999) / 1000);
+			detail = "Forage";
+			tip = "Time left to forage; red in the last 30 seconds";
+			red = forageLeft <= FORAGE_WARNING_MS;
+		}
+		if (!time.equals(labelForage.getText())) labelForage.setText(time);
+		if (!detail.equals(labelForageDetail.getText())) labelForageDetail.setText(detail);
+		forageBar.setToolTipText(tip);
+		labelForage.setToolTipText(tip);
+		Color background = red ? WARNING_RED : FORAGE_BLUE;
+		if (!background.equals(forageBar.getBackground())) forageBar.setBackground(background);
 	}
 
 	private static String nz(String strategy) { return strategy == null ? "not on the sheet" : strategy; }
