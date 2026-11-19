@@ -264,12 +264,18 @@ final class WoodhallowTools {
 	private void createDnavTab() {
 		panelDnav = new JPanel();
 		panelDnav.setLayout(new BoxLayout(panelDnav, BoxLayout.Y_AXIS));
-		panelDnav.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("Dnav"),
+		// Text colours are set here, not left to the game's look and feel: its text areas and border
+		// titles default to black on the dark background. Wolves left keeps the label yellow.
+		javax.swing.border.TitledBorder dnavTitle = BorderFactory.createTitledBorder("Dnav");
+		dnavTitle.setTitleColor(Color.WHITE);
+		panelDnav.setBorder(BorderFactory.createCompoundBorder(dnavTitle,
 				BorderFactory.createEmptyBorder(0, 3, 2, 3)));
 		panelDnav.setVisible(false);
 		labelWolvesLeft = new JLabel(" ");
 		labelWolvesLeft.setToolTipText("Choose the wolf count source under Options > Woodhallow & Rumble");
-		labelWolvesLeft.setFont(labelWolvesLeft.getFont().deriveFont(Font.BOLD, 20f));
+		Font dnavFont = labelWolvesLeft.getFont();
+		// Sized from the window's font, like the Rumble tab (about 20 and 15 pt at the usual 12-13 pt).
+		labelWolvesLeft.setFont(dnavFont.deriveFont(Font.BOLD, dnavFont.getSize2D() * 1.6f));
 		labelWolvesLeft.setAlignmentX(Component.LEFT_ALIGNMENT);
 		panelDnav.add(labelWolvesLeft);
 		panelDnav.add(Box.createVerticalStrut(6));
@@ -286,7 +292,8 @@ final class WoodhallowTools {
 		labelStrategy.setWrapStyleWord(true);
 		labelStrategy.setOpaque(false);
 		labelStrategy.setBorder(null);
-		labelStrategy.setFont(labelWolvesLeft.getFont().deriveFont(Font.PLAIN, 15f));
+		labelStrategy.setFont(dnavFont.deriveFont(Font.PLAIN, dnavFont.getSize2D() * 1.2f));
+		labelStrategy.setForeground(Color.WHITE);
 		labelStrategy.setAlignmentX(Component.LEFT_ALIGNMENT);
 		labelStrategy.setColumns(1);   // never asks for more width than the window has
 		// Its wrapped height depends on its width, so lay out again whenever the width changes.
@@ -306,6 +313,7 @@ final class WoodhallowTools {
 		ahoyRow.setLayout(new BoxLayout(ahoyRow, BoxLayout.X_AXIS));
 		ahoyRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel ahoyLabel = new JLabel("Starting wolves: ");
+		ahoyLabel.setForeground(Color.WHITE);
 		ahoyLabel.setToolTipText("Click the werewolf count the Ahoy tab shows, for the exact strategy and pace");
 		ahoyRow.add(ahoyLabel);
 		ahoyButtons = new JPanel();
