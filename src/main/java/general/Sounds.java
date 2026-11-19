@@ -13,7 +13,8 @@ import java.nio.file.StandardCopyOption;
 /**
  * Plays Gizmo's alert sounds, bundled in the jar under /sounds:
  *   werewolves_clear.wav    the last werewolf of the wave has been turned back
- *   rumble_minute_ping.wav  the rumble's warning 5 s before each minute
+ *   rumble_minute_coin.wav  the rumble's warning 5 s before each minute: "Picked Coin Echo 2" by
+ *                           NenadSimic (freesound.org/s/171756), converted to 16-bit
  *   time_left_warning.wav   Thalassa's warning: 30 s left of stations or foraging, 15 s left of a lair round
  *   plank_swabbie.wav       the "plank swabbie" voice line
  *
@@ -29,8 +30,8 @@ import java.nio.file.StandardCopyOption;
 public final class Sounds {
 
 	public static final String CLEAR = "werewolves_clear.wav";
-	/** The rumble's 5-seconds-before-the-minute warning: the short ping. */
-	public static final String RUMBLE_WARNING = "rumble_minute_ping.wav";
+	/** The rumble's 5-seconds-before-the-minute warning: a coin pickup with an echo. */
+	public static final String RUMBLE_WARNING = "rumble_minute_coin.wav";
 	/** From PP_Timer / Thalassa (converted to WAV): the "plank swabbie" voice line and the time-left warning. */
 	public static final String PLANK = "plank_swabbie.wav", THIRTY_SECONDS = "time_left_warning.wav";
 	/** The lair's 15-seconds-left warning is the same sound as the 30-seconds-left one. */
