@@ -933,11 +933,6 @@ public class DRGizmo {
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (((JEditorPane) children[i]).getText()), true);
 			} else if (children[i] instanceof JButton) {
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (((JButton) children[i]).getText()), true);
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.swing.YoMultiLineLabel")) {
-				Object innerLabel = getField(children[i], "_label", Object.class);
-				String asdf = getField(innerLabel, "b", String.class);
-				//printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (((JLabel) innerLabel).getText()), true);
-				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (asdf), true);
 			} else {
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString(), true);
 			}
@@ -987,73 +982,4 @@ public class DRGizmo {
 		} catch (Exception ignored) {}
 		return null;
 	}
-
-	
-	private void printAllFieldsAndMethods(Class clazz) {
-		printStatus("\n\n\nFields", true);
-		printAllFields(clazz);
-		printStatus("\nMethods", true);
-		printAllMethods(clazz);
-	}
-	
-	private void printAllFields(Class clazz) {
-		//Class<?> clazz = o.getClass();
-		
-		/*
-		Class<?> c = o.getClass();
-		try {
-			while (!c.equals(Object.class)) {
-				final Field[] fields = c.getDeclaredFields();
-				for (int i = 0; i < fields.length; ++i) {
-					if (fieldName.equals(fields[i].getName())) {
-						fields[i].setAccessible(true);
-						Object ret = fields[i].get(o);
-						try {
-							return clazz.cast(ret);
-						} catch (ClassCastException e) {
-							return null;
-						}
-					}
-				}
-				c = c.getSuperclass();
-			}
-		} catch (Exception ignored) {}
-		return null;
-		*/
-		
-		
-
-		try {
-			Field[] fields = clazz.getFields();
-	         for(int i = 0; i < fields.length; i++) {
-	            printStatus(fields[i].getName(), true);
-	            printStatus(fields[i].toString(), true);
-	         }
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-	}
-	
-	
-	private void printAllMethods(Class clazz) {
-		try {
-			Method[] methods = clazz.getMethods();
-	         for(int i = 0; i < methods.length; i++) {
-	            printStatus(methods[i].getName(), true);
-	            printStatus(methods[i].toString(), true);
-	         }
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-	}
-	
-	
-	
 }
-
-
-
-
-
