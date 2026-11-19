@@ -415,7 +415,7 @@ public final class ActivityTracker {
 
 	/**
 	 * Minimal per-station lists, Navigating first, then Foraging, then anything else:
-	 * a station name line, then one "Name rate" line per pirate in duty report order ("-" if the time is unknown).
+	 * a "---Station---" line, then one "Name rate" line per pirate in duty report order ("-" if the time is unknown).
 	 */
 	public static List<String> blocks(Period period, String sep) { return blocks(period, sep, true); }
 
@@ -428,7 +428,8 @@ public final class ActivityTracker {
 		List<String> out = new ArrayList<>();
 		for (String station : order) {
 			List<Row> rows = byStation.get(station);   // in duty report order
-			StringBuilder sb = new StringBuilder(header ? station : "");
+			// The station line as in the scan output: "---Navigating---".
+			StringBuilder sb = new StringBuilder(header ? "---" + station + "---" : "");
 			for (Row r : rows) {
 				if (sb.length() > 0) sb.append('\n');
 				sb.append(r.pirate).append(sep);

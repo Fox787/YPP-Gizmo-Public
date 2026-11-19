@@ -356,7 +356,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		printStatus(dataString, false);
 		if (checkBoxDebug.isSelected() && timed != null) printStatus(ActivityTracker.describeTimes(timed), true);
 		// Without the Score/min option, the per-minute lists still print separately.
-		if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(perMinute, false);
+		// A blank line first, to set them apart from what came before.
+		if (!inline && perMinute != null && !perMinute.isEmpty()) printStatus(System.getProperty("line.separator") + perMinute, false);
 		//check for broken records, against the records for the activity this report is from
 		if (checkBoxBrokenRecordAlert.isSelected()) {
 			checkScanRecords(data);

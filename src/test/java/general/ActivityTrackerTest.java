@@ -32,6 +32,9 @@ class ActivityTrackerTest {
 		assertEquals(16.40927, rates.get("Foraging").get("Jice"), 0.00001);
 		assertEquals(15, period.rows.get(0).score);
 		assertTrue(ActivityTracker.blocks(period, " ").get(0).contains(String.format("Jice %.2f", 6.52)));
+		assertTrue(ActivityTracker.blocks(period, " ").get(0).startsWith("---Navigating---
+"));
+		assertTrue(ActivityTracker.blocks(period, " ", false).get(0).startsWith("Jice "));
 		String json = RunLog.toJson(period, "Jice", "Emerald", Path.of("run.jsonl"), "woodhallow");
 		assertTrue(json.contains("\"score_per_minute\":6.52"));
 	}
