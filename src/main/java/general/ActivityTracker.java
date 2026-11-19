@@ -215,12 +215,8 @@ public final class ActivityTracker {
 	 */
 	private static String sceneKind(Class<?> type) {
 		for (Class<?> k = type; k != null; k = k.getSuperclass()) {
-			switch (k.getSimpleName()) {
-				case "WerewolfIsleSceneObject": return RecordChecker.DEN;
-				case "GauntletSceneObject": return RecordChecker.CI;
-				case "VampireLairSceneObject": return RecordChecker.LAIR;
-				default: break;
-			}
+			String kind = GameScene.activityOf(k.getSimpleName());
+			if (kind != null) return kind;
 		}
 		return null;
 	}

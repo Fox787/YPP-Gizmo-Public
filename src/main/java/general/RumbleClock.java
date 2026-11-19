@@ -32,6 +32,11 @@ public final class RumbleClock {
 	/** Cursed Isles merc count and plank check, from the same game log. */
 	public MercPlank plank() { return plank; }
 
+	private final GameScene scene = new GameScene();
+
+	/** The scene the client is in (Den / CI / Lair), from the same game log. */
+	GameScene scene() { return scene; }
+
 	/** Milliseconds of foraging left, or -1 if no forage period is running. */
 	public long forageLeft(long now) {
 		long end = forageEndsAt;
@@ -134,6 +139,10 @@ public final class RumbleClock {
 
 	void feed(String line, long now) {
 		plank.feed(line);
+		if (line.contains("chat display for ")) {
+			scene.feed(line, lineTime(line, now));
+			return;
+		}
 		if (line.contains("Stopping foraging in ")) {
 			var m = FORAGE.matcher(line);
 			if (m.find()) { forageEndsAt = lineTime(line, now) + (Long.parseLong(m.group(1)) + 1) * 1000; startedAt = 0; }

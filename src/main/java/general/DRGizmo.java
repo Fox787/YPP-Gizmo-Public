@@ -38,11 +38,19 @@ public class DRGizmo {
 	JTextArea status;
 	boolean debug;
 	DRGroupData data = new DRGroupData();
+	/** The activity from the logs (GameScene), or null; when set, it tags the report instead of the counters. */
+	private String logActivity;
 
 	DRGizmo(Window window, JTextArea status, boolean writeDebug) {
 		this.window = window;
 		this.status = status;
 		debug = writeDebug;
+	}
+
+	/** Tags reports with this activity (from the logs) instead of reading the counters; null keeps the counters. */
+	DRGizmo activity(String fromLogs) {
+		logActivity = fromLogs;
+		return this;
 	}
 
 	private void printStatus(String s, boolean isDebug) {
@@ -132,6 +140,8 @@ public class DRGizmo {
 	private boolean findWolves() {
 		data = new DRGroupData();
 		printStatus("Scan Wolves: ", true);
+		// The logs say this isn't the Den: no werewolf stations to look for.
+		if (logActivity != null && !RecordChecker.DEN.equals(logActivity)) return false;
 
 		if (window == null) {
 			printStatus("findWolves failed: no window", true);
@@ -312,7 +322,7 @@ public class DRGizmo {
 			processStation(station);
 		}
 
-		data.setActivity(RecordChecker.activityOf(data));
+		data.setActivity(logActivity != null ? logActivity : RecordChecker.activityOf(data));
 		printStatus("findDutyReport is true (" + data.getActivity() + ")", true);
 		return true;
 	}
@@ -362,10 +372,13 @@ public class DRGizmo {
 		int[] tokens = null;
 		if (pirateData.getComponentCount() > 2) {
 			Component tokenPanel = pirateData.getComponent(2);
-			switch (counterType(tokenPanel)) {
-				case "CURSED_CHESTS" -> data.setActivity(RecordChecker.CI);
-				case "VAMPIRATE_CHESTS", "VAMPIRATE_PATCHES" -> data.setActivity(RecordChecker.LAIR);
-				case "WEREWOLF_CHESTS", "WEREWOLF_MOONS" -> data.setActivity(RecordChecker.DEN);
+			// Fallback when the logs can't tell the activity: the counter enum on the report.
+			if (logActivity == null) {
+				switch (counterType(tokenPanel)) {
+					case "CURSED_CHESTS" -> data.setActivity(RecordChecker.CI);
+					case "VAMPIRATE_CHESTS", "VAMPIRATE_PATCHES" -> data.setActivity(RecordChecker.LAIR);
+					case "WEREWOLF_CHESTS", "WEREWOLF_MOONS" -> data.setActivity(RecordChecker.DEN);
+				}
 			}
 			tokens = readTokens(tokenPanel);
 			printStatus(Arrays.toString(tokens), true);

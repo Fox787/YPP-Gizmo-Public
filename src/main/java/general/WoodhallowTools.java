@@ -240,6 +240,14 @@ final class WoodhallowTools {
 	/** When the client showed the latest Cursed Isles forage period's duty report (game log), 0 if none. For auto scan. */
 	long lastCiReport() { return rumbleClock.lastCiReport(); }
 
+	/**
+	 * The activity the logs say a duty report scanned now belongs to (RecordChecker.DEN / CI / LAIR):
+	 * the game log's scene, else a Lair arrival in chat. Null when they can't tell.
+	 */
+	String logActivity(long now) {
+		return rumbleClock.scene().activity(now, stationClock.lastArrival("vampireLairs"));
+	}
+
 	/** When the client last showed a duty report no new game followed (game log), 0 if none. For auto scan. */
 	long lastFinalReport() { return rumbleClock.lastFinalReport(); }
 

@@ -287,7 +287,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		try {
 			// Look quietly first, so an empty attempt doesn't fill the Output tab.
 			JTextArea scanDebug = new JTextArea();
-			DRGroupData found = new DRGizmo(window, scanDebug, checkBoxDebug.isSelected()).findDutyReportQuietly();
+			DRGroupData found = new DRGizmo(window, scanDebug, checkBoxDebug.isSelected())
+					.activity(woodhallowTools.logActivity(System.currentTimeMillis())).findDutyReportQuietly();
 			if (found == null || found.isEmpty()) return;
 			String key = found.toString();
 			if (key.equals(lastScannedReport)) return;   // still the previous report
@@ -2264,7 +2265,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		}
 
 		if (e.getSource().equals(buttonScan)) {
-			DRGizmo gizmo = new DRGizmo(window, textAreaOutput, checkBoxDebug.isSelected());
+			DRGizmo gizmo = new DRGizmo(window, textAreaOutput, checkBoxDebug.isSelected())
+					.activity(woodhallowTools.logActivity(System.currentTimeMillis()));
 			DRGroupData data = gizmo.scanDutyReport(SpecialDrops.load(globalPrefs));
 			if (data != null && !data.isEmpty()) {
 				processDutyReport(data);
