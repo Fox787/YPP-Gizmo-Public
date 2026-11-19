@@ -41,3 +41,9 @@ Notable implementation challenges include:
 -  Java instrumentation and agent development
 -  Recursive algorithms for traversing hierarchical UI data structures
 -  Multi-threaded event handling in Swing applications
+
+---
+
+## Sound credits
+
+- Rumble minute warning (`rumble_minute_coin.wav`): "Picked Coin Echo 2" by NenadSimic, https://freesound.org/s/171756/, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Converted from 24-bit to 16-bit WAV.
