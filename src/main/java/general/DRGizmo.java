@@ -23,7 +23,6 @@ import java.awt.*;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.List;
@@ -939,24 +938,6 @@ public class DRGizmo {
 				String asdf = getField(innerLabel, "b", String.class);
 				//printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (((JLabel) innerLabel).getText()), true);
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (asdf), true);
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.item.client.PoeContainer")) {
-				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + readPoeContainer(children[i]), true);
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.item.client.ItemContainer")) {
-				try {
-					printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + readItemContainer(children[i]), true);
-					
-				} catch (Exception e) {
-					// TODO: handle exception
-					printStatusStackTrace(e);
-				}
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.item.client.InventoryItemContainer")) {
-				try {
-					printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + readInventoryItemContainer(children[i]), true);
-					
-				} catch (Exception e) {
-					// TODO: handle exception
-					printStatusStackTrace(e);
-				}
 			} else {
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString(), true);
 			}
@@ -1005,136 +986,6 @@ public class DRGizmo {
 			}
 		} catch (Exception ignored) {}
 		return null;
-	}
-
-	
-	/**
-	 * Pass this a poeContainer and it'll poop out the amount
-	 * @return
-	 */
-	private int readPoeContainer(Object poeContainer) {
-		
-		Integer amount = getField(poeContainer, "_amount", Integer.class);
-		return amount.intValue();
-				
-	}
-	
-	private String readItemContainer(Object itemContainer) {
-		
-		//get the _item field
-		Object item = getField(itemContainer, "_item", Object.class);
-		
-		//now comes the tricky part, we have to get the name of the item
-		//get the item class, this should be com.threerings.piracy.item.client.data.Item
-		Class itemClass = item.getClass();
-		
-		//get the getName method
-		Method methodGetName = null;
-		try {
-			methodGetName = itemClass.getMethod("getName", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//now we have to invoke the item.getName() method.
-		String itemName = null;
-		try {
-			itemName = (String) methodGetName.invoke(item);
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-				
-		return itemName;
-	}
-		
-	
-	private String readInventoryItemContainer(Object inventoryItemContainer) {
-		
-		JPanel asdf = (JPanel) inventoryItemContainer;
-		
-		//replace breaks with newlines for fun
-		String tooltipText = asdf.getToolTipText().replaceAll("<br>", "\n");
-		
-		//remove html tags
-		//  this has its issues (items with custom messages and maybe more) but its good enough
-		tooltipText = tooltipText.replaceAll("\\<.*?\\>", "");
-		
-		//printStatus(tooltipText, true);
-		
-		//get the _item field
-		Object item = getField(inventoryItemContainer, "_item", Object.class);
-		
-		//now comes the tricky part, we have to get the name of the item
-		//get the item class, this should be com.threerings.piracy.item.client.data.Item
-		Class itemClass = item.getClass();
-		
-		//get the getName method
-		Method methodGetName = null;
-		try {
-			methodGetName = itemClass.getMethod("getName", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//now we have to invoke the item.getName() method.
-		String itemName = null;
-		try {
-			itemName = (String) methodGetName.invoke(item);
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//get the ToString method
-		Method methodToString = null;
-		try {
-			methodToString = itemClass.getMethod("toString", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//now we have to invoke the item.getName() method.
-		String itemToString = null;
-		try {
-			itemToString = (String) methodToString.invoke(item);
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-				
-		return tooltipText + ", " + itemName + ", " + itemToString;
-		
 	}
 
 	

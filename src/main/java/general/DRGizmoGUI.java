@@ -111,6 +111,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JButton buttonScan;
 	private JButton buttonScore;
 	private JButton buttonTestsWho;
+	private JButton buttonTestsDumpTree;
 	private JButton buttonOutputNew;
 	private JButton buttonOutputAvg;
 	private JButton buttonTestsClear;
@@ -2104,6 +2105,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				buttonTestsWho.setPreferredSize(new Dimension(80, 23));
 				panelTestsButtonsPanel.add(buttonTestsWho);
 
+				buttonTestsDumpTree = new JButton("Dump UI tree");
+				buttonTestsDumpTree.setToolTipText("Debug: print every component in the game window, with its path, class and visible text (needs Debug on)");
+				buttonTestsDumpTree.addActionListener(this);
+				panelTestsButtonsPanel.add(buttonTestsDumpTree);
+
 				Component hGlue_1_1 = Box.createHorizontalGlue();
 				panelTestsButtonsPanel.add(hGlue_1_1);
 
@@ -2497,6 +2503,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			return;
 		}
 
+
+		if (e.getSource().equals(buttonTestsDumpTree)) {
+			new DRGizmo(window, textAreaTests, checkBoxDebug.isSelected()).scanAllNodes();
+			return;
+		}
 
 		if (e.getSource().equals(buttonTestsWho)) {
 
