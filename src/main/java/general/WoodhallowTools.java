@@ -40,8 +40,6 @@ final class WoodhallowTools {
 	private long forageWarnedFor, plankPlayedAt, rumbleWarnedMinute = -1;
 	private Color shorthandColor;
 	private static final Color WARNING_RED = new Color(0xe03030);
-	/** The forage bar's colour (white text), red in the last 30 seconds and for the plank alert. */
-	private static final Color FORAGE_BLUE = new Color(0x2f5f9e);
 	/** Above the tabs, whichever is open: the Cursed Isles forage countdown, then the plank alert. */
 	private JPanel forageBar;
 	private JLabel labelForage, labelForageDetail;
@@ -108,7 +106,7 @@ final class WoodhallowTools {
 		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
 		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
 		checkBoxForageTimer = option(section, prefs, "Forage timer (Cursed Isles, Woodhallow's lair)", "foragetimer", true);
-		checkBoxForageTimer.setToolTipText("Time left to forage, in a blue bar above the tabs; red in the last 30 seconds");
+		checkBoxForageTimer.setToolTipText("Time left to forage, in a bar above the tabs; red in the last 30 seconds");
 		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
 		checkBoxForageSound.setToolTipText("Thalassa's warning sound at 30 seconds left to forage");
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
@@ -432,13 +430,12 @@ final class WoodhallowTools {
 		panelRumble = new JPanel(new BorderLayout(0, 2));
 		panelRumble.add(rumbleTop, BorderLayout.NORTH);
 		panelRumble.add(rumbleBoard, BorderLayout.CENTER);
-		// The forage bar: the Rumble tab's top line (big timer left, detail right), in a coloured strip.
+		// The forage bar: the Rumble tab's top line (big timer left, detail right), styled like it: the
+		// window's own background and label colours from the game's look and feel, red text as the warning.
 		labelForage = new JLabel(" ");
 		labelForage.setFont(timerFont);
-		labelForage.setForeground(Color.WHITE);
 		labelForageDetail = new JLabel(" ");
 		labelForageDetail.setFont(bigFont);
-		labelForageDetail.setForeground(Color.WHITE);
 		forageBar = new JPanel(new BorderLayout(8, 0));
 		forageBar.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
 		forageBar.add(labelForage, BorderLayout.WEST);
@@ -530,8 +527,8 @@ final class WoodhallowTools {
 	}
 
 	/**
-	 * The forage bar, above whichever tab is open: blue with the time left to forage (2:00 down), red in
-	 * the last 30 seconds; after the forage, red with the plank alert while it lasts. Hidden otherwise.
+	 * The forage bar, above whichever tab is open: the time left to forage (2:00 down), red text in
+	 * the last 30 seconds; after the forage, the plank alert in red while it lasts. Hidden otherwise.
 	 */
 	private void updateForageBar(long forageLeft, boolean foraging, boolean plankAlert, String plankText,
 			MercPlank plank, int toPlank) {
@@ -556,8 +553,8 @@ final class WoodhallowTools {
 		if (!detail.equals(labelForageDetail.getText())) labelForageDetail.setText(detail);
 		forageBar.setToolTipText(tip);
 		labelForage.setToolTipText(tip);
-		Color background = red ? WARNING_RED : FORAGE_BLUE;
-		if (!background.equals(forageBar.getBackground())) forageBar.setBackground(background);
+		labelForage.setForeground(red ? WARNING_RED : labelWolvesLeftColor);
+		labelForageDetail.setForeground(plankAlert ? WARNING_RED : shorthandColor);
 	}
 
 	/**
