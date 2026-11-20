@@ -19,11 +19,14 @@ final class WoodhallowTools {
 	private WolfCount wolfCount = new WolfCount();
 	/** The next pack's werewolves from the island itself, so Ahoy needn't be open; Ahoy is the fallback. */
 	private final DenWolves denWolves = new DenWolves();
-	private final JCheckBox chatOnly, checkBoxClearSound, checkBoxWarningSound;
+	private final JCheckBox chatOnly, checkBoxClearSound;
+	/** The time-left sound matrix: [activity][0] = 30 s, [activity][1] = 15 s. */
+	private final JCheckBox[][] warningSounds = new JCheckBox[TimeLeftWarnings.Activity.values().length][2];
+	private final TimeLeftWarnings timeLeftWarnings = new TimeLeftWarnings();
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
 	private final JCheckBox checkBoxRatingsExport;
 	// Cursed Isles forage timer (Thalassa's), merc plank warning (PP_Timer's), and the rumble minute warning.
-	private final JCheckBox checkBoxForageTimer, checkBoxForageSound, checkBoxPlankSound, checkBoxRumbleSound, checkBoxLairSound;
+	private final JCheckBox checkBoxForageTimer, checkBoxPlankSound, checkBoxRumbleSound;
 	// The row next to the Scan button: the running timer on the left, the shorthand (or wolves left) on the right.
 	private final JCheckBox checkBoxScanRow, checkBoxExtendedDnav;
 	private final JLabel scanTimer = fitted(), scanShorthand = fitted();
@@ -37,7 +40,7 @@ final class WoodhallowTools {
 	private long dnavEnds;
 	static final long FORAGE_WARNING_MS = 30_000;
 	static final long PLANK_REPEAT_MS = 6500;   // PP_Timer's gap between "plank swabbie" voice lines
-	private long forageWarnedFor, plankPlayedAt, rumbleWarnedMinute = -1;
+	private long plankPlayedAt, rumbleWarnedMinute = -1;
 	private Color shorthandColor;
 	private static final Color WARNING_RED = new Color(0xe03030);
 	/** The forage bar's red (last 30 seconds, plank alert): lighter, so its big text reads on the window's blue. */
@@ -69,7 +72,7 @@ final class WoodhallowTools {
 		}
 	};
 
-	private long clearPlayedFor, warningPlayedFor, lairWarningPlayedFor, dnavPeriodStart = Long.MIN_VALUE;
+	private long clearPlayedFor, dnavPeriodStart = Long.MIN_VALUE;
 	private long lastDnavTick;
 	private long rumbleSecond = -1;
 	private String rumbleGroups;
@@ -104,16 +107,12 @@ final class WoodhallowTools {
 		checkBoxRumbleBoard = option(section, prefs, "Rumble board", "rumbleboard", true);
 		checkBoxRumbleShorthand = option(section, prefs, "Rumble shorthand", "rumbleshorthand", true);
 		checkBoxClearSound = option(section, prefs, "Last wolf sound", "clearsound", true);
-		checkBoxWarningSound = option(section, prefs, "30-second warning", "warningsound", true);
+		addWarningMatrix(section, prefs);
 		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
 		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
 		checkBoxForageTimer = option(section, prefs, "Forage timer (Cursed Isles, Woodhallow's lair)", "foragetimer", true);
 		checkBoxForageTimer.setToolTipText("Time left to forage, in a bar above the tabs; red in the last 30 seconds");
-		checkBoxForageSound = option(section, prefs, "Cursed Isles: 30 s left to forage sound", "foragesound", true);
-		checkBoxForageSound.setToolTipText("Thalassa's warning sound at 30 seconds left to forage");
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
-		checkBoxLairSound = option(section, prefs, "Lair: 15 s warning sound", "lairsound", true);
-		checkBoxLairSound.setToolTipText("Thalassa's warning sound when the chat says \"Ye hear the sound of rustling in coffins.\" (15 seconds left of the round)");
 		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
 		// Chat log: mercs and pirates leaving the vessel, for the plank check.
 		clock.setOnLiveMessage(rumbleClock.plank()::chat);
@@ -192,6 +191,48 @@ final class WoodhallowTools {
 		option.addActionListener(ev -> prefs.putBoolean(key, option.isSelected()));
 		section.add(option);
 		return option;
+	}
+
+	/**
+	 * Time-left warnings: a 30 s and a 15 s box per activity, each its own setting. Ticking both warns
+	 * twice. The ticked-by-default cells are the old single options, under their old keys.
+	 */
+	private void addWarningMatrix(JPanel section, Preferences prefs) {
+		JLabel title = new JLabel("Time-left warning sounds");
+		title.setAlignmentX(Component.LEFT_ALIGNMENT);
+		section.add(title);
+		JPanel grid = new JPanel(new GridBagLayout());
+		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(0, 0, 0, 10);
+		c.anchor = GridBagConstraints.WEST;
+		c.gridy = 0;
+		c.gridx = 1;
+		grid.add(new JLabel("30 s"), c);
+		c.gridx = 2;
+		grid.add(new JLabel("15 s"), c);
+		String[] when = {
+				"Woodhallow: %s s before stations end (from the chat's \"30 seconds!\" line)",
+				"Cursed Isles: %s s left to forage",
+				"Vampire Lair: %s s left of the round" };
+		for (TimeLeftWarnings.Activity activity : TimeLeftWarnings.Activity.values()) {
+			int row = activity.ordinal();
+			c.gridy = row + 1;
+			c.gridx = 0;
+			grid.add(new JLabel(activity.label), c);
+			for (int col = 0; col < 2; col++) {
+				String key = col == 0 ? activity.key30 : activity.key15;
+				boolean on = prefs.getBoolean(key, col == 0 ? activity.default30 : activity.default15);
+				JCheckBox box = new JCheckBox((String) null, on);
+				box.setToolTipText(String.format(when[row], col == 0 ? "30" : "15"));
+				box.addActionListener(ev -> prefs.putBoolean(key, box.isSelected()));
+				c.gridx = col + 1;
+				grid.add(box, c);
+				warningSounds[row][col] = box;
+			}
+		}
+		grid.setMaximumSize(grid.getPreferredSize());
+		section.add(grid);
 	}
 
 	private static void addVolume(JPanel section, Preferences prefs) {
@@ -612,21 +653,26 @@ final class WoodhallowTools {
 			clearPlayedFor = cleared;
 			Sounds.play(Sounds.CLEAR);
 		}
-		if (checkBoxWarningSound.isSelected() && thirty > 0 && thirty != warningPlayedFor && now - thirty < 15_000) {
-			warningPlayedFor = thirty;
+		// Woodhallow: stations end 30 s after the chat's "30 seconds!" line.
+		long denEnd = thirty > 0 ? thirty + TimeLeftWarnings.THIRTY_MS : 0;
+		warn(TimeLeftWarnings.Activity.WOODHALLOW, denEnd, denEnd, now);
+		// Vampire Lair: 30 s from the round timer (fray end + 2:03); 15 s from the coffin warning, which
+		// the chat gives 15 s before the round ends.
+		warn(TimeLeftWarnings.Activity.VAMPIRE_LAIR, stationClock.lairTimerEnd(), stationClock.lastLairRoundEnd(), now);
+	}
+
+	/** The matrix's two cells for one activity: the 30 s warning against end30, the 15 s one against end15. */
+	private void warn(TimeLeftWarnings.Activity activity, long end30, long end15, long now) {
+		JCheckBox[] boxes = warningSounds[activity.ordinal()];
+		if (timeLeftWarnings.due(activity, TimeLeftWarnings.THIRTY_MS, end30, now) && boxes[0].isSelected())
 			Sounds.play(Sounds.THIRTY_SECONDS);
-		}
-		// The lair's "rustling in coffins" warning: the round ends 15 s after it.
-		long lairEnd = stationClock.lastLairRoundEnd(), lairWarned = lairEnd - 15_000;
-		if (checkBoxLairSound.isSelected() && lairEnd > 0 && lairEnd != lairWarningPlayedFor && now >= lairWarned && now < lairEnd) {
-			lairWarningPlayedFor = lairEnd;
-			Sounds.play(Sounds.LAIR_WARNING);
-		}
+		if (timeLeftWarnings.due(activity, TimeLeftWarnings.FIFTEEN_MS, end15, now) && boxes[1].isSelected())
+			Sounds.play(Sounds.THIRTY_SECONDS);
 	}
 
 	/**
-	 * The rumble's minute warning (5 s before the punch sizes change, once a minute) and the Cursed Isles
-	 * forage warning (30 s left, once a period), through the same separate-process player as the rest.
+	 * The rumble's minute warning (5 s before the punch sizes change, once a minute) and the
+	 * Cursed Isles time-left warnings (the sound matrix), through the same separate-process player as the rest.
 	 */
 	private void playTimerSounds(long now, long rumbleElapsed, long forageLeft) {
 		if (rumbleElapsed < 0) rumbleWarnedMinute = -1;
@@ -637,11 +683,8 @@ final class WoodhallowTools {
 				if (checkBoxRumbleSound.isSelected()) Sounds.play(Sounds.RUMBLE_WARNING);
 			}
 		}
-		long forageEnd = rumbleClock.forageEndsAt();
-		if (forageLeft >= 0 && forageLeft <= FORAGE_WARNING_MS && forageWarnedFor != forageEnd) {
-			forageWarnedFor = forageEnd;
-			if (checkBoxForageSound.isSelected()) Sounds.play(Sounds.THIRTY_SECONDS);
-		}
+		long forageEnd = forageLeft >= 0 ? rumbleClock.forageEndsAt() : 0;
+		warn(TimeLeftWarnings.Activity.CURSED_ISLES, forageEnd, forageEnd, now);
 	}
 
 	/** Shows the Dnav box (in the main window, where Next Dnav sits) during stations; hides it after. */
