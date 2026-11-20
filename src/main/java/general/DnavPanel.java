@@ -16,7 +16,7 @@ import java.util.Map;
  */
 public final class DnavPanel extends JPanel {
 
-	private static final Color GREY = new Color(0x808080), LABEL = Color.WHITE, RED = WoodhallowTools.WARNING_RED, GREEN = new Color(0x2e9e40);
+	private static final Color GREY = new Color(0x808080), LABEL = Color.WHITE, RED = new Color(0xe03030), GREEN = new Color(0x2e9e40);
 
 	private final TitledBorder title = new TitledBorder(null, "Next Dnav", TitledBorder.LEADING, TitledBorder.TOP, null, null);
 	private final JLabel wolves = value(), fray = value(), score = value(), need = value(), now = value(), time = value(), left = value();
