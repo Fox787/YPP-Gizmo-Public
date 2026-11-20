@@ -14,9 +14,10 @@ import java.util.List;
  *   - this client's own game log: which puzzle the logged-in pirate entered and when (ownPuzzle,
  *     via RumbleClock), so your own split between Dnav and foraging is known;
  *   - the displayed duty report: each pirate's stations and scores.
- * Other pirates who switched stations are "unknown". Only with the opt-in "Scene-wide score per
- * minute" (pending developer approval) does it read the island scene every 250 ms: its occupants'
- * station activity, role and name, and whether the fray is on. With that off, nothing here polls.
+ *   - "Scene-wide score per minute" (on by default): the island scene every 250 ms, its occupants'
+ *     station activity, role and name, and whether the fray is on, so other pirates' switches are timed.
+ * With scene-wide off, other pirates who switched stations are "unknown" and nothing here polls.
+ * The developers said reading the client is fine (Nov 2026): no game code or network data is changed.
  */
 public final class ActivityTracker {
 
@@ -98,7 +99,7 @@ public final class ActivityTracker {
 		}
 	}
 
-	/** True while the opt-in scene reading is running. */
+	/** True while the scene reading is running. */
 	boolean sceneTrackingEnabled() { return sceneTrackingSince != Long.MAX_VALUE; }
 
 	private String lastReportKey;

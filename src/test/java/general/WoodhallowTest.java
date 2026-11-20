@@ -248,4 +248,28 @@ class WoodhallowTest {
 		assertTrue(Sounds.scaled(Sounds.LAIR_WARNING, 50).length > 44);
 		assertEquals(120_000, DnavForecast.during(1, 4, 0, 300).clearMs);
 	}
+
+	@Test
+	void denWolvesReadsTheIslandsNextPackWithoutAhoy() throws Exception {
+		SwingUtilities.invokeAndWait(() -> {
+			var scene = new com.threerings.yohoho.island.data.WerewolfIsleSceneObject();
+			scene.packWerewolves = 7;
+			var game = new JPanel(new BorderLayout()) {
+				@Override public boolean isShowing() { return true; }
+				@Override public boolean isDisplayable() { return true; }
+			};
+			var island = new JPanel() {
+				@SuppressWarnings("unused") private final Object unrelated = "x";
+				@SuppressWarnings("unused") private com.threerings.yohoho.island.data.WerewolfIsleSceneObject held = scene;
+				@Override public boolean isDisplayable() { return true; }
+			};
+			game.add(island, BorderLayout.CENTER);
+			DenWolves wolves = new DenWolves();
+			assertEquals(7, wolves.read(game));
+			scene.packWerewolves = 3;          // Duty Nav charting lowers it.
+			assertEquals(3, wolves.read(game));
+			game.remove(island);               // left the island: a fresh look finds no Den
+			assertEquals(-1, new DenWolves().read(game));
+		});
+	}
 }

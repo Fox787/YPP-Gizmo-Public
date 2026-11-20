@@ -17,6 +17,8 @@ final class WoodhallowTools {
 	private final ActivityTracker activityTracker;
 	private final RumbleClock rumbleClock = new RumbleClock();
 	private WolfCount wolfCount = new WolfCount();
+	/** The next pack's werewolves from the island itself, so Ahoy needn't be open; Ahoy is the fallback. */
+	private final DenWolves denWolves = new DenWolves();
 	private final JCheckBox chatOnly, checkBoxClearSound, checkBoxWarningSound;
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
 	private final JCheckBox checkBoxRatingsExport;
@@ -85,10 +87,10 @@ final class WoodhallowTools {
 		stationClock = clock;
 		activityTracker = tracker;
 
-		checkBoxScorePerMinute = option(section, prefs, "Score per minute", "scoreperminute", false);
+		checkBoxScorePerMinute = option(section, prefs, "Score per minute", "scoreperminute", true);
 		checkBoxScorePerMinute.setToolTipText("Time Woodhallow duty reports from the chat log and your own game log, and show score per minute");
-		JCheckBox sceneTiming = option(section, prefs, "Scene-wide score per minute", "scenescoreperminute", false);
-		sceneTiming.setToolTipText("Also time other players' station switches by reading the island scene. Enable after developer approval.");
+		JCheckBox sceneTiming = option(section, prefs, "Scene-wide score per minute", "scenescoreperminute", true);
+		sceneTiming.setToolTipText("Also time other players' station switches by reading the island scene");
 		Runnable applySceneTiming = () -> {
 			sceneTiming.setEnabled(checkBoxScorePerMinute.isSelected());
 			tracker.setSceneTrackingEnabled(checkBoxScorePerMinute.isSelected() && sceneTiming.isSelected());
@@ -97,7 +99,7 @@ final class WoodhallowTools {
 		sceneTiming.addActionListener(ev -> applySceneTiming.run());
 		applySceneTiming.run();
 		chatOnly = option(section, prefs, "Wolf count from chat only", "chatonlywolfcount", false);
-		chatOnly.setToolTipText("Use the chat log for the remaining wolf count. Untick to use the selected, visible Ahoy tab.");
+		chatOnly.setToolTipText("Use the chat log for the remaining wolf count. Untick to read it from the island, as the Ahoy tab shows it.");
 		chatOnly.addItemListener(ev -> wolfCount.clearRemaining());
 		checkBoxRumbleBoard = option(section, prefs, "Rumble board", "rumbleboard", true);
 		checkBoxRumbleShorthand = option(section, prefs, "Rumble shorthand", "rumbleshorthand", true);
@@ -342,7 +344,10 @@ final class WoodhallowTools {
 		Map<Integer, Double> odds = half < 0
 				? DnavForecast.werewolfOdds(Math.max(1, stationClock.crew()), stationClock.frayNumber()) : Map.of();
 		List<Integer> choices = half < 0 ? odds.keySet().stream().sorted().toList() : List.of(2 * half, 2 * half + 1);
-		WolfCount.Reading reading = wolfCount.read(chatOnly.isSelected(), () -> AhoyWolfCount.read(game),
+		WolfCount.Reading reading = wolfCount.read(chatOnly.isSelected(), () -> {
+					int fromScene = denWolves.read(game);
+					return fromScene >= 0 ? fromScene : AhoyWolfCount.read(game);
+				},
 				chat, period.start, now, choices);
 
 		ahoyRow.setVisible(reading.starting() < 0);
