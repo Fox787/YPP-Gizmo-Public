@@ -88,6 +88,7 @@ public final class RumbleClock {
 				offset = Files.size(newest);
 				startedAt = 0;
 				forageEndsAt = 0;
+				seedScene(newest, offset);
 				return;
 			}
 			long size = Files.size(file);
@@ -110,6 +111,30 @@ public final class RumbleClock {
 		} catch (IOException | RuntimeException ignored) {
 			// Try again next poll.
 		}
+	}
+
+	/** Largest log read back for the scene; session logs run well under 1 MB. */
+	private static final long SEED_MAX_BYTES = 8L * 1024 * 1024;
+
+	/**
+	 * Gizmo started (or the client began a new log) mid-session: take the scene the client is already in
+	 * from the log so far, so activity tagging and the parlor check work before the next scene change.
+	 * Only the scene lines are used; timers start fresh from the log's end.
+	 */
+	private void seedScene(Path log, long size) throws IOException {
+		long from = Math.max(0, size - SEED_MAX_BYTES);
+		byte[] buf;
+		try (RandomAccessFile raf = new RandomAccessFile(log.toFile(), "r")) {
+			raf.seek(from);
+			buf = new byte[(int) (size - from)];
+			raf.readFully(buf);
+		}
+		seedScene(new String(buf, StandardCharsets.UTF_8), System.currentTimeMillis());
+	}
+
+	void seedScene(String logText, long now) {
+		for (String line : logText.split("\r?\n"))
+			if (line.contains("chat display for ")) scene.feed(line, lineTime(line, now));
 	}
 
 	/** Called (on the file thread) when this client enters a duty puzzle: its data object's name and the log time. */

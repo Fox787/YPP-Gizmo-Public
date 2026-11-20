@@ -55,6 +55,17 @@ class GameSceneTest {
 	}
 
 	@Test
+	void startingMidSessionTakesTheSceneFromTheLogSoFar() {
+		RumbleClock clock = new RumbleClock();
+		clock.seedScene(String.format(LEAVE, "WerewolfIsleSceneObject") + "\r\n"
+				+ "2026/11/16 11:18:45:900 INFO ih.doLog: Reporting ready data.BoxingObject:1(a, b):0.\r\n"
+				+ String.format(ENTER, "BuildingSceneObject") + "\r\n", 1_000);
+		assertEquals(-1, clock.elapsed(2_000));   // seeding starts no timers
+		clock.feed("2026/11/20 01:56:52:228 INFO ih.doLog: Reporting ready data.BoxingObject:664054(Ozpin, Sisli):0.", 3_000);
+		assertEquals(-1, clock.elapsed(4_000));   // already in a parlor: no rumble timer
+	}
+
+	@Test
 	void otherLinesAndScenesTagNothing() {
 		GameScene scene = new GameScene();
 		scene.feed("2026/11/16 10:36:02:868 INFO ih.doLog: Got updated scene model [placeId=45555]", 1_000);
