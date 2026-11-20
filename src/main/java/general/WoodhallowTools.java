@@ -40,6 +40,8 @@ final class WoodhallowTools {
 	private long forageWarnedFor, plankPlayedAt, rumbleWarnedMinute = -1;
 	private Color shorthandColor;
 	private static final Color WARNING_RED = new Color(0xe03030);
+	/** The forage bar's red (last 30 seconds, plank alert): lighter, so its big text reads on the window's blue. */
+	private static final Color FORAGE_RED = new Color(0xff6666);
 	/** Above the tabs, whichever is open: the Cursed Isles forage countdown, then the plank alert. */
 	private JPanel forageBar;
 	private JLabel labelForage, labelForageDetail;
@@ -553,8 +555,8 @@ final class WoodhallowTools {
 		if (!detail.equals(labelForageDetail.getText())) labelForageDetail.setText(detail);
 		forageBar.setToolTipText(tip);
 		labelForage.setToolTipText(tip);
-		labelForage.setForeground(red ? WARNING_RED : labelWolvesLeftColor);
-		labelForageDetail.setForeground(plankAlert ? WARNING_RED : shorthandColor);
+		labelForage.setForeground(red ? FORAGE_RED : labelWolvesLeftColor);
+		labelForageDetail.setForeground(plankAlert ? FORAGE_RED : shorthandColor);
 	}
 
 	/**
