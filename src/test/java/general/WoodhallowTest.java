@@ -93,7 +93,7 @@ class WoodhallowTest {
 	}
 
 	@Test
-	void chatCountTakesOverWhenAhoyIsHiddenAndChatOnlyNeverReadsAhoy() {
+	void chatCountTakesOverWhenTheIslandCountIsNotRead() {
 		var wolves = new WolfCount();
 		long start = 100_000;
 		var unknown = new StationClock.WolfProgress(-1, -1, 0);
@@ -101,21 +101,19 @@ class WoodhallowTest {
 		var choices = java.util.List.of(8, 9);
 		var visible = new AtomicInteger(8);
 		assertEquals(new WolfCount.Reading(8, 8, start + 1_000),
-				wolves.read(false, visible::get, unknown, start, start + 1_000, choices));
+				wolves.read(visible::get, unknown, start, start + 1_000, choices));
 		visible.set(-1);
 		assertEquals(new WolfCount.Reading(4, 8, start + 40_000),
-				wolves.read(false, visible::get, half, start, start + 45_000, choices), "Ahoy closed: chat's newer count");
+				wolves.read(visible::get, half, start, start + 45_000, choices), "Ahoy closed: chat's newer count");
 		visible.set(3);
 		assertEquals(new WolfCount.Reading(3, 8, start + 50_000),
-				wolves.read(false, visible::get, half, start, start + 50_000, choices), "Ahoy open again and newer");
+				wolves.read(visible::get, half, start, start + 50_000, choices), "Ahoy open again and newer");
 
 		wolves.clearRemaining();
-		assertEquals(new WolfCount.Reading(4, -1, half.changedAt()),
-				wolves.read(true, () -> fail("Chat only must never read Ahoy"), half, start, start + 51_000, choices));
-		assertEquals(4, wolves.read(false, () -> -1, half, start, start + 52_000, choices).remaining(),
+		assertEquals(4, wolves.read(() -> -1, half, start, start + 52_000, choices).remaining(),
 				"Ahoy never read: chat's count");
 		var only = new StationClock.WolfProgress(2, -1, start + 60_000);
-		assertEquals(2, new WolfCount().read(false, () -> -1, only, start, start + 61_000, choices).remaining(),
+		assertEquals(2, new WolfCount().read(() -> -1, only, start, start + 61_000, choices).remaining(),
 				"\"Only N left\" without a half message");
 	}
 
@@ -157,10 +155,10 @@ class WoodhallowTest {
 		var unknown = new StationClock.WolfProgress(-1, -1, 0);
 		var half = new StationClock.WolfProgress(4, 4, 32_000);
 		var choices = java.util.List.of(8, 9);
-		assertEquals(-1, count.read(false, () -> 8, unknown, 1000, 11_000, choices).starting());
-		assertEquals(9, count.read(false, () -> 9, unknown, 1000, 12_000, choices).starting());
+		assertEquals(-1, count.read(() -> 8, unknown, 1000, 11_000, choices).starting());
+		assertEquals(9, count.read(() -> 9, unknown, 1000, 12_000, choices).starting());
 		assertEquals(new WolfCount.Reading(4, 9, 32_000),
-				count.read(false, () -> 4, half, 1000, 33_000, choices));
+				count.read(() -> 4, half, 1000, 33_000, choices));
 	}
 
 	@Test
@@ -211,7 +209,7 @@ class WoodhallowTest {
 		clock.message("Beware! More wolf-kin approach!", 220_000);
 		clock.message("8 o' 8 still standin'! To yer stations!", 300_000);
 		clock.message("The wolf-kin gather! 30 seconds!", 570_000);
-		tracker.setSceneTrackingEnabled(true, 299_000);
+		tracker.trackSceneFrom(299_000);
 		tracker.observeSceneActivity("Other", 10, 302_000);
 		tracker.observeSceneActivity("Other", 56, 400_000);
 		tracker.report(report, 600_000);

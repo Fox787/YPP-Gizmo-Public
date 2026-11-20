@@ -14,9 +14,9 @@ import java.util.List;
  *   - this client's own game log: which puzzle the logged-in pirate entered and when (ownPuzzle,
  *     via RumbleClock), so your own split between Dnav and foraging is known;
  *   - the displayed duty report: each pirate's stations and scores.
- *   - "Scene-wide score per minute" (on by default): the island scene every 250 ms, its occupants'
- *     station activity, role and name, and whether the fray is on, so other pirates' switches are timed.
- * With scene-wide off, other pirates who switched stations are "unknown" and nothing here polls.
+ *   - the island scene, read every 250 ms from start: its occupants' station activity, role and name,
+ *     and whether the fray is on, so other pirates' switches are timed too, and arriving at Woodhallow
+ *     starts a new run.
  * The developers said reading the client is fine (Nov 2026): no game code or network data is changed.
  */
 public final class ActivityTracker {
@@ -83,24 +83,11 @@ public final class ActivityTracker {
 		if (code != 0) recordStation(ownStations, code, now);
 	}
 
-	void setSceneTrackingEnabled(boolean enabled) {
-		setSceneTrackingEnabled(enabled, System.currentTimeMillis());
-	}
-
-	void setSceneTrackingEnabled(boolean enabled, long now) {
+	/** Other pirates' station switches count from {@code now}: periods that began earlier stay "unknown". */
+	void trackSceneFrom(long now) {
 		scenePirates.clear();
-		sceneTrackingSince = enabled ? now : Long.MAX_VALUE;
-		// The scene is only read while this is on: with it off the poll timer doesn't run at all.
-		if (!enabled) {
-			timer.stop();
-			scene = null;
-		} else if (started) {
-			timer.start();
-		}
+		sceneTrackingSince = now;
 	}
-
-	/** True while the scene reading is running. */
-	boolean sceneTrackingEnabled() { return sceneTrackingSince != Long.MAX_VALUE; }
 
 	private String lastReportKey;
 	private String lastReportText;
@@ -111,21 +98,13 @@ public final class ActivityTracker {
 		this.timer = new javax.swing.Timer(POLL_MS, e -> poll(System.currentTimeMillis()));
 	}
 
-	private boolean started;
-
-	/** Starts scene reading if "Scene-wide score per minute" is on; otherwise nothing polls. */
+	/** Starts reading the scene; other pirates' switches are timed from now on. */
 	public void start() {
-		started = true;
-		if (sceneTrackingEnabled()) timer.start();
+		trackSceneFrom(System.currentTimeMillis());
+		timer.start();
 	}
 
-	public void stop() {
-		started = false;
-		timer.stop();
-	}
-
-	/** For tests: whether the scene poll timer is running. */
-	boolean polling() { return timer.isRunning(); }
+	public void stop() { timer.stop(); }
 
 	// ---------------------------------------------------------------- polling
 

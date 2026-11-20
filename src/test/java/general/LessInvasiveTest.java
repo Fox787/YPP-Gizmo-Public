@@ -74,17 +74,4 @@ class LessInvasiveTest {
 		assertEquals(round, AutoScanTrigger.lairEnd(round + AutoScanTrigger.LAIR_FALLBACK_MS, round, 0), "no report logged");
 		assertEquals(0, AutoScanTrigger.lairEnd(round + 10_000, 0, round), "not in a lair round");
 	}
-
-	@Test
-	void sceneIsOnlyPolledWhenSceneWideTimingIsOn() {
-		ActivityTracker tracker = new ActivityTracker(null, new StationClock());
-		tracker.setSceneTrackingEnabled(false, 0);
-		tracker.start();
-		assertFalse(tracker.polling());
-		tracker.setSceneTrackingEnabled(true, 0);
-		assertTrue(tracker.polling());
-		tracker.setSceneTrackingEnabled(false, 0);
-		assertFalse(tracker.polling());
-		tracker.stop();
-	}
 }

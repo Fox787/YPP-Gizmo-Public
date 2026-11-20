@@ -3,7 +3,10 @@ package main.java.general;
 import java.util.List;
 import java.util.function.IntSupplier;
 
-/** Tracks the visible Ahoy readings for one Woodhallow station period. */
+/**
+ * The wolf count for one Woodhallow station period: the island's own count (DenWolves, else the Ahoy
+ * tab), with the chat log's count whenever it is newer.
+ */
 final class WolfCount {
 	// Allow for the one-second chat and UI polls when stations open.
 	private static final long OPENING_WINDOW_MS = 5_000;
@@ -14,9 +17,8 @@ final class WolfCount {
 
 	record Reading(int remaining, int starting, long changedAt) { }
 
-	Reading read(boolean chatOnly, IntSupplier readAhoy, StationClock.WolfProgress chat,
+	Reading read(IntSupplier readAhoy, StationClock.WolfProgress chat,
 				 long startedAt, long now, List<Integer> candidates) {
-		if (chatOnly) return new Reading(chat.remaining(), chat.starting(), chat.changedAt());
 		observe(readAhoy.getAsInt(), chat, startedAt, now);
 		int starting = startingCount(candidates);
 		if (starting < 0) starting = chat.starting();
