@@ -39,7 +39,11 @@ final class WoodhallowTools {
 	static final long PLANK_REPEAT_MS = 6500;   // PP_Timer's gap between "plank swabbie" voice lines
 	private long forageWarnedFor, plankPlayedAt, rumbleWarnedMinute = -1;
 	private Color shorthandColor;
-	private static final Color WARNING_RED = new Color(0xe03030);
+	/**
+	 * Gizmo's one warning red, for text on the game window's blue: timers near their end, the plank alert,
+	 * wolves behind pace. Lighter than a pure red so it stays readable on the dark blue (about 4:1).
+	 */
+	static final Color WARNING_RED = new Color(0xff6666);
 	/** Above the tabs, whichever is open: the Cursed Isles forage countdown, then the plank alert. */
 	private JPanel forageBar;
 	private JLabel labelForage, labelForageDetail;
@@ -400,7 +404,7 @@ final class WoodhallowTools {
 			}
 		}
 		labelWolvesLeft.setText(text);
-		labelWolvesLeft.setForeground(late ? Color.RED : labelWolvesLeftColor);
+		labelWolvesLeft.setForeground(late ? WARNING_RED : labelWolvesLeftColor);
 	}
 
 	private static String strategiesWithOdds(Map<Integer, Double> odds) {
@@ -514,7 +518,7 @@ final class WoodhallowTools {
 		if (seconds != rumbleSecond) {
 			rumbleSecond = seconds;
 			labelRumble.setText(String.format("%d:%02d", seconds / 60, seconds % 60));
-			labelRumble.setForeground(seconds % 60 >= 55 ? new Color(0xe03030) : labelWolvesLeftColor);
+			labelRumble.setForeground(seconds % 60 >= 55 ? WARNING_RED : labelWolvesLeftColor);
 		}
 		labelRumbleShorthand.setVisible(shorthand);
 		if (shorthand) {
