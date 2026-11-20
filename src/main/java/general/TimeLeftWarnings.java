@@ -37,6 +37,8 @@ final class TimeLeftWarnings {
 	static final long THIRTY_MS = 30_000, FIFTEEN_MS = 15_000;
 	/** How long after its moment a warning may still play (the sound ticks run once a second). */
 	static final long WINDOW_MS = 10_000;
+	/** Ends this close are the same one. */
+	static final long SAME_END_MS = 5_000;
 
 	private final Map<String, Long> playedFor = new HashMap<>();
 
@@ -47,7 +49,8 @@ final class TimeLeftWarnings {
 		if (left > lead || left <= lead - WINDOW_MS) return false;
 		String key = activity.name() + lead;
 		Long played = playedFor.get(key);
-		if (played != null && played == end) return false;
+		// The same end, give or take a corrected reading (the Den's countdown can move it a little).
+		if (played != null && Math.abs(played - end) < SAME_END_MS) return false;
 		playedFor.put(key, end);
 		return true;
 	}

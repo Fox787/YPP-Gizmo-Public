@@ -270,4 +270,36 @@ class WoodhallowTest {
 			assertEquals(-1, new DenWolves().read(game));
 		});
 	}
+
+	@Test
+	void denWaveClockReadsTheClientsCountdownAndKeepsCountingWhenHidden() throws Exception {
+		assertEquals(229_000, DenWaveClock.parse("3:49"));
+		assertEquals(-1, DenWaveClock.parse("Next wave"));
+		assertEquals(-1, DenWaveClock.parse("1:75"));
+		SwingUtilities.invokeAndWait(() -> {
+			var game = new JPanel(new BorderLayout()) {
+				@Override public boolean isShowing() { return true; }
+			};
+			var page = new JPanel() {
+				@Override public boolean isShowing() { return getParent() != null; }
+			};
+			var countdown = new com.threerings.piracy.swing.TimeLabel("3:49") {
+				@Override public boolean isShowing() { return getParent() != null && getParent().isShowing(); }
+			};
+			page.add(countdown);
+			game.add(page, BorderLayout.EAST);
+			DenWaveClock clock = new DenWaveClock();
+			long now = 1_000_000;
+			assertEquals(now + 229_000, clock.read(game, now));
+			countdown.setText("3:48");                       // a second later, same end: steady
+			assertEquals(now + 229_000, clock.read(game, now + 1_000));
+			game.remove(page);                               // another side tab: the end is kept
+			assertEquals(now + 229_000, clock.read(game, now + 60_000));
+			game.add(page, BorderLayout.EAST);
+			countdown.setText("2:00");                       // the server says otherwise: follow it
+			assertEquals(now + 70_000 + 120_000, clock.read(game, now + 70_000));
+			clock.reset();
+			assertEquals(0, clock.end());
+		});
+	}
 }

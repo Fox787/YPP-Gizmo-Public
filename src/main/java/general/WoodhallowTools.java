@@ -38,6 +38,11 @@ final class WoodhallowTools {
 		};
 	}
 	private long dnavEnds;
+	/** Woodhallow's current station end (any period, the lair one too), 0 when none is on. Set once a second. */
+	private long denEnds;
+	/** The client's "Next wave in" countdown, for denEnds. */
+	private final DenWaveClock waveClock = new DenWaveClock();
+	private long wavePeriodStart = Long.MIN_VALUE;
 	static final long FORAGE_WARNING_MS = 30_000;
 	static final long PLANK_REPEAT_MS = 6500;   // PP_Timer's gap between "plank swabbie" voice lines
 	private long plankPlayedAt, rumbleWarnedMinute = -1;
@@ -98,7 +103,7 @@ final class WoodhallowTools {
 		addWarningMatrix(section, prefs);
 		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
 		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
-		checkBoxForageTimer = option(section, prefs, "Forage timer (Cursed Isles, Woodhallow's lair)", "foragetimer", true);
+		checkBoxForageTimer = option(section, prefs, "Forage timer (Cursed Isles, Woodhallow)", "foragetimer", true);
 		checkBoxForageTimer.setToolTipText("Time left to forage, in a bar above the tabs; red in the last 30 seconds");
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
 		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
@@ -354,10 +359,30 @@ final class WoodhallowTools {
 		panelDnav.add(ahoyRow);
 	}
 
+	/**
+	 * When Woodhallow's current station period ends: the client's own "Next wave in" countdown once it has
+	 * been read this period (DenWaveClock), else the chat's estimate. 0 when no period is on. Stations are
+	 * open while the chat's estimate hasn't passed, or, until the chat marks the period's end, while the
+	 * client's countdown runs.
+	 */
+	private long denStationEnd(long now) {
+		StationClock.Period period = stationClock.current();
+		if (period == null || !stationClock.inDen() || now - period.start >= 360_000) return 0;
+		if (period.start != wavePeriodStart) {
+			wavePeriodStart = period.start;
+			waveClock.reset();
+		}
+		long chatEnd = stationClock.expectedEnd(period);
+		long wave = waveClock.read(game, now);
+		boolean open = chatEnd > now || (!period.closed() && wave > now);
+		if (!open) return 0;
+		return wave > now ? wave : chatEnd;
+	}
+
 	private void updateDnav(long now) {
 		StationClock.Period period = stationClock.current();
-		long ends = stationClock.expectedEnd(period);
-		boolean inStations = period != null && stationClock.inDen() && !period.lair && ends > now && now - period.start < 360_000;
+		long ends = denEnds = denStationEnd(now);
+		boolean inStations = ends > now && !period.lair;
 		setDnavTab(inStations);
 		dnavEnds = inStations ? ends : 0;
 		if (!inStations) return;
@@ -509,10 +534,12 @@ final class WoodhallowTools {
 			Sounds.play(Sounds.PLANK);
 		}
 		String plankText = plankText(toPlank);
-		// Shown: the Cursed Isles forage (game log), else Woodhallow's last period (chat). Sounds stay on
-		// the Cursed Isles one; the Den's 30-second warning already plays from chat.
+		// The bar: the Cursed Isles forage (game log), else Woodhallow's stations (the client's countdown).
+		// The Scan row shows Woodhallow's normal stations in its Dnav branch (with wolves left), so it only
+		// takes the Den's final, Dnav-less lair period as a forage. Sounds: TimeLeftWarnings.
 		long shownForageLeft = forageLeft >= 0 ? forageLeft : denForageLeft(now);
-		updateScanRow(now, elapsed, shownForageLeft, toPlank, plankAlert);
+		long scanForageLeft = forageLeft >= 0 ? forageLeft : dnavEnds > now ? -1 : shownForageLeft;
+		updateScanRow(now, elapsed, scanForageLeft, toPlank, plankAlert);
 
 		boolean board = elapsed >= 0 && checkBoxRumbleBoard.isSelected();
 		boolean shorthand = elapsed >= 0 && checkBoxRumbleShorthand.isSelected();
@@ -589,14 +616,11 @@ final class WoodhallowTools {
 	}
 
 	/**
-	 * Woodhallow's last period ("Plunder the lair!"), which is all foraging and has no Dnav: milliseconds
-	 * left, from the chat log's period, or -1 when it isn't on. The game log has no forage line for it.
+	 * Woodhallow's stations, every period including the final "Plunder the lair!" one: milliseconds left,
+	 * from the client's "Next wave in" countdown (else the chat's estimate), or -1 when none is on.
 	 */
 	private long denForageLeft(long now) {
-		StationClock.Period period = stationClock.current();
-		if (period == null || !period.lair || !stationClock.inDen()) return -1;
-		long ends = stationClock.expectedEnd(period);
-		return ends > now && now - period.start < 360_000 ? ends - now : -1;
+		return denEnds > now ? denEnds - now : -1;
 	}
 
 	private static String nz(String strategy) { return strategy == null ? "not on the sheet" : strategy; }
@@ -641,8 +665,8 @@ final class WoodhallowTools {
 			clearPlayedFor = cleared;
 			Sounds.play(Sounds.CLEAR);
 		}
-		// Woodhallow: stations end 30 s after the chat's "30 seconds!" line.
-		long denEnd = thirty > 0 ? thirty + TimeLeftWarnings.THIRTY_MS : 0;
+		// Woodhallow: the client's countdown (denEnds), else 30 s after the chat's "30 seconds!" line.
+		long denEnd = denEnds > now ? denEnds : thirty > 0 ? thirty + TimeLeftWarnings.THIRTY_MS : 0;
 		warn(TimeLeftWarnings.Activity.WOODHALLOW, denEnd, denEnd, now);
 		// Vampire Lair: 30 s from the round timer (fray end + 2:03); 15 s from the coffin warning, which
 		// the chat gives 15 s before the round ends.
