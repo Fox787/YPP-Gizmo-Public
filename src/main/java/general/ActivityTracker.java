@@ -2,26 +2,22 @@ package main.java.general;
 
 import java.awt.*;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.List;
-import java.util.prefs.Preferences;
 
 /**
- * Times how long each pirate spends on each station, so a duty report's scores can be turned into
- * score per minute.
- *
- * Read-only. Four times a second, at Woodhallow, it reads the scene's occupant list: one
- * YoOccupantInfo per pirate in the scene (on screen or not), whose public field "activity" is the
- * code of the symbol over their head. Only changes to a different non-blank symbol are kept.
- *
- * Timing uses the station period from the chat log (StationClock): every pirate on a station gets
- * the whole period, from "To yer stations!" to the end, except that switching to the other
- * station's symbol splits the period at that moment. Nothing else counts: blank symbols, idling,
- * leaving the scene or the puzzle being finished early don't shorten anyone's time, so idling can't
- * raise a rate. Time before a pirate's first symbol in the period goes to that first station.
- *
- * Activity codes are numbers. Which code is which station is learned from duty reports: for each
- * station, the code its pirates spent longest on wins, and is remembered for next time.
+ * Times Woodhallow duty reports (only while "Score per minute" is on), from:
+ *   - the chat log: when each station period starts and ends (StationClock), so a pirate on one
+ *     station gets the whole period;
+ *   - this client's own game log: which puzzle the logged-in pirate entered and when (ownPuzzle,
+ *     via RumbleClock), so your own split between Dnav and foraging is known;
+ *   - the displayed duty report: each pirate's stations and scores.
+ *   - the island scene, read every 250 ms from start: its occupants' station activity, role and name,
+ *     and whether the fray is on, so other pirates' switches are timed too, and arriving at Woodhallow
+ *     starts a new run.
+ * The developers said reading the client is fine (Nov 2026): no game code or network data is changed.
  */
 public final class ActivityTracker {
 
@@ -34,213 +30,226 @@ public final class ActivityTracker {
 
 		int current() { return changes.isEmpty() ? 0 : (int) changes.get(changes.size() - 1)[1]; }
 
-		/** Milliseconds on each code within [start, end]. */
+		/** The first station seen in this round gets the time from the start. */
 		Map<Integer, Long> times(long start, long end) {
-			Map<Integer, Long> out = new HashMap<>();
-			if (end <= start) return out;
-			// Symbol at the start: the last change before it, else the first change inside the window.
+			Map<Integer, Long> times = new HashMap<>();
 			int code = 0;
-			int i = 0;
-			for (; i < changes.size() && changes.get(i)[0] <= start; i++) code = (int) changes.get(i)[1];
-			if (code == 0 && i < changes.size() && changes.get(i)[0] < end) code = (int) changes.get(i)[1];
-			if (code == 0) return out;
 			long from = start;
-			for (; i < changes.size() && changes.get(i)[0] < end; i++) {
-				long t = changes.get(i)[0];
-				int c = (int) changes.get(i)[1];
-				if (c == code) continue;
-				out.merge(code, t - from, Long::sum);
-				code = c;
-				from = t;
+			for (long[] change : changes) {
+				long at = change[0];
+				if (at < start - 1000) continue; // Chat timestamps and symbol lag can straddle the boundary.
+				if (at >= end) break;
+				int next = (int) change[1];
+				if (code == 0 && at > start + SNAP_MS) break;
+				if (next == code) continue;
+				if (code != 0) {
+					long boundary = Math.max(from, at);
+					times.merge(code, boundary - from, Long::sum);
+					from = boundary;
+				}
+				code = next;
 			}
-			out.merge(code, end - from, Long::sum);
-			return out;
-		}
-
-		int longestCode(long start, long end) {
-			int best = 0;
-			long bestT = 0;
-			for (Map.Entry<Integer, Long> e : times(start, end).entrySet())
-				if (e.getValue() > bestT) { best = e.getKey(); bestT = e.getValue(); }
-			return best;
+			if (code != 0) times.merge(code, end - from, Long::sum);
+			return times;
 		}
 	}
 
 	static final long MAX_PERIOD_MS = 5 * 60_000L;
-	static final long OTHERS_LAG_MS = 300;
-	/** Station periods are 2 or 5 minutes; a measured length this close to one is snapped to it. */
-	static final long SNAP_MS = 15_000;
+	private static final long OTHERS_LAG_MS = 300;
+	private static final long SNAP_MS = 15_000;
+	private static final int NAV = 10, FORAGE = 56;
+	static final int POLL_MS = 250;
+	private static final long SCENE_SEARCH_MS = 5_000;
+	private static final long ACTIVE_DEN_SEARCH_MS = 60_000;
 
-	/** The pirate running this client, whose symbols aren't delayed by the server. */
 	private String self = "";
-	public void setSelf(String pirate) { self = pirate == null ? "" : pirate; }
-
-	static long snap(long len) {
-		for (long target : new long[]{2 * 60_000L, 5 * 60_000L})
-			if (Math.abs(len - target) <= SNAP_MS) return target;
-		return len;
-	}
-	static final int POLL_MS = 250;   // 4 times a second; the scene search stays at every 5 s
-
+	private final PirateState ownStations = new PirateState();
 	private final Window window;
-	private final Preferences prefs;
 	private final StationClock clock;
 	private final javax.swing.Timer timer;
-	private final Map<String, PirateState> pirates = new LinkedHashMap<>();
+	private final Map<String, PirateState> scenePirates = new LinkedHashMap<>();
+	private long sceneTrackingSince = Long.MAX_VALUE;
 	private Object scene;
-	private long lastSearch;
+	private long nextSceneSearch;
+
+	void setSelf(String pirate) {
+		String name = pirate == null ? "" : pirate;
+		if (!self.equalsIgnoreCase(name)) ownStations.changes.clear();
+		self = name;
+	}
+
+	void ownPuzzle(String object, long now) {
+		int code = "NaviObject".equals(object) ? NAV : "ForageObject".equals(object) ? FORAGE : 0;
+		if (code != 0) recordStation(ownStations, code, now);
+	}
+
+	/** Other pirates' station switches count from {@code now}: periods that began earlier stay "unknown". */
+	void trackSceneFrom(long now) {
+		scenePirates.clear();
+		sceneTrackingSince = now;
+	}
+
 	private String lastReportKey;
 	private String lastReportText;
 
-	public ActivityTracker(Window window, Preferences prefs, StationClock clock) {
+	public ActivityTracker(Window window, StationClock clock) {
 		this.window = window;
-		this.prefs = prefs;
 		this.clock = clock;
 		this.timer = new javax.swing.Timer(POLL_MS, e -> poll(System.currentTimeMillis()));
 	}
 
-	public void start() { timer.start(); }
+	/** Starts reading the scene; other pirates' switches are timed from now on. */
+	public void start() {
+		trackSceneFrom(System.currentTimeMillis());
+		timer.start();
+	}
+
 	public void stop() { timer.stop(); }
 
 	// ---------------------------------------------------------------- polling
 
 	private void poll(long now) {
 		try {
-			if (now - lastSearch > 5000 || scene == null) {
-				lastSearch = now;
+			if (scene != null && !active(scene)) {
+				scene = null;
+				nextSceneSearch = now;
+			}
+			if (now >= nextSceneSearch) {
 				Object found = findScene(window, 0);
-				if (found != null) scene = found; // while puzzling the scene view is hidden; keep the last one
+				if (found != null) scene = found; // The view can be hidden during a puzzle.
+				SceneFields cached = scene == null ? null : SCENE_FIELDS.get(scene.getClass());
+				// An active Woodhallow scene remains valid even when a puzzle hides its view.
+				boolean verifiedDen = cached != null && cached.active() != null && RecordChecker.DEN.equals(cached.kind());
+				nextSceneSearch = now + (verifiedDen ? ACTIVE_DEN_SEARCH_MS : SCENE_SEARCH_MS);
 			}
-			String kind = scene == null ? null : sceneKind(scene);
-			if (kind == null) return;
-			if (!kind.equals(RecordChecker.DEN)) {
-				// Cursed Isles / Vampire Lair: only note that station symbols are showing, for auto scan.
-				Object set = scene.getClass().getField("occupantInfo").get(scene);
-				if (!(set instanceof Iterable)) return;
-				for (Object info : (Iterable<?>) set) {
-					if (observe(info, now) != 0) { lastSymbolAt = now; lastSymbolKind = kind; }
+			if (scene == null) return;
+			SceneFields fields = SCENE_FIELDS.get(scene.getClass());
+			if (fields.kind() == null || fields.occupants() == null) return;
+			boolean den = RecordChecker.DEN.equals(fields.kind());
+			if (den) {
+				if (now - lastAtWoodhallow > ARRIVAL_GAP_MS && onArrival != null)
+					onArrival.accept(lastAtWoodhallow == 0);
+				lastAtWoodhallow = now;
+				if (fields.fraying() != null && fields.fraying().getBoolean(scene)) {
+					for (PirateState state : scenePirates.values()) state.showing = 0;
+					return;
 				}
-				return;
 			}
-			if (now - lastAtWoodhallow > ARRIVAL_GAP_MS && onArrival != null) onArrival.accept(lastAtWoodhallow == 0);
-			lastAtWoodhallow = now;
-			if (fraying(scene)) return;
-			Object set = scene.getClass().getField("occupantInfo").get(scene);
-			if (!(set instanceof Iterable)) return;
-			for (Object info : (Iterable<?>) set) {
-				if (observe(info, now) != 0) { lastSymbolAt = now; lastSymbolKind = kind; }
+			// Only Woodhallow's occupants are read (other pirates' station switches, for their score per minute).
+			if (!den || now < sceneTrackingSince) return;
+			if (!(fields.occupants().get(scene) instanceof Iterable<?> occupants)) return;
+			for (Object info : occupants) {
+				if (info == null) continue;
+				OccupantFields occupant = OCCUPANT_FIELDS.get(info.getClass());
+				if (occupant.activity() == null || isBot(info, occupant.role())) continue;
+				int code = ((Number) occupant.activity().get(info)).intValue();
+				if (occupant.username() == null) continue;
+				Object name = occupant.username().get(info);
+				if (name != null) observeSceneActivity(name.toString(), code, now);
 			}
 		} catch (ReflectiveOperationException | RuntimeException ignored) {
-			// A client update can rename things; just stop counting rather than break anything.
+			// A client update can rename fields. Leave timing unknown if an observation is missing.
 		}
 	}
 
-	/** Feeds one occupant; returns the symbol code over their head (0 = none, NPC or unreadable). */
-	private int observe(Object info, long now) throws ReflectiveOperationException {
-		if (isNpc(info)) return 0;
-		Field f;
-		try { f = info.getClass().getField("activity"); } catch (NoSuchFieldException e) { return 0; } // NPCs, pets
-		int code = ((Number) f.get(info)).intValue();
-		Object name = info.getClass().getField("username").get(info);
-		if (name == null) return 0;
-		update(name.toString(), code, now);
-		return code;
+	private static boolean isBot(Object info, Field role) throws IllegalAccessException {
+		if (role == null) return false;
+		int value = ((Number) role.get(info)).intValue();
+		return value == 4 || value == 12 || value == 13;
 	}
 
-	/**
-	 * Wolves, pets and other NPCs are NPPOccupantInfo subclasses; bots carry a bot role
-	 * (YoOccupantInfo.BOT = 4, SKILLED_BOT = 12, DANGEROUS_BOT = 13). Only real pirates are tracked.
-	 */
-	static boolean isNpc(Object info) {
-		for (Class<?> k = info.getClass(); k != null; k = k.getSuperclass())
-			if (k.getSimpleName().equals("NPPOccupantInfo")) return true;
-		try {
-			int role = ((Number) info.getClass().getField("role").get(info)).intValue();
-			return role == 4 || role == 12 || role == 13;
-		} catch (ReflectiveOperationException | RuntimeException e) {
-			return false;
+	private record SceneFields(String kind, Field occupants, Field fraying, Method active) { }
+
+	private static final ClassValue<SceneFields> SCENE_FIELDS = new ClassValue<>() {
+		@Override protected SceneFields computeValue(Class<?> type) {
+			Method active;
+			try { active = type.getMethod("isActive"); }
+			catch (NoSuchMethodException e) { active = null; }
+			return new SceneFields(sceneKind(type), publicField(type, "occupantInfo"), publicField(type, "fraying"), active);
 		}
+	};
+
+	private record OccupantFields(Field activity, Field username, Field role) { }
+
+	private static final ClassValue<OccupantFields> OCCUPANT_FIELDS = new ClassValue<>() {
+		@Override protected OccupantFields computeValue(Class<?> type) {
+			for (Class<?> c = type; c != null; c = c.getSuperclass())
+				if (c.getSimpleName().equals("NPPOccupantInfo")) return new OccupantFields(null, null, null);
+			return new OccupantFields(publicField(type, "activity"), publicField(type, "username"), publicField(type, "role"));
+		}
+	};
+
+	private static Field publicField(Class<?> type, String name) {
+		try { return type.getField(name); }
+		catch (NoSuchFieldException e) { return null; }
 	}
 
-	/** Only Woodhallow is timed. */
-	static boolean isWoodhallow(Object scene) {
-		return RecordChecker.DEN.equals(sceneKind(scene));
+	private static boolean active(Object candidate) throws ReflectiveOperationException {
+		Method active = SCENE_FIELDS.get(candidate.getClass()).active();
+		return active == null || Boolean.TRUE.equals(active.invoke(candidate));
 	}
 
 	/**
 	 * Which station activity a scene is: RecordChecker.DEN (Woodhallow, WerewolfIsleSceneObject),
 	 * CI (Cursed Isles forage, GauntletSceneObject) or LAIR (VampireLairSceneObject); null for anything else.
 	 */
-	static String sceneKind(Object scene) {
-		for (Class<?> k = scene.getClass(); k != null; k = k.getSuperclass()) {
-			switch (k.getSimpleName()) {
-				case "WerewolfIsleSceneObject": return RecordChecker.DEN;
-				case "GauntletSceneObject": return RecordChecker.CI;
-				case "VampireLairSceneObject": return RecordChecker.LAIR;
-				default: break;
-			}
+	private static String sceneKind(Class<?> type) {
+		for (Class<?> k = type; k != null; k = k.getSuperclass()) {
+			String kind = GameScene.activityOf(k.getSimpleName());
+			if (kind != null) return kind;
 		}
 		return null;
 	}
 
-	/** Last time any pirate in a Den / CI / Lair scene had a station symbol over their head, and which scene. */
-	private long lastSymbolAt;
-	private String lastSymbolKind;
 
-	/** When a station symbol was last seen in a Den, CI or Lair scene; 0 if never. For auto scan. */
-	public long lastSymbolAt() { return lastSymbolAt; }
-
-	/** RecordChecker.DEN / CI / LAIR for lastSymbolAt(); null if never seen. */
-	public String lastSymbolKind() { return lastSymbolKind; }
-
-	static boolean fraying(Object scene) {
-		try { return scene.getClass().getField("fraying").getBoolean(scene); }
-		catch (ReflectiveOperationException | RuntimeException e) { return false; }
+	void observeSceneActivity(String pirate, int code, long now) {
+		if (now < sceneTrackingSince || pirate.equalsIgnoreCase(self)) return;
+		if (code != NAV && code != FORAGE && code != 0) return;
+		if (code == 0 && !scenePirates.containsKey(pirate)) return;
+		PirateState state = scenePirates.computeIfAbsent(pirate, unused -> new PirateState());
+		if (code != 0 && code != state.showing) recordStation(state, code, now - OTHERS_LAG_MS);
+		state.lastSeen = now;
+		state.showing = code;
 	}
 
-	/** Feeds one sighting; package-private so it can be tested without a client. */
-	void update(String pirate, int code, long now) {
-		PirateState p = pirates.computeIfAbsent(pirate, k -> new PirateState());
-		p.lastSeen = now;
-		p.showing = code;
-		if (code == 0 || code == p.current()) return;
-		// Other pirates' symbols reach this client through the server, about 0.3 s after they really
-		// switched; date their switch (leaving one station, joining the next) that much earlier.
-		long when = pirate.equalsIgnoreCase(self) ? now : now - OTHERS_LAG_MS;
-		p.changes.add(new long[]{when, code});
-		// Keep about 6 hours.
-		while (p.changes.size() > 2 && p.changes.get(1)[0] < now - 6 * 3600_000L) p.changes.remove(0);
+	private static void recordStation(PirateState pirate, int code, long at) {
+		pirate.changes.add(new long[]{at, code});
+		while (pirate.changes.size() > 2 && pirate.changes.get(1)[0] < at - 6 * 3600_000L)
+			pirate.changes.remove(0);
 	}
 
-	/** First scene object (not a puzzle's) referenced by a displayable component. */
-	private Object findScene(Component c, int depth) {
-		if (c == null || depth > 40) return null;
-		if (c.isDisplayable()) {
-			for (Class<?> k = c.getClass(); k != null && !k.getName().startsWith("java"); k = k.getSuperclass()) {
-				for (Field f : k.getDeclaredFields()) {
-					if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
-					if (!isSceneObject(f.getType())) continue;
-					try {
-						f.setAccessible(true);
-						Object v = f.get(c);
-						if (v != null && isSceneObject(v.getClass())) return v;
-					} catch (Exception ignored) { }
+	private static final ClassValue<List<Field>> COMPONENT_FIELDS = new ClassValue<>() {
+		@Override protected List<Field> computeValue(Class<?> type) {
+			List<Field> fields = new ArrayList<>();
+			for (Class<?> c = type; c != null && !c.getName().startsWith("java"); c = c.getSuperclass()) {
+				for (Field field : c.getDeclaredFields()) {
+					if (!Modifier.isStatic(field.getModifiers()) && isSceneObject(field.getType()) && field.trySetAccessible())
+						fields.add(field);
 				}
 			}
+			return fields;
 		}
-		if (c instanceof Container) {
-			Container k = (Container) c;
-			for (int i = 0; i < k.getComponentCount(); i++) {
-				Object v = findScene(k.getComponent(i), depth + 1);
-				if (v != null) return v;
+	};
+
+	/** Finds an active scene, including non-station scenes so they replace the last station scene. */
+	private Object findScene(Component component, int depth) throws ReflectiveOperationException {
+		if (component == null || !component.isDisplayable() || depth > 40) return null;
+		for (Field field : COMPONENT_FIELDS.get(component.getClass())) {
+			Object value = field.get(component);
+			if (value != null && active(value)) return value;
+		}
+		if (component instanceof Container container) {
+			for (Component child : container.getComponents()) {
+				Object value = findScene(child, depth + 1);
+				if (value != null) return value;
 			}
 		}
 		return null;
 	}
 
-	private static boolean isSceneObject(Class<?> k) {
-		for (; k != null; k = k.getSuperclass())
-			if (k.getName().equals("com.threerings.whirled.data.SceneObject")) return true;
+	private static boolean isSceneObject(Class<?> type) {
+		for (Class<?> c = type; c != null; c = c.getSuperclass())
+			if (c.getName().equals("com.threerings.whirled.data.SceneObject")) return true;
 		return false;
 	}
 
@@ -251,6 +260,8 @@ public final class ActivityTracker {
 		public String station, pirate, rating;
 		public int[] tokens;
 		public int score;
+		boolean woodhallowNav;
+		public boolean exact;
 		/** Time on the station; 0 if unknown. */
 		public long ms;
 	}
@@ -267,7 +278,7 @@ public final class ActivityTracker {
 	private final List<Period> periods = new ArrayList<>();
 
 	public List<Period> periods() { return new ArrayList<>(periods); }
-	public void clearPeriods() { periods.clear(); }
+	void finishExport(List<Period> exported) { periods.removeAll(exported); }
 
 	/** The period added by the latest report() call, once; null if that report was a repeat. */
 	private Period fresh;
@@ -282,49 +293,66 @@ public final class ActivityTracker {
 
 	/** End of the last report's period, so a fallback period never overlaps it. */
 	private long lastEnd;
+	private long lastStationStart = Long.MIN_VALUE;
 
-	/** Score per minute for every pirate on the report. Learns or reuses each station's activity code. */
+	/** Score per minute for Woodhallow duty report rows with a known station duration. */
 	public String report(DRGroupData dr) {
 		return report(dr, System.currentTimeMillis());
 	}
 
 	String report(DRGroupData dr, long now) {
-		String key = dr.toString();
-		if (key.equals(lastReportKey)) return lastReportText;   // same report scanned again
+		StationClock.Period sp = clock == null ? null : clock.lastEnded(now);
+		String key = (sp == null ? "" : sp.start) + "|" + dr;
+		if (key.equals(lastReportKey)) return lastReportText;
 
 		Period period = new Period();
-		StationClock.Period sp = clock == null ? null : clock.lastEnded(now);
-		if (sp != null && sp.end > lastEnd) {
+		if (sp != null && sp.start > lastStationStart) {
 			period.start = sp.start;
 			period.end = Math.min(sp.end, now);
 			period.timedToTimer = true;
+			lastStationStart = sp.start;
 		} else {
 			// No station messages found (chat log missing?): from the last report, or the last 15 minutes, to now.
 			period.start = Math.max(lastEnd, now - 15 * 60_000L);
 			period.end = now;
 		}
-		// A station period never runs past 5 minutes, whatever the messages say, and a length within
-		// 15 s of 2 or 5 minutes is taken as exactly that (chat timestamps are only to the second).
 		period.end = Math.min(period.end, period.start + MAX_PERIOD_MS);
-		if (period.timedToTimer) period.end = period.start + snap(period.end - period.start);
+		if (period.timedToTimer) {
+			long expected = clock.duration(sp);
+			if (Math.abs(period.end - period.start - expected) <= SNAP_MS) period.end = period.start + expected;
+		}
 		periods.add(period);
 		fresh = period;
 
-		Map<String, Integer> codes = assignCodes(dr, period);
-		for (Map.Entry<String, LinkedHashMap<String, DRIndividualData>> st : dr.data.entrySet()) {
-			String station = st.getKey();
-			int code = codes.getOrDefault(station, 0);
-			for (DRIndividualData d : st.getValue().values()) {
-				PirateState p = pirates.get(d.getName());
-				Long ms = (p == null || code == 0) ? null : p.times(period.start, period.end).get(code);
-				long t = ms == null ? 0 : ms;
+		boolean woodhallow = RecordChecker.DEN.equals(RecordChecker.activityOf(dr));
+		Map<String, Integer> stationsOf = new HashMap<>();
+		for (Map<String, DRIndividualData> rows : dr.data.values())
+			for (String name : rows.keySet()) stationsOf.merge(name, 1, Integer::sum);
+		for (Map.Entry<String, LinkedHashMap<String, DRIndividualData>> station : dr.data.entrySet()) {
+			int code = switch (station.getKey()) {
+				case "Navigating" -> NAV;
+				case "Foraging" -> FORAGE;
+				default -> 0;
+			};
+			for (DRIndividualData d : station.getValue().values()) {
+				String name = d.getName();
+				boolean singleStation = stationsOf.get(name) == 1;
+				boolean local = name.equalsIgnoreCase(self);
+				long time = 0;
+				if (period.timedToTimer && code != 0) {
+					if (singleStation) time = period.end - period.start;
+					else if (local) time = splitTime(ownStations, code, period);
+					else if (period.start >= sceneTrackingSince) time = splitTime(scenePirates.get(name), code, period);
+				}
 				Row row = new Row();
-				row.station = station;
-				row.pirate = d.getName();
+				row.station = station.getKey();
+				row.pirate = name;
 				row.rating = d.getRating();
 				row.tokens = d.getTokens();
 				row.score = d.getTokenScore();
-				row.ms = t < 5_000 ? 0 : t;
+				row.woodhallowNav = woodhallow && code == NAV;
+				row.ms = time < 5_000 ? 0 : time;
+				row.exact = row.ms > 0 && (singleStation || local);
 				period.rows.add(row);
 			}
 		}
@@ -332,9 +360,29 @@ public final class ActivityTracker {
 		lastReportKey = key;
 		lastPeriod = period;
 		StringBuilder sb = new StringBuilder();
-		for (String block : blocks(period, " ")) sb.append(block).append("\n\n");
+		// No blank line between stations, as in the scan output.
+		for (String block : blocks(period, " ")) sb.append(block).append("\n");
 		lastReportText = sb.toString().trim();
 		return lastReportText;
+	}
+
+	private static long splitTime(PirateState pirate, int code, Period period) {
+		if (pirate == null) return 0;
+		Map<Integer, Long> times = pirate.times(period.start, period.end);
+		return times.getOrDefault(NAV, 0L) > 0 && times.getOrDefault(FORAGE, 0L) > 0 ? times.get(code) : 0;
+	}
+
+	static String describeTimes(Period period) {
+		StringBuilder text = new StringBuilder("Station times");
+		for (Row row : period.rows) {
+			text.append('\n').append(row.pirate).append(' ').append(row.station).append(' ');
+			if (row.ms == 0) text.append("unknown");
+			else {
+				text.append(String.format(Locale.ROOT, "%.1fs", row.ms / 1000.0));
+				if (!row.exact) text.append(" (scene estimate)");
+			}
+		}
+		return text.toString();
 	}
 
 	private Period lastPeriod;
@@ -344,7 +392,7 @@ public final class ActivityTracker {
 
 	/**
 	 * Minimal per-station lists, Navigating first, then Foraging, then anything else:
-	 * a station name line, then one "Name rate" line per pirate in duty report order ("-" if the time is unknown).
+	 * a "---Station---" line, then one "Name rate" line per pirate in duty report order ("-" if the time is unknown).
 	 */
 	public static List<String> blocks(Period period, String sep) { return blocks(period, sep, true); }
 
@@ -357,7 +405,8 @@ public final class ActivityTracker {
 		List<String> out = new ArrayList<>();
 		for (String station : order) {
 			List<Row> rows = byStation.get(station);   // in duty report order
-			StringBuilder sb = new StringBuilder(header ? station : "");
+			// The station line as in the scan output: "---Navigating---".
+			StringBuilder sb = new StringBuilder(header ? "---" + station + "---" : "");
 			for (Row r : rows) {
 				if (sb.length() > 0) sb.append('\n');
 				sb.append(r.pirate).append(sep);
@@ -366,6 +415,62 @@ public final class ActivityTracker {
 			out.add(sb.toString());
 		}
 		return out;
+	}
+
+	/** Packs timed or untimed duty reports into whole vessel-chat messages. */
+	static List<String> chatMessages(DRGroupData report, Period period, boolean ignoreNpc) {
+		Map<String, List<String>> byStation = new LinkedHashMap<>();
+		if (period == null) {
+			for (var station : report.data.entrySet())
+				for (DRIndividualData row : station.getValue().values())
+					addChatRow(byStation, station.getKey(), row.getName(), row.getTokenScore(), "-", ignoreNpc);
+		} else {
+			for (Row row : period.rows) {
+				String rate = row.ms > 0 ? String.format("%.2f", rate(row)) : "-";
+				addChatRow(byStation, row.station, row.pirate, row.score, rate, ignoreNpc);
+			}
+		}
+		if (byStation.isEmpty()) return List.of();
+
+		List<String> stations = new ArrayList<>(byStation.keySet());
+		stations.sort(Comparator.comparingInt(ActivityTracker::stationOrder));
+		List<String> blocks = new ArrayList<>();
+		for (String station : stations)
+			blocks.add(chatStation(station) + "\n" + String.join("\n", byStation.get(station)));
+		String combined = ReportClipboard.VESSEL_COMMAND + String.join("\n\n", blocks);
+		if (combined.length() <= ReportClipboard.CHAT_LIMIT) return List.of(combined);
+		combined = ReportClipboard.VESSEL_COMMAND + String.join("\n", blocks);
+		if (combined.length() <= ReportClipboard.CHAT_LIMIT) return List.of(combined);
+
+		List<String> messages = new ArrayList<>();
+		for (String station : stations) {
+			String header = ReportClipboard.VESSEL_COMMAND + chatStation(station);
+			StringBuilder message = new StringBuilder(header);
+			for (String row : byStation.get(station)) {
+				if (header.length() + 1 + row.length() > ReportClipboard.CHAT_LIMIT) return List.of();
+				if (message.length() + 1 + row.length() > ReportClipboard.CHAT_LIMIT) {
+					messages.add(message.toString());
+					message.setLength(header.length());
+				}
+				message.append('\n').append(row);
+			}
+			messages.add(message.toString());
+		}
+		return messages;
+	}
+
+	private static void addChatRow(Map<String, List<String>> byStation, String station, String pirate,
+								   int score, String rate, boolean ignoreNpc) {
+		if (ignoreNpc && pirate.contains(" ")) return;
+		byStation.computeIfAbsent(station, unused -> new ArrayList<>()).add(pirate + " " + score + " (" + rate + ")");
+	}
+
+	private static String chatStation(String station) {
+		return switch (station) {
+			case "Navigating" -> "Nav";
+			case "Foraging" -> "Forage";
+			default -> station;
+		};
 	}
 
 	/** station -> pirate -> score per minute, for rows with a known time; empty if period is null. */
@@ -377,65 +482,17 @@ public final class ActivityTracker {
 		return out;
 	}
 
-	static double rate(Row r) { return r.ms > 0 ? r.score / (r.ms / 60000.0) : -1; }
+	static double rate(Row r) {
+		if (r.ms <= 0) return -1;
+		double score = r.woodhallowNav ? DnavForecast.navPoints(r.tokens) / DnavForecast.POINTS_PER_SCORE : r.score;
+		return score / (r.ms / 60_000.0);
+	}
 
 	private static int stationOrder(String s) {
 		String l = s.toLowerCase();
 		if (l.startsWith("navigat")) return 0;
 		if (l.startsWith("forag")) return 1;
 		return 2;
-	}
-
-	/**
-	 * Which symbol code is which station. Evidence for a station comes from pirates listed on that
-	 * station only (someone on both can't tell them apart), weighted by time. Two stations never share
-	 * a code; with too little evidence the remembered code is used.
-	 */
-	private Map<String, Integer> assignCodes(DRGroupData dr, Period period) {
-		Map<String, Integer> stationsOf = new HashMap<>();
-		for (LinkedHashMap<String, DRIndividualData> m : dr.data.values())
-			for (String n : m.keySet()) stationsOf.merge(n, 1, Integer::sum);
-
-		Map<String, Map<Integer, Long>> evidence = new LinkedHashMap<>();
-		for (Map.Entry<String, LinkedHashMap<String, DRIndividualData>> st : dr.data.entrySet()) {
-			Map<Integer, Long> ev = new HashMap<>();
-			for (String n : st.getValue().keySet()) {
-				PirateState p = pirates.get(n);
-				if (p == null || stationsOf.get(n) > 1) continue;
-				for (Map.Entry<Integer, Long> e : p.times(period.start, period.end).entrySet()) ev.merge(e.getKey(), e.getValue(), Long::sum);
-			}
-			evidence.put(st.getKey(), ev);
-		}
-
-		Map<String, Integer> out = new HashMap<>();
-		Set<Integer> taken = new HashSet<>();
-		// Strongest evidence first, so a clear station claims its code before a doubtful one.
-		List<String> order = new ArrayList<>(evidence.keySet());
-		order.sort((x, y) -> Long.compare(max(evidence.get(y)), max(evidence.get(x))));
-		for (String station : order) {
-			String prefKey = "activitycode." + station;
-			int remembered = prefs == null ? 0 : prefs.getInt(prefKey, 0);
-			int best = 0;
-			long bestT = 0;
-			for (Map.Entry<Integer, Long> e : evidence.get(station).entrySet())
-				if (!taken.contains(e.getKey()) && e.getValue() > bestT) { best = e.getKey(); bestT = e.getValue(); }
-			int code;
-			if (best != 0 && (bestT >= 60_000 || remembered == 0)) {
-				code = best;
-				if (prefs != null) prefs.putInt(prefKey, code);
-			} else {
-				code = taken.contains(remembered) ? 0 : remembered;
-			}
-			if (code != 0) taken.add(code);
-			out.put(station, code);
-		}
-		return out;
-	}
-
-	private static long max(Map<Integer, Long> m) {
-		long b = 0;
-		for (long v : m.values()) b = Math.max(b, v);
-		return b;
 	}
 
 	/** When the latest station period ended, for auto scan; 0 if none. */
@@ -448,7 +505,7 @@ public final class ActivityTracker {
 	public List<String> snapshot() {
 		List<String> out = new ArrayList<>();
 		long now = System.currentTimeMillis();
-		for (Map.Entry<String, PirateState> e : pirates.entrySet()) {
+		for (Map.Entry<String, PirateState> e : scenePirates.entrySet()) {
 			PirateState p = e.getValue();
 			if (now - p.lastSeen > 60_000) continue;   // no longer in the scene
 			long since = p.changes.isEmpty() ? now : p.changes.get(p.changes.size() - 1)[0];

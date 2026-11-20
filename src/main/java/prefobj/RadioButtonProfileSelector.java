@@ -2,7 +2,6 @@ package main.java.prefobj;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionListener;
 import java.util.prefs.*;
 
 /**
@@ -16,6 +15,7 @@ public class RadioButtonProfileSelector extends JPanel {
     private Preferences globalPrefs;
     private final String PROFILE_ROOT = "profiles";
     private final String CURRENT_PROFILE_KEY = "currentProfile";
+    private static final String DEN_PROFILE_ADDED = "denProfileAdded";
     private final String DEFAULT_PROFILE = "Default";
     private String selectedProfile = null;
     private ProfileChangeListener changeListener;
@@ -44,8 +44,7 @@ public class RadioButtonProfileSelector extends JPanel {
     public RadioButtonProfileSelector(Preferences globalPrefs) {
         this.globalPrefs = globalPrefs;
 
-        setLayout(new BorderLayout());
-        setBorder(BorderFactory.createTitledBorder("Profiles"));
+        setLayout(new BorderLayout(0, 5));
 
         radioPanel = new JPanel();
         radioPanel.setLayout(new BoxLayout(radioPanel, BoxLayout.Y_AXIS));
@@ -56,17 +55,14 @@ public class RadioButtonProfileSelector extends JPanel {
         btnDelete = new JButton("Delete");
 
 
-        //JPanel crudPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        JPanel crudPanel = new JPanel();
-        crudPanel.setLayout(new BoxLayout(crudPanel, BoxLayout.Y_AXIS));
-
-        crudPanel.add(btnNew);
-        
-        crudPanel.add(btnRename);
-        crudPanel.add(btnDelete);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEADING, 3, 0));
+        for (JButton button : new JButton[]{btnNew, btnRename, btnDelete}) {
+            button.setMargin(new Insets(3, 4, 3, 4));
+            actions.add(button);
+        }
 
         add(radioPanel, BorderLayout.CENTER);
-        add(crudPanel, BorderLayout.EAST);
+        add(actions, BorderLayout.SOUTH);
 
         btnNew.addActionListener(e -> createProfile());
         btnRename.addActionListener(e -> renameProfile());
@@ -84,6 +80,7 @@ public class RadioButtonProfileSelector extends JPanel {
            globalPrefs.put(CURRENT_PROFILE_KEY, selectedProfile);
         }
 
+        addDenProfile();
         loadProfiles();
     }
 
@@ -195,37 +192,7 @@ public class RadioButtonProfileSelector extends JPanel {
     private void createDefaultProfile() {
         try {
             Preferences profileRoot = globalPrefs.node(PROFILE_ROOT);
-            // Template 1: "Emerald Ocean"
-            if (!profileRoot.nodeExists("CI")) {
-                Preferences ciProfile = profileRoot.node("CI");
-                // Set CI-specific defaults
-
-                ciProfile.putBoolean("autocopy", true);
-
-                ciProfile.putInt("scanocean", 4);
-                ciProfile.putBoolean("scanusetabs", false);
-                ciProfile.putBoolean("scanpirate", true);
-                ciProfile.putBoolean("scantokenscore", true);
-                ciProfile.putBoolean("scantokenarray", true);
-
-                ciProfile.putBoolean("scorewritedate", true);
-                ciProfile.putBoolean("scoreusetabs", true);
-                ciProfile.putInt("scoreocean", 1);
-                ciProfile.putBoolean("scorepirate", true);
-                ciProfile.putBoolean("scoresheetcombo", true);
-
-                ciProfile.putInt("tokencircle", 1);
-                ciProfile.putInt("tokendiamond", 1);
-                ciProfile.putInt("tokenplus", 1);
-                ciProfile.putInt("tokencross", 1);
-                ciProfile.putInt("tokenthrall", 1);
-                ciProfile.putInt("tokencannonball", 1);
-                ciProfile.putInt("chestsmall", 1);
-                ciProfile.putInt("chestmedium", 2);
-                ciProfile.putInt("chestlarge", 3);
-
-                ciProfile.flush();
-            }
+            createForageProfile(profileRoot, "CI");
 
             // Template 2: "Lair"
             if (!profileRoot.nodeExists("Lair")) {
@@ -264,6 +231,45 @@ public class RadioButtonProfileSelector extends JPanel {
         } catch (BackingStoreException e) {
             e.printStackTrace();
         }
+    }
+
+    private void addDenProfile() {
+        if (globalPrefs.getBoolean(DEN_PROFILE_ADDED, false)) return;
+        try {
+            createForageProfile(globalPrefs.node(PROFILE_ROOT), "Den");
+            // Only seed it once so the user can rename or delete it.
+            globalPrefs.putBoolean(DEN_PROFILE_ADDED, true);
+        } catch (BackingStoreException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void createForageProfile(Preferences root, String name) throws BackingStoreException {
+        if (root.nodeExists(name)) return;
+        Preferences profile = root.node(name);
+        profile.putBoolean("autocopy", true);
+        profile.putInt("scanocean", 4);
+        profile.putBoolean("scanusetabs", false);
+        profile.putBoolean("scanpirate", true);
+        profile.putBoolean("scantokenscore", true);
+        profile.putBoolean("scantokenarray", true);
+
+        profile.putBoolean("scorewritedate", true);
+        profile.putBoolean("scoreusetabs", true);
+        profile.putInt("scoreocean", 1);
+        profile.putBoolean("scorepirate", true);
+        profile.putBoolean("scoresheetcombo", true);
+
+        profile.putInt("tokencircle", 1);
+        profile.putInt("tokendiamond", 1);
+        profile.putInt("tokenplus", 1);
+        profile.putInt("tokencross", 1);
+        profile.putInt("tokenthrall", 1);
+        profile.putInt("tokencannonball", 1);
+        profile.putInt("chestsmall", 1);
+        profile.putInt("chestmedium", 2);
+        profile.putInt("chestlarge", 3);
+        profile.flush();
     }
 
     /**

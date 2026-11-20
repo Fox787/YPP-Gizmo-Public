@@ -23,6 +23,8 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 	 */
 	public static final double VERSION = 1.0;
 
+	private static final Pattern LOGGED_IN_TITLE = Pattern.compile("^Puzzle Pirates - ([\\w-]+) on the (\\w+) ocean$");
+
 	public static final boolean DEVELOPERS = false;
 
 	private static volatile boolean agentLoaded = false;
@@ -32,6 +34,12 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 	protected DRGizmoGUI frame = null;
 	Window window = null;
 	private boolean attachedMidGame = false;
+
+	static String pirateInTitle(String title) {
+		if (title == null) return null;
+		Matcher matcher = LOGGED_IN_TITLE.matcher(title);
+		return matcher.matches() ? matcher.group(1) : null;
+	}
 
 	public DRGizmoMain() {
 		this(false);
@@ -110,11 +118,9 @@ public class DRGizmoMain implements TopLevelWindowListener, GUIInitializedListen
 			if (window.getAccessibleContext().getAccessibleName().equals("Puzzle Pirates")) {
 
 				window.addPropertyChangeListener(new PropertyChangeListener() {
-					Pattern title = Pattern.compile("^Puzzle Pirates - (\\w+) on the (\\w+) ocean$");
 					@Override
 					public void propertyChange(PropertyChangeEvent evt) {
-						Matcher matcher = title.matcher(evt.getNewValue().toString());
-						if (matcher.find() && frame == null) {
+						if (frame == null && pirateInTitle(String.valueOf(evt.getNewValue())) != null) {
 							showGizmoGUI();
 						}
 					}

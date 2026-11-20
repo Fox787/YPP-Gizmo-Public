@@ -23,7 +23,6 @@ import java.awt.*;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.List;
@@ -39,11 +38,19 @@ public class DRGizmo {
 	JTextArea status;
 	boolean debug;
 	DRGroupData data = new DRGroupData();
+	/** The activity from the logs (GameScene), or null; when set, it tags the report instead of the counters. */
+	private String logActivity;
 
 	DRGizmo(Window window, JTextArea status, boolean writeDebug) {
 		this.window = window;
 		this.status = status;
 		debug = writeDebug;
+	}
+
+	/** Tags reports with this activity (from the logs) instead of reading the counters; null keeps the counters. */
+	DRGizmo activity(String fromLogs) {
+		logActivity = fromLogs;
+		return this;
 	}
 
 	private void printStatus(String s, boolean isDebug) {
@@ -98,6 +105,11 @@ public class DRGizmo {
 	}
 
 	public DRGroupData scanDutyReport() {
+		return scanDutyReport(SpecialDrops.DEFAULTS);
+	}
+
+	DRGroupData scanDutyReport(List<SpecialDrops.Rule> specialDrops) {
+		booty = null;
 		try {
 			// findDutyReport2 includes Steam client compatibility fixes and should always be used.
 			if (findWolves())
@@ -106,8 +118,7 @@ public class DRGizmo {
 				return data;
 
 			// No duty report open: treat the window as a booty division screen instead.
-			System.out.println("\n\n");
-			printLootReport(null);
+			printLootReport(specialDrops);
 
 			return null;
 		} catch (Exception e) {
@@ -129,6 +140,8 @@ public class DRGizmo {
 	private boolean findWolves() {
 		data = new DRGroupData();
 		printStatus("Scan Wolves: ", true);
+		// The logs say this isn't the Den: no werewolf stations to look for.
+		if (logActivity != null && !RecordChecker.DEN.equals(logActivity)) return false;
 
 		if (window == null) {
 			printStatus("findWolves failed: no window", true);
@@ -169,7 +182,7 @@ public class DRGizmo {
 	private boolean isWolfStation(Container station) {
 		for (int j = 1; j < station.getComponentCount(); j++) {
 			Component tp = tokenPanelOf(station.getComponent(j));
-			if (tp != null && wolfCounterType(tp) != null) return true;
+			if (tp != null && counterType(tp).startsWith("WEREWOLF_")) return true;
 		}
 		return false;
 	}
@@ -189,7 +202,7 @@ public class DRGizmo {
 
 
 				Component tp = tokenPanelOf(row);
-				String type = tp == null ? null : wolfCounterType(tp);
+				String type = tp == null ? null : counterType(tp);
 				int[] tokens = tp == null ? null : readTokens(tp);
 
 				printStatus(name + " " + type + " " + Arrays.toString(tokens), true);
@@ -209,19 +222,22 @@ public class DRGizmo {
 		return pd.getComponentCount() > 2 ? pd.getComponent(2) : null;
 	}
 
-	/** Returns e.g. "WEREWOLF_MOONS" / "WEREWOLF_CHESTS" if the panel carries a werewolf counter enum, else null. */
-	private String wolfCounterType(Component panel) {
+	/** Reads the chest or puzzle counter enum without depending on its obfuscated field name. */
+	private String counterType(Component panel) {
 		for (Class<?> k = panel.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
 			for (java.lang.reflect.Field f : k.getDeclaredFields()) {
 				if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !f.getType().isEnum()) continue;
 				try {
 					f.setAccessible(true);
-					Object v = f.get(panel);
-					if (v != null && v.toString().startsWith("WEREWOLF")) return v.toString();
+					Enum<?> counter = (Enum<?>) f.get(panel);
+					if (counter == null) continue;
+					String name = counter.name();
+					if (name.endsWith("_CHESTS") || name.equals("WEREWOLF_MOONS")
+							|| name.equals("VAMPIRATE_PATCHES")) return name;
 				} catch (Exception ignored) { }
 			}
 		}
-		return null;
+		return "";
 	}
 
 	private static final int[] WOLF_MOON_WEIGHTS  = {1, 2, 3};
@@ -306,7 +322,7 @@ public class DRGizmo {
 			processStation(station);
 		}
 
-		data.setActivity(RecordChecker.activityOf(data));
+		data.setActivity(logActivity != null ? logActivity : RecordChecker.activityOf(data));
 		printStatus("findDutyReport is true (" + data.getActivity() + ")", true);
 		return true;
 	}
@@ -356,6 +372,14 @@ public class DRGizmo {
 		int[] tokens = null;
 		if (pirateData.getComponentCount() > 2) {
 			Component tokenPanel = pirateData.getComponent(2);
+			// Fallback when the logs can't tell the activity: the counter enum on the report.
+			if (logActivity == null) {
+				switch (counterType(tokenPanel)) {
+					case "CURSED_CHESTS" -> data.setActivity(RecordChecker.CI);
+					case "VAMPIRATE_CHESTS", "VAMPIRATE_PATCHES" -> data.setActivity(RecordChecker.LAIR);
+					case "WEREWOLF_CHESTS", "WEREWOLF_MOONS" -> data.setActivity(RecordChecker.DEN);
+				}
+			}
 			tokens = readTokens(tokenPanel);
 			printStatus(Arrays.toString(tokens), true);
 		}
@@ -540,62 +564,17 @@ public class DRGizmo {
 	}
 
 	private static final String POT_LABEL = "Divided treasure";
-	private static final long SHOUT_TOTAL_VALUE = 500_000_000L;
-	private static final long SHOUT_SHARE = 500_000L;
 
-	/** An item worth calling out. min > 0 means group(1) of the regex must be at least min. */
-	private static final class Shout {
-		final Pattern pattern;
-		final long min;
-
-		Shout(String regex, long min) {
-			this.pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
-			this.min = min;
-		}
-
-		boolean hits(String tip) {
-			Matcher m = pattern.matcher(tip);
-			if (!m.find()) return false;
-			if (min <= 0) return true;
-			try { return Long.parseLong(m.group(1)) >= min; } catch (Exception e) { return false; }
-		}
+	private void shout(String pirate, String text, int quantity) {
+		booty.specialDrops.computeIfAbsent(pirate, name -> new LinkedHashMap<>()).merge(text, quantity, Integer::sum);
 	}
 
-	private static final List<Shout> SHOUTS = new ArrayList<>();
-	static {
-		SHOUTS.add(new Shout("Ippolito \\(", 0));
-		SHOUTS.add(new Shout("Serpent \\(", 0));
-		SHOUTS.add(new Shout("Lobster \\(", 0));
-		SHOUTS.add(new Shout("Krakling \\(", 0));
-		SHOUTS.add(new Shout("Ghostling \\(", 0));
-		SHOUTS.add(new Shout("Bat \\(", 0));
-		SHOUTS.add(new Shout("Squirrel \\(", 0));
-		SHOUTS.add(new Shout("Karkinos \\(", 0));
-		SHOUTS.add(new Shout("Gator \\(", 0));
-		SHOUTS.add(new Shout("Ghost rat \\(", 0));
-	}
-
-	/** pirate -> (item -> count), in the order found. */
-	private final Map<String, Map<String, Integer>> shouts = new LinkedHashMap<>();
-
-	private void shout(String pirate, String text) {
-		Map<String, Integer> m = shouts.get(pirate);
-		if (m == null) { m = new LinkedHashMap<>(); shouts.put(pirate, m); }
-		bump(m, text, 1);
-	}
-
-	/** Prints every pirate's loot (or only who's, if not null) followed by the special drops. */
-	private void printLootReport(String who) {
+	/** Prints the loot followed by the configured booty alerts. */
+	private void printLootReport(List<SpecialDrops.Rule> specialDrops) {
 		emitted = 0;
-		shouts.clear();
 		booty = new BootyDivision();
-		// printBootyTips() and printShares() were present but not called in the jar build.
-		printStatus("\n\n", false);
-		printPirateTips(who);
-
-		printStatus("\n\n", false);
-		printShoutouts();
-		booty.specialDrops.putAll(shouts);
+		printPirateTips(specialDrops);
+		printShoutouts(specialDrops);
 	}
 
 	/** What the last scan read from the booty screen, or null if no booty screen was found. */
@@ -605,53 +584,12 @@ public class DRGizmo {
 		return booty == null || booty.isEmpty() ? null : booty;
 	}
 
-	private Container bootyContent() {
-		List<Container> contents = new ArrayList<>();
-		collectByChildLabel(window, contents);
-		return contents.isEmpty() ? null : contents.get(0);
-	}
-
-	/** Money row: each child with a tooltip and a numeric value, e.g. "Total value: 123456". */
-	private void printBootyTips() {
-		Container content = bootyContent();
-		Container money = content == null ? null : findMoneyPanel(content);
-		if (money == null) { emit("booty: money row not found"); return; }
-
-		for (int i = 0; i < money.getComponentCount(); i++) {
-			Component c = money.getComponent(i);
-			long v = parseAmount(textOf(c));
-			String tip = tipOf(c);
-			if (v < 0 || tip.length() == 0) continue;
-			emit(tip + ": " + v);
-			if (tip.toLowerCase().contains("total value") && v >= SHOUT_TOTAL_VALUE)
-				shout("Voyage", "total value " + v);
-		}
-	}
-
-	/** Shares list: "shares: name=amount name=amount ...". */
-	private void printShares() {
-		Container content = bootyContent();
-		if (content == null) return;
-		Container pairs = findPairsPanel(content, findMoneyPanel(content));
-		if (pairs == null) return;
-
-		StringBuilder sb = new StringBuilder("shares: ");
-		for (int i = 0; i + 1 < pairs.getComponentCount(); i += 2) {
-			String name = textOf(pairs.getComponent(i));
-			long v = parseAmount(textOf(pairs.getComponent(i + 1)));
-			sb.append(name).append('=').append(v).append(' ');
-			if (v >= SHOUT_SHARE) shout(name, v + " Eights share");
-		}
-		emit(sb.toString());
-	}
-
-	private void printPirateTips(String who) {
+	private void printPirateTips(List<SpecialDrops.Rule> specialDrops) {
 		List<Container> panels = new ArrayList<>();
 		collectLootPanels(window, panels);
 
 		for (Container p : panels) {
 			String name = buttonNameOf(p.getComponent(0));
-			if (who != null && !who.equalsIgnoreCase(name)) continue;
 
 			Container slots = (Container) p.getComponent(1);
 			BootyDivision.PirateLoot loot = new BootyDivision.PirateLoot(name);
@@ -668,7 +606,7 @@ public class DRGizmo {
 				bump(counts, tip, qty);
 				boolean pot = isPot(slot);
 				if (pot) bump(loot.potItems, tip, qty);
-				else checkShouts(name, tip);
+				else if (SpecialDrops.scopeOf(specialDrops, tip) != null) shout(name, tip, qty);
 			}
 			int hidden = hiddenCount(slots);
 			loot.slots = shown;
@@ -678,12 +616,6 @@ public class DRGizmo {
 			emit("== " + name + " (" + shown + " slots" + (hidden > 0 ? ", " + hidden + " HIDDEN by filter" : "") + ") ==");
 			for (Map.Entry<String, Integer> e : counts.entrySet())
 				emit((e.getValue() > 1 ? e.getValue() + "x " : "") + e.getKey());
-		}
-	}
-
-	private void checkShouts(String pirate, String tip) {
-		for (Shout s : SHOUTS) {
-			if (s.hits(tip)) { shout(pirate, tip); return; }
 		}
 	}
 
@@ -751,19 +683,30 @@ public class DRGizmo {
 		m.put(k, v == null ? n : v + n);
 	}
 
-	private void printShoutouts() {
-		printStatus("== Special Drops ==", false);
-		if (shouts.isEmpty()) { printStatus("(nothing flagged)", false); return; }
-		for (Map.Entry<String, Map<String, Integer>> e : shouts.entrySet()) {
-			StringBuilder sb = new StringBuilder(e.getKey()).append(": ");
-			boolean first = true;
+	private String loggedInPirate() {
+		if (window == null) return null;
+		String pirate = window instanceof Frame frame ? DRGizmoMain.pirateInTitle(frame.getTitle()) : null;
+		if (pirate != null || window.getAccessibleContext() == null) return pirate;
+		return DRGizmoMain.pirateInTitle(window.getAccessibleContext().getAccessibleName());
+	}
+
+	private void printShoutouts(List<SpecialDrops.Rule> rules) {
+		if (booty.specialDrops.isEmpty()) return;
+		String ownPirate = rules.stream().anyMatch(rule -> rule.scope() == SpecialDrops.Scope.OWN) ? loggedInPirate() : null;
+		boolean headingPrinted = false;
+		for (Map.Entry<String, Map<String, Integer>> e : booty.specialDrops.entrySet()) {
+			StringJoiner wins = new StringJoiner(", ");
 			for (Map.Entry<String, Integer> it : e.getValue().entrySet()) {
-				if (!first) sb.append(", ");
-				first = false;
-				if (it.getValue() > 1) sb.append(it.getValue()).append("x ");
-				sb.append(it.getKey());
+				if (SpecialDrops.scopeOf(rules, it.getKey()) == SpecialDrops.Scope.OWN
+						&& !e.getKey().equalsIgnoreCase(ownPirate)) continue;
+				wins.add((it.getValue() > 1 ? it.getValue() + "x " : "") + it.getKey());
 			}
-			printStatus(sb.toString(), false);
+			if (wins.length() == 0) continue;
+			if (!headingPrinted) {
+				printStatus("== " + SpecialDrops.TITLE + " ==", false);
+				headingPrinted = true;
+			}
+			printStatus(e.getKey() + ": " + wins, false);
 		}
 	}
 
@@ -917,78 +860,6 @@ public class DRGizmo {
 	
 	
 	
-	/**
-	 * this processes a "Who's online" given the right branch
-	 * @param branch
-	 */
-	private void processWhoBranch(Container branch) {
-		if (branch.getComponentCount() == 0) {
-			printStatus("nothing to process", true);
-			return;
-		}
-		
-		
-	}
-	
-	/**
-	 * this processes a duty report given the right container
-	 * todo make this method eat a twocolumnpanel instead of a difficult to track jpanel near the twocolumnpanel
-	 * @param branch
-	 */
-	@SuppressWarnings("unchecked")
-	private void processBranch(Container branch) {
-		if (branch.getComponentCount() == 0) {
-			printStatus("nothing to process", true);
-			return;
-		}
-
-		printStatus("branches to process:", true);
-		for (int j = 0; j < branch.getComponentCount(); j++) {
-			printStatus(j + ": " + branch.getComponent(j).getClass().toString(), true);
-		}
-		for (int i = 0; i < branch.getComponentCount(); i++) {
-			printStatus("branch " + i + ": " + branch.getComponent(i).getClass().toString(), true);
-			Container station = (Container) descend(branch, i);
-			Component stationLabel = descendNodes(station, new int[] {0, 1, 0});
-			/*
-			Component stationLabel = descend(station, 0);
-			stationLabel = descend(stationLabel, 1);
-			stationLabel = descend(stationLabel, 0);
-			*/
-			String stationName = ((JLabel) stationLabel).getText(); 
-			printStatus(stationName, true);
-			for (int j = 1; j < station.getComponentCount(); j++) {
-				Component pirateData = descend(station, j);
-				pirateData = descend(pirateData, 1);
-				Component nameLabel = descend(pirateData, 0);
-				String name = ((JLabel) nameLabel).getText();
-				printStatus(name, true);
-				Component drLabel = descend(pirateData, 1);
-				Object innerLabel = getField(drLabel, "_label", Object.class);
-				String dr = getField(innerLabel, "b", String.class);
-				printStatus(dr, true);
-				int[] tokens = null;
-				Component tokenPanel = descend(pirateData, 2);
-				if (tokenPanel != null) {
-					ArrayList<int[]> tokensArrayList = getField(tokenPanel, "_rows", ArrayList.class);
-					tokens = new int[tokensArrayList.get(0).length];
-					
-					//tokensArrayList has an array for every row of tokens
-					for (int[] array : tokensArrayList) {
-						for (int k = 0; k < array.length; k++) {
-							tokens[k] += array[k];
-						}
-					}
-
-					printStatus(Arrays.toString(tokens), true);
-				}
-				//printStatus(name + " " + dr + " " + Arrays.toString(tokens));
-				data.put(stationName, name, dr, tokens, getTotalScore(stationName, tokens));
-				//printStatus(name + " " + dr + " " + Arrays.toString(tokens));
-			}
-		}
-	}
-	
 	private void printAllNodes(Component parent, int depth, StringBuilder path) {
 		
 		Component[] children = ((Container) parent).getComponents();
@@ -1003,29 +874,6 @@ public class DRGizmo {
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (((JEditorPane) children[i]).getText()), true);
 			} else if (children[i] instanceof JButton) {
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (((JButton) children[i]).getText()), true);
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.swing.YoMultiLineLabel")) {
-				Object innerLabel = getField(children[i], "_label", Object.class);
-				String asdf = getField(innerLabel, "b", String.class);
-				//printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (((JLabel) innerLabel).getText()), true);
-				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + (asdf), true);
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.item.client.PoeContainer")) {
-				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + readPoeContainer(children[i]), true);
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.item.client.ItemContainer")) {
-				try {
-					printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + readItemContainer(children[i]), true);
-					
-				} catch (Exception e) {
-					// TODO: handle exception
-					printStatusStackTrace(e);
-				}
-			} else if (children[i].getClass().toString().equals("class com.threerings.piracy.item.client.InventoryItemContainer")) {
-				try {
-					printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString() + "\t\t" + readInventoryItemContainer(children[i]), true);
-					
-				} catch (Exception e) {
-					// TODO: handle exception
-					printStatusStackTrace(e);
-				}
 			} else {
 				printStatus("depth: " + depth + "{ " + path.toString().trim() + ")" + children[i].getClass().toString(), true);
 			}
@@ -1053,225 +901,4 @@ public class DRGizmo {
 		if (childNum >= ((Container) parent).getComponentCount()) return null;
 		return ((Container) parent).getComponent(childNum);
 	}
-	
-	private <T> T getField(Object o, String fieldName, Class<T> clazz) {
-		Class<?> c = o.getClass();
-		try {
-			while (!c.equals(Object.class)) {
-				final Field[] fields = c.getDeclaredFields();
-				for (int i = 0; i < fields.length; ++i) {
-					if (fieldName.equals(fields[i].getName())) {
-						fields[i].setAccessible(true);
-						Object ret = fields[i].get(o);
-						try {
-							return clazz.cast(ret);
-						} catch (ClassCastException e) {
-							return null;
-						}
-					}
-				}
-				c = c.getSuperclass();
-			}
-		} catch (Exception ignored) {}
-		return null;
-	}
-
-	
-	/**
-	 * Pass this a poeContainer and it'll poop out the amount
-	 * @return
-	 */
-	private int readPoeContainer(Object poeContainer) {
-		
-		Integer amount = getField(poeContainer, "_amount", Integer.class);
-		return amount.intValue();
-				
-	}
-	
-	private String readItemContainer(Object itemContainer) {
-		
-		//get the _item field
-		Object item = getField(itemContainer, "_item", Object.class);
-		
-		//now comes the tricky part, we have to get the name of the item
-		//get the item class, this should be com.threerings.piracy.item.client.data.Item
-		Class itemClass = item.getClass();
-		
-		//get the getName method
-		Method methodGetName = null;
-		try {
-			methodGetName = itemClass.getMethod("getName", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//now we have to invoke the item.getName() method.
-		String itemName = null;
-		try {
-			itemName = (String) methodGetName.invoke(item);
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-				
-		return itemName;
-	}
-		
-	
-	private String readInventoryItemContainer(Object inventoryItemContainer) {
-		
-		JPanel asdf = (JPanel) inventoryItemContainer;
-		
-		//replace breaks with newlines for fun
-		String tooltipText = asdf.getToolTipText().replaceAll("<br>", "\n");
-		
-		//remove html tags
-		//  this has its issues (items with custom messages and maybe more) but its good enough
-		tooltipText = tooltipText.replaceAll("\\<.*?\\>", "");
-		
-		//printStatus(tooltipText, true);
-		
-		//get the _item field
-		Object item = getField(inventoryItemContainer, "_item", Object.class);
-		
-		//now comes the tricky part, we have to get the name of the item
-		//get the item class, this should be com.threerings.piracy.item.client.data.Item
-		Class itemClass = item.getClass();
-		
-		//get the getName method
-		Method methodGetName = null;
-		try {
-			methodGetName = itemClass.getMethod("getName", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//now we have to invoke the item.getName() method.
-		String itemName = null;
-		try {
-			itemName = (String) methodGetName.invoke(item);
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//get the ToString method
-		Method methodToString = null;
-		try {
-			methodToString = itemClass.getMethod("toString", null);
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-		
-		//now we have to invoke the item.getName() method.
-		String itemToString = null;
-		try {
-			itemToString = (String) methodToString.invoke(item);
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-				
-		return tooltipText + ", " + itemName + ", " + itemToString;
-		
-	}
-
-	
-	private void printAllFieldsAndMethods(Class clazz) {
-		printStatus("\n\n\nFields", true);
-		printAllFields(clazz);
-		printStatus("\nMethods", true);
-		printAllMethods(clazz);
-	}
-	
-	private void printAllFields(Class clazz) {
-		//Class<?> clazz = o.getClass();
-		
-		/*
-		Class<?> c = o.getClass();
-		try {
-			while (!c.equals(Object.class)) {
-				final Field[] fields = c.getDeclaredFields();
-				for (int i = 0; i < fields.length; ++i) {
-					if (fieldName.equals(fields[i].getName())) {
-						fields[i].setAccessible(true);
-						Object ret = fields[i].get(o);
-						try {
-							return clazz.cast(ret);
-						} catch (ClassCastException e) {
-							return null;
-						}
-					}
-				}
-				c = c.getSuperclass();
-			}
-		} catch (Exception ignored) {}
-		return null;
-		*/
-		
-		
-
-		try {
-			Field[] fields = clazz.getFields();
-	         for(int i = 0; i < fields.length; i++) {
-	            printStatus(fields[i].getName(), true);
-	            printStatus(fields[i].toString(), true);
-	         }
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-	}
-	
-	
-	private void printAllMethods(Class clazz) {
-		try {
-			Method[] methods = clazz.getMethods();
-	         for(int i = 0; i < methods.length; i++) {
-	            printStatus(methods[i].getName(), true);
-	            printStatus(methods[i].toString(), true);
-	         }
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			printStatusStackTrace(e);
-		}
-	}
-	
-	
-	
 }
-
-
-
-
-
