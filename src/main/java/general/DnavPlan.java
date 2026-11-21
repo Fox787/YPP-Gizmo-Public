@@ -72,7 +72,7 @@ final class DnavPlan {
 
 	/**
 	 * {@code donkeys} Booch-donkeys first (each a Booch then a x5), then the triples, the doubles and the
-	 * single. A double scores 2 x the board; it's taken to leave the board as it was (not yet checked).
+	 * single. A double scores 2 x the board and leaves a 125 board, like a Booch (Jared, 21 Nov 2026).
 	 */
 	static Line line(boolean booch, int donkeys, int triples, int doubles, boolean single, int tripleSeconds, int singleSeconds,
 					 int donkeySeconds, int doubleSeconds) {
@@ -94,6 +94,7 @@ final class DnavPlan {
 		}
 		for (int i = 0; i < doubles; i++) {
 			points += 2 * board;
+			board = BOOCH_BOARD;
 			t += doubleSeconds;
 			steps.add(new Step("Double " + (i + 1), t, points));
 		}
