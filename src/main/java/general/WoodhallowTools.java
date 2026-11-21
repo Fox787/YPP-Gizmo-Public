@@ -26,9 +26,12 @@ final class WoodhallowTools {
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
 	private final JCheckBox checkBoxRatingsExport;
 	// Cursed Isles forage timer (Thalassa's), merc plank warning (PP_Timer's), and the rumble minute warning.
-	private final JCheckBox checkBoxForageTimer, checkBoxPlankSound, checkBoxRumbleSound;
+	private final JCheckBox checkBoxPlankSound, checkBoxRumbleSound;
 	// The row next to the Scan button: the running timer on the left, the shorthand (or wolves left) on the right.
-	private final JCheckBox checkBoxScanRow, checkBoxExtendedDnav;
+	private final JCheckBox checkBoxExtendedDnav;
+	/** Where the timers go: TIMERS_TOP, TIMERS_BOTTOM or TIMERS_BOTH (pref "timerplace", top by default). */
+	private final JComboBox<String> comboTimerPlace;
+	static final String TIMERS_TOP = "Top", TIMERS_BOTTOM = "Bottom", TIMERS_BOTH = "Top and bottom";
 	private final JLabel scanTimer = fitted(), scanShorthand = fitted();
 
 	/** A label no wider than its text, so the Scan row's glue keeps it on the right (HTML text would stretch). */
@@ -103,8 +106,7 @@ final class WoodhallowTools {
 		addWarningMatrix(section, prefs);
 		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
 		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
-		checkBoxForageTimer = option(section, prefs, "Forage timer (Cursed Isles, Woodhallow)", "foragetimer", true);
-		checkBoxForageTimer.setToolTipText("Time left to forage, in a bar above the tabs; red in the last 30 seconds");
+		comboTimerPlace = timerPlace(section, prefs);
 		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
 		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
 		// Chat log: mercs and pirates leaving the vessel, for the plank check.
@@ -113,16 +115,15 @@ final class WoodhallowTools {
 		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
 		checkBoxExtendedDnav = option(section, prefs, "Extended Dnav (solo strategies in Next Dnav)", "extendeddnav", false);
 		checkBoxExtendedDnav.setToolTipText("Also show the solo navigation strategies, with their chances, under the Next Dnav forecast");
-		checkBoxScanRow = option(section, prefs, "Timers next to the Scan button", "scanrowtimers", true);
-		checkBoxScanRow.setToolTipText("Rumble, forage, vampire lair and Dnav station timers beside the Scan button, with the shorthand or wolves left on the right");
 		addVolume(section, prefs);
 		createDnavTab();
 		createRumbleTab();
 		rumbleForecast.setExtended(checkBoxExtendedDnav.isSelected());
 		checkBoxExtendedDnav.addActionListener(ev -> rumbleForecast.setExtended(checkBoxExtendedDnav.isSelected()));
+		// About the Scan button's height (23 px at the usual 12 pt font).
 		Font font = scanTimer.getFont();
-		scanTimer.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.3f));
-		scanShorthand.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.3f));
+		scanTimer.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.45f));
+		scanShorthand.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.45f));
 	}
 
 	/** Adds the timer and the shorthand beside it ("1:00 (15-16)"), right-aligned in the Scan button's row. */
@@ -144,7 +145,7 @@ final class WoodhallowTools {
 		String left = " ", right = " ";
 		Color leftColor = labelWolvesLeftColor, rightColor = labelWolvesLeftColor;
 		long lairLeft = stationClock.lairTimerEnd() - now;
-		if (!checkBoxScanRow.isSelected()) {
+		if (!timersBottom()) {
 			// Nothing.
 		} else if (plankAlert) {
 			left = plankText(toPlank);
@@ -160,12 +161,15 @@ final class WoodhallowTools {
 				right = stationClock.inDen() ? RumbleBoard.instaShorthand(minute, maxDamage)
 						: "(" + RumbleBoard.shorthand(minute, maxDamage) + ")";
 			}
-		} else if (forageLeft >= 0 && checkBoxForageTimer.isSelected()) {
+		} else if (forageLeft >= 0) {
+			// Its own option: the forage timer option is the bar above the tabs.
 			left = clock((forageLeft + 999) / 1000);
 			if (forageLeft <= FORAGE_WARNING_MS) leftColor = WARNING_RED;
-		} else if (lairLeft > 0 && lairLeft <= StationClock.LAIR_ROUND_AFTER_FRAY_MS) {
+			right = FORAGE_LABEL;
+		} else if (lairRoundOn(lairLeft)) {
 			left = clock((lairLeft + 999) / 1000);
-			if (lairLeft <= 15_000) leftColor = WARNING_RED;
+			if (lairLeft <= LAIR_WARNING_MS) leftColor = WARNING_RED;
+			right = LAIR_ROUND_LABEL;
 		} else if (dnavEnds > now) {
 			left = clock((dnavEnds - now + 999) / 1000);
 			right = labelWolvesLeft.getText();
@@ -177,7 +181,40 @@ final class WoodhallowTools {
 		scanShorthand.setForeground(rightColor);
 	}
 
+	static final String FORAGE_LABEL = "Forage", LAIR_ROUND_LABEL = "Carp/Treasure Haul";
+	/** The lair round turns red in its last 15 seconds (the chat's coffin warning). */
+	private static final long LAIR_WARNING_MS = 15_000;
+
+	/** The vampire lair's carpentry/treasure haul round after a fray is on. */
+	private static boolean lairRoundOn(long lairLeft) {
+		return lairLeft > 0 && lairLeft <= StationClock.LAIR_ROUND_AFTER_FRAY_MS;
+	}
+
 	private static String plankText(int toPlank) { return "Plank " + toPlank + (toPlank == 1 ? " merc!" : " mercs!"); }
+
+	/**
+	 * The timers' place: the bar above the tabs (top), the Scan button's row (bottom), or both. Covers the
+	 * rumble, forage, Woodhallow station and vampire lair carpentry/treasure haul timers.
+	 */
+	private static JComboBox<String> timerPlace(JPanel section, Preferences prefs) {
+		JComboBox<String> place = new JComboBox<>(new String[]{TIMERS_TOP, TIMERS_BOTTOM, TIMERS_BOTH});
+		String saved = prefs.get("timerplace", TIMERS_TOP);
+		place.setSelectedItem(List.of(TIMERS_TOP, TIMERS_BOTTOM, TIMERS_BOTH).contains(saved) ? saved : TIMERS_TOP);
+		place.addActionListener(ev -> prefs.put("timerplace", (String) place.getSelectedItem()));
+		place.setToolTipText("<html>Rumble, forage, Woodhallow station and vampire lair carpentry/treasure haul timers:<br>"
+				+ "top is a bar above the tabs, bottom is beside the Scan button</html>");
+		place.setMaximumSize(place.getPreferredSize());
+		JPanel row = new JPanel();
+		row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+		row.setAlignmentX(Component.LEFT_ALIGNMENT);
+		row.add(new JLabel("Timers: "));
+		row.add(place);
+		section.add(row);
+		return place;
+	}
+
+	private boolean timersTop() { return !TIMERS_BOTTOM.equals(comboTimerPlace.getSelectedItem()); }
+	private boolean timersBottom() { return !TIMERS_TOP.equals(comboTimerPlace.getSelectedItem()); }
 
 	private static JCheckBox option(JPanel section, Preferences prefs, String label, String key, boolean defaultValue) {
 		JCheckBox option = new JCheckBox(label, prefs.getBoolean(key, defaultValue));
@@ -479,15 +516,14 @@ final class WoodhallowTools {
 		labelRumbleShorthand.setFont(bigFont);
 		labelRumbleShorthand.setToolTipText("<html>Groups to charge this minute: the recommended range,<br>at Woodhallow after the groups for an insta on a white name (in white)</html>");
 		shorthandColor = labelRumbleShorthand.getForeground();
-		JPanel rumbleTop = new JPanel(new BorderLayout(8, 0));
-		rumbleTop.add(labelRumble, BorderLayout.WEST);
-		rumbleTop.add(labelRumbleShorthand, BorderLayout.EAST);
+		// The Rumble tab is the board; the timer and shorthand go in the timer bar above the tabs.
 		rumbleBoard = new RumbleBoard();
 		panelRumble = new JPanel(new BorderLayout(0, 2));
-		panelRumble.add(rumbleTop, BorderLayout.NORTH);
 		panelRumble.add(rumbleBoard, BorderLayout.CENTER);
-		// The forage bar: the Rumble tab's top line (big timer left, detail right), styled like it: the
-		// window's own background and label colours from the game's look and feel, red text as the warning.
+		// The timer bar above the tabs, for the rumble and the forages alike: the rumble timer (or the time
+		// left) big on the left, the shorthand (or what is timed) on the right. The window's own background
+		// and label colours from the game's look and feel, red text as the warning. During a rumble it holds
+		// labelRumble and labelRumbleShorthand, otherwise labelForage and labelForageDetail.
 		labelForage = new JLabel(" ");
 		labelForage.setFont(timerFont);
 		labelForageDetail = new JLabel(" ");
@@ -502,7 +538,7 @@ final class WoodhallowTools {
 		rumbleForecast.setVisible(false);
 	}
 
-	/** The forage bar, for the main window to put above the tabs. Hidden unless foraging or planking. */
+	/** The timer bar, for the main window to put above the tabs. Hidden unless a timer or the plank alert is on. */
 	JComponent forageBar() { return forageBar; }
 
 	/**
@@ -543,9 +579,15 @@ final class WoodhallowTools {
 
 		boolean board = elapsed >= 0 && checkBoxRumbleBoard.isSelected();
 		boolean shorthand = elapsed >= 0 && checkBoxRumbleShorthand.isSelected();
-		boolean foraging = elapsed < 0 && shownForageLeft >= 0 && checkBoxForageTimer.isSelected();
-		updateForageBar(shownForageLeft, foraging, plankAlert, plankText, plank, toPlank);
-		// The Rumble tab is the board: with the board off, the timer and shorthand are on the Scan row only.
+		// No forage on: the vampire lair's carpentry/treasure haul round, styled the same.
+		long lairLeft = stationClock.lairTimerEnd() - now;
+		boolean lairRound = shownForageLeft < 0 && lairRoundOn(lairLeft);
+		long barLeft = lairRound ? lairLeft : shownForageLeft;
+		boolean rumbleOn = elapsed >= 0 && timersTop();
+		boolean foraging = elapsed < 0 && barLeft >= 0 && timersTop();
+		updateTimerBar(rumbleOn);
+		if (!rumbleOn) updateForageBar(barLeft, lairRound, foraging, plankAlert, plankText, plank, toPlank);
+		// The Rumble tab is the board.
 		int index = tabbedPane.indexOfComponent(panelRumble);
 		if (board && index < 0) {
 			tabBeforeRumble = userTab();
@@ -554,25 +596,24 @@ final class WoodhallowTools {
 		} else if (!board && index >= 0) {
 			removeAutoTab(panelRumble, tabBeforeRumble);
 		}
-		if (!board) {
+		boolean woodhallow = stationClock.inDen();
+		boolean maxDamage = woodhallow && stationClock.elitesLeft() == 0;
+		int minute = (int) (elapsed / 60_000);
+		if (board) {
+			rumbleBoard.setVisible(true);
+			rumbleBoard.setMinute(minute);
+			rumbleBoard.setWerewolfFight(woodhallow, maxDamage);
+		}
+		if (!rumbleOn) {
 			rumbleSecond = -1;
 			rumbleGroups = null;
 			return;
 		}
-		labelRumble.setToolTipText("Time into the rumble; red in the last 5 seconds before the punch sizes change");
-		labelRumbleShorthand.setForeground(shorthandColor);
-
-		boolean woodhallow = stationClock.inDen();
-		boolean maxDamage = woodhallow && stationClock.elitesLeft() == 0;
-		int minute = (int) (elapsed / 60_000);
-		rumbleBoard.setVisible(board);
-		rumbleBoard.setMinute(minute);
-		rumbleBoard.setWerewolfFight(woodhallow, maxDamage);
 		long seconds = elapsed / 1000;
 		if (seconds != rumbleSecond) {
 			rumbleSecond = seconds;
-			labelRumble.setText(String.format("%d:%02d", seconds / 60, seconds % 60));
-			labelRumble.setForeground(seconds % 60 >= 55 ? new Color(0xe03030) : labelWolvesLeftColor);
+			labelRumble.setText(clock(seconds));
+			labelRumble.setForeground(seconds % 60 >= 55 ? FORAGE_RED : labelWolvesLeftColor);
 		}
 		labelRumbleShorthand.setVisible(shorthand);
 		if (shorthand) {
@@ -584,11 +625,26 @@ final class WoodhallowTools {
 		}
 	}
 
+	/** Puts the rumble's labels in the timer bar during a rumble (and shows it), the forage ones otherwise. */
+	private void updateTimerBar(boolean rumble) {
+		boolean holdsRumble = labelRumble.getParent() == forageBar;
+		if (rumble != holdsRumble) {
+			forageBar.removeAll();
+			forageBar.add(rumble ? labelRumble : labelForage, BorderLayout.WEST);
+			forageBar.add(rumble ? labelRumbleShorthand : labelForageDetail, BorderLayout.EAST);
+			forageBar.setToolTipText(null);
+			forageBar.revalidate();
+			forageBar.repaint();
+		}
+		if (rumble && !forageBar.isVisible()) forageBar.setVisible(true);
+	}
+
 	/**
 	 * The forage bar, above whichever tab is open: the time left to forage (2:00 down), red text in
-	 * the last 30 seconds; after the forage, the plank alert in red while it lasts. Hidden otherwise.
+	 * the last 30 seconds, or the vampire lair's carpentry/treasure haul round (red in the last 15); after the
+	 * forage, the plank alert in red while it lasts. Hidden otherwise.
 	 */
-	private void updateForageBar(long forageLeft, boolean foraging, boolean plankAlert, String plankText,
+	private void updateForageBar(long forageLeft, boolean lairRound, boolean foraging, boolean plankAlert, String plankText,
 			MercPlank plank, int toPlank) {
 		boolean show = foraging || plankAlert;
 		if (forageBar.isVisible() != show) forageBar.setVisible(show);
@@ -603,9 +659,10 @@ final class WoodhallowTools {
 			red = true;
 		} else {
 			time = clock((forageLeft + 999) / 1000);
-			detail = "Forage";
-			tip = "Time left to forage; red in the last 30 seconds";
-			red = forageLeft <= FORAGE_WARNING_MS;
+			detail = lairRound ? LAIR_ROUND_LABEL : FORAGE_LABEL;
+			tip = lairRound ? "Time left in the carpentry/treasure haul round; red in the last 15 seconds"
+					: "Time left to forage; red in the last 30 seconds";
+			red = forageLeft <= (lairRound ? LAIR_WARNING_MS : FORAGE_WARNING_MS);
 		}
 		if (!time.equals(labelForage.getText())) labelForage.setText(time);
 		if (!detail.equals(labelForageDetail.getText())) labelForageDetail.setText(detail);
