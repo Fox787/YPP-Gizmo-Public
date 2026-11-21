@@ -18,15 +18,17 @@ import java.util.regex.Pattern;
 
 /**
  * Voyage records from Puzzle Practice (puzzle-practice/Puzzle_Practice, main):
- *   src/voyage-records/known-records.json  best score / most top-tier chests per voyage and crew size
- *   src/voyage-records/sheet-records.json  the sheets' other records; Gizmo uses the one-DR,
- *                                          one-forage and one-pirate ones that match its record boxes
- * "Get records" downloads the latest copies to exported_data/; Gizmo reads those, so it works
- * offline afterwards. Only plain HTTPS GETs to GitHub: nothing is sent about the player.
+ * src/voyage-records/records.json holds every global record in one format, each with its category
+ * ("Most dire chests", "Best forage score in one DR, one pirate", ...). Gizmo maps the categories it
+ * can check to its kinds (SHEET_KINDS); the rest are kept as "other" for the records window.
+ * "Get records" downloads the latest copy to the data folder; Gizmo reads that, so it works offline
+ * afterwards. Only a plain HTTPS GET to GitHub: nothing is sent about the player.
  */
 public final class VoyageRecords {
 
 	static final String BASE = "https://raw.githubusercontent.com/puzzle-practice/Puzzle_Practice/main/src/voyage-records/";
+	static final String RECORDS = "records.json";
+	/** Puzzle Practice's older two files, still read from the cache until records.json has been downloaded. */
 	static final String KNOWN = "known-records.json", SHEET = "sheet-records.json";
 
 	public static final class Record {
@@ -53,7 +55,8 @@ public final class VoyageRecords {
 		this.folder = folder;
 		List<Record> cached = new ArrayList<>();
 		long loadedAt = 0;
-		for (String name : new String[]{KNOWN, SHEET}) {
+		String[] names = Files.exists(folder.resolve(RECORDS)) ? new String[]{RECORDS} : new String[]{KNOWN, SHEET};
+		for (String name : names) {
 			Path file = folder.resolve(name);
 			try {
 				cached.addAll(parse(Files.readString(file)));
@@ -84,17 +87,13 @@ public final class VoyageRecords {
 		}
 	}
 
-	/** Fetches and parses both files off the UI thread, then publishes the new records together. */
+	/** Fetches and parses records.json off the UI thread, then publishes the new records. */
 	public int download() throws IOException {
-		byte[] known = fetch(KNOWN);
-		byte[] sheet = fetch(SHEET);
-		List<Record> parsed = new ArrayList<>(parse(new String(known, StandardCharsets.UTF_8)));
-		List<Record> sheetRecords = parse(new String(sheet, StandardCharsets.UTF_8));
-		if (parsed.isEmpty() || sheetRecords.isEmpty()) throw new IOException("A record file contained no usable records");
-		parsed.addAll(sheetRecords);
+		byte[] all = fetch(RECORDS);
+		List<Record> parsed = parse(new String(all, StandardCharsets.UTF_8));
+		if (parsed.isEmpty()) throw new IOException("records.json contained no usable records");
 		Files.createDirectories(folder);
-		writeCache(folder.resolve(KNOWN), known);
-		writeCache(folder.resolve(SHEET), sheet);
+		writeCache(folder.resolve(RECORDS), all);
 		snapshot = new Snapshot(List.copyOf(parsed), System.currentTimeMillis());
 		return parsed.size();
 	}
@@ -114,10 +113,17 @@ public final class VoyageRecords {
 	}
 
 	/**
-	 * Sheet categories Gizmo checks, as {voyage, category, kind, one pirate}. Kinds: "chests" and
-	 * "score" are per voyage (entry), "drChests" and "drScore" per duty report (one forage).
+	 * Puzzle Practice categories Gizmo checks, as {voyage, category, kind, one pirate}. Kinds: "chests"
+	 * and "score" are per voyage (entry), "drChests", "drScore" and "drNav" per duty report.
 	 */
 	static final String[][] SHEET_KINDS = {
+			{"woodhallow", "Most dire chests", "chests", ""},
+			{"woodhallow", "Best score", "score", ""},
+			{"cursedIsles", "Most cursed chests", "chests", ""},
+			{"cursedIsles", "Best score", "score", ""},
+			{"vampireLairs", "Most immortal chests", "chests", ""},
+			{"vampireLairs", "Best score", "score", ""},
+			{"woodhallow", "Best dnav score in one DR, one pirate", "drNav", "1"},
 			{"woodhallow", "Most dire chests in one DR", "drChests", ""},
 			{"woodhallow", "Best forage score in one DR", "drScore", ""},
 			{"woodhallow", "Most DCs in one forage", "drChests", "1"},
@@ -176,7 +182,7 @@ public final class VoyageRecords {
 	}
 
 	/** Puzzle Practice's kinds, plus the Woodhallow one-DR records it is adding. */
-	public static final String CHESTS = "chests", SCORE = "score", DR_CHESTS = "drChests", DR_SCORE = "drScore";
+	public static final String CHESTS = "chests", SCORE = "score", DR_CHESTS = "drChests", DR_SCORE = "drScore", DR_NAV = "drNav";
 
 	static String topChests(String voyage) {
 		if ("woodhallow".equals(voyage)) return "dire chests";
@@ -192,6 +198,7 @@ public final class VoyageRecords {
 			case CHESTS: return "most " + topChests(voyage);
 			case DR_CHESTS: return "most " + topChests(voyage) + " in one DR";
 			case DR_SCORE: return "vampireLairs".equals(voyage) ? "most total chests in one fray" : "best forage score in one DR";
+			case DR_NAV: return "best dnav score in one DR";
 			default: return kind;
 		}
 	}
@@ -329,9 +336,10 @@ public final class VoyageRecords {
 	private static final Pattern PIRATE_SCORES = Pattern.compile("\"pirateScores\"\\s*:\\s*\\[(\\d+(?:\\s*,\\s*\\d+)*)\\s*\\]");
 
 	/**
-	 * Puzzle Practice's recordsMessage: one numbered line per record still beaten (against the latest
-	 * records downloaded), then the same records as JSON for known-records.json. Null if none.
-	 * Only the best claim for each voyage, ocean, crew size and kind is sent.
+	 * The message to send: one numbered line per record still beaten (against the latest records
+	 * downloaded), then "Data for the records:" and the same records as a JSON list in Puzzle Practice's
+	 * records.json format (category, crewSize only for per-crew categories, numeric value, pirates with
+	 * pirateScores biggest first, loot). Null if none. Only the best claim for each record is sent.
 	 */
 	public synchronized String claimMessage() {
 		record Claim(Record record, String json, Record known) {}
@@ -343,7 +351,7 @@ public final class VoyageRecords {
 				if (one.isEmpty()) continue;
 				Record c = one.get(0);
 				Record known = get(c.voyage, c.ocean, c.crewSize, c.kind);
-				if (known != null && c.value <= known.value) continue;   // the table has it (or better) now
+				if (known != null && c.value <= known.value) continue;   // the records have it (or better) now
 				String key = c.voyage + "|" + c.ocean + "|" + c.crewSize + "|" + c.kind;
 				Claim prev = best.get(key);
 				if (prev == null || prev.record().value < c.value
@@ -352,7 +360,7 @@ public final class VoyageRecords {
 			}
 		} catch (IOException | RuntimeException e) { return null; }
 		if (best.isEmpty()) return null;
-		StringBuilder text = new StringBuilder(), json = new StringBuilder("["), sheet = new StringBuilder("[");
+		StringBuilder text = new StringBuilder(), data = new StringBuilder("[");
 		int i = 0;
 		for (Claim claim : best.values()) {
 			Record c = claim.record();
@@ -360,35 +368,47 @@ public final class VoyageRecords {
 			Record known = claim.known();
 			Matcher t = TIME.matcher(raw), lo = LOOT.matcher(raw);
 			String time = t.find() ? t.group(1) : null;
-			String loot = lo.find() ? lo.group(1) + "/" + lo.group(2) + "/" + lo.group(3) : "?";
+			int[] loot = lo.find() ? new int[]{Integer.parseInt(lo.group(1)), Integer.parseInt(lo.group(2)), Integer.parseInt(lo.group(3))} : null;
+			boolean anyLoot = loot != null && loot[0] + loot[1] + loot[2] > 0;
 			String ocean = c.ocean.substring(0, 1).toUpperCase() + c.ocean.substring(1);
-			String who = c.crewSize > 0 ? c.crewSize + " pirates, " + describe(c.voyage, c.kind) : describe(c.voyage, c.kind, 0);
-			text.append(String.format("%d. %s (%s), %s: %d (%s) on %s. Loot %s. %s: %s\n",
-					++i, voyageName(c.voyage), ocean, who, c.value,
-					known == null ? "no record for this crew size yet" : "beats " + known.value, time != null ? time : c.date != null ? c.date : "an unknown date",
-					loot, c.crewSize > 0 ? "Crew" : "Pirate", crewText(c)));
 			String category = categoryFor(c.voyage, c.kind, c.crewSize);
-			if (category == null) {
-				json.append(json.length() > 1 ? "," : "").append(raw.trim());
-			} else {
-				// The sheet's shape: category instead of kind, value as text, no crew size for one pirate.
-				StringBuilder ps = new StringBuilder("[");
-				for (String n : c.pirates) ps.append(ps.length() > 1 ? "," : "").append(q(n));
-				ps.append("]");
-				sheet.append(sheet.length() > 1 ? "," : "").append(String.format(
-						"{\"voyage\":%s,\"ocean\":%s,\"category\":%s,%s\"value\":\"%d\",\"date\":%s,\"time\":%s,\"pirates\":%s,\"loot\":[%s]%s}",
-						q(c.voyage), q(c.ocean), q(category), c.crewSize > 0 ? "\"crewSize\":" + c.crewSize + "," : "", c.value,
-						q(c.date), q(time), ps, loot.replace("/", ","), scoresField(c.pirateScores)));
+			String what = category != null ? (c.crewSize > 0 ? c.crewSize + " pirates, " : "") + category
+					: (c.crewSize > 0 ? c.crewSize + " pirates, " + describe(c.voyage, c.kind) : describe(c.voyage, c.kind, 0));
+			// Pirates in the order Puzzle Practice wants: biggest share first (the order as found when there are no shares).
+			List<Integer> order = new ArrayList<>();
+			for (int k = 0; k < c.pirates.size(); k++) order.add(k);
+			if (c.pirateScores.size() == c.pirates.size()) order.sort((x, y) -> Integer.compare(c.pirateScores.get(y), c.pirateScores.get(x)));
+			List<String> names = new ArrayList<>();
+			List<Integer> shares = new ArrayList<>();
+			for (int k : order) {
+				names.add(c.pirates.get(k));
+				if (c.pirateScores.size() == c.pirates.size()) shares.add(c.pirateScores.get(k));
 			}
+			StringBuilder crew = new StringBuilder();
+			for (int k = 0; k < names.size(); k++)
+				crew.append(k > 0 ? ", " : "").append(names.get(k)).append(shares.isEmpty() || names.size() == 1 ? "" : " (" + shares.get(k) + ")");
+			text.append(String.format("%d. %s (%s), %s: %d (%s) on %s.%s %s: %s\n",
+					++i, voyageName(c.voyage), ocean, what, c.value,
+					known == null ? "no record for this crew size yet" : "beats " + known.value,
+					time != null ? time : c.date != null ? c.date : "an unknown date",
+					anyLoot ? " Loot " + loot[0] + "/" + loot[1] + "/" + loot[2] + "." : "",
+					c.crewSize > 0 ? "Crew" : "Pirate", names.isEmpty() ? "not in the log" : crew));
+			StringBuilder ps = new StringBuilder("[");
+			for (String n : names) ps.append(ps.length() > 1 ? "," : "").append(q(n));
+			ps.append("]");
+			data.append(data.length() > 1 ? "," : "").append(String.format(
+					"{\"voyage\":%s,\"ocean\":%s,\"category\":%s,%s\"value\":%d%s%s,\"pirates\":%s%s%s}",
+					q(c.voyage), q(c.ocean), q(category != null ? category : describe(c.voyage, c.kind, c.crewSize)),
+					c.crewSize > 0 ? "\"crewSize\":" + c.crewSize + "," : "", c.value,
+					c.date != null ? ",\"date\":" + q(c.date) : "", time != null ? ",\"time\":" + q(time) : "", ps,
+					shares.isEmpty() || names.size() == 1 ? "" : ",\"pirateScores\":" + shares.toString().replace(" ", ""),
+					anyLoot ? ",\"loot\":[" + loot[0] + "," + loot[1] + "," + loot[2] + "]" : ""));
 		}
-		json.append("]");
-		sheet.append("]");
+		data.append("]");
 		return (i == 1 ? "Hi Jice, I've beaten a voyage record on Puzzle Practice:" : "Hi Jice, I've beaten " + i + " voyage records on Puzzle Practice:")
 				+ "\n" + text + "\n"
 				+ "I'll send a picture, image or video of " + (i == 1 ? "it" : "each one") + ", numbered as above.\n\n"
-				+ (sheet.length() > 2 ? "Data for the sheet records:\n" + sheet : "")
-				+ (json.length() > 2 && sheet.length() > 2 ? "\n\n" : "")
-				+ (json.length() > 2 ? "Data for the records table:\n" + json : "");
+				+ "Data for the records:\n" + data;
 	}
 
 	// The file is a flat list of objects with string, number and string-array fields.

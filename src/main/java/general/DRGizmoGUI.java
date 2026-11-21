@@ -469,9 +469,18 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			printRecordLines(LairRecordChecks.fray(voyageRecords, data, ocean, time));
 			return;
 		}
-		if (!data.data.containsKey(RecordChecker.FORAGE)) return;
-		int[] loot = new int[3];   // tier 3, 2, 1
 		List<String> lines = new ArrayList<>();
+		// Woodhallow: each navigator's Duty Navigation score in this DR (singles + 2 x doubles + 3 x triples)
+		// against "Best dnav score in one DR, one pirate".
+		if ("woodhallow".equals(voyage) && data.data.containsKey("Navigating"))
+			for (DRIndividualData d : data.data.get("Navigating").values()) {
+				int[] t = d.getTokens();
+				if (t == null || t.length < 3) continue;
+				lines.add(voyageRecords.compare(voyage, ocean, 0, VoyageRecords.DR_NAV, t[0] + 2 * t[1] + 3 * t[2], time,
+						List.of(d.getName()), new int[]{0, 0, 0}));
+			}
+		if (!data.data.containsKey(RecordChecker.FORAGE)) { printRecordLines(lines); return; }
+		int[] loot = new int[3];   // tier 3, 2, 1
 		Map<String, int[]> pirateLoot = new LinkedHashMap<>();
 		for (DRIndividualData d : data.data.get(RecordChecker.FORAGE).values()) {
 			int[] t = d.getTokens();
