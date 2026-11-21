@@ -120,11 +120,14 @@ final class WoodhallowTools {
 		checkBoxRatingsExport = option(section, prefs, "Export dr_ratings.jsonl", "drratingsexport", true);
 		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
 		checkBoxExtendedDnav = option(section, prefs, "Extended Dnav (solo strategies in Next Dnav)", "extendeddnav", false);
-		checkBoxExtendedDnav.setToolTipText("Also show the two fastest solo lines (with and without a Booch) under the Next Dnav forecast");
+		checkBoxExtendedDnav.setToolTipText("Also show the fastest solo lines (with and without a Booch, and with a Booch-donkey) under the Next Dnav forecast");
 		addSeconds(section, prefs, "Solo triple (s)", "dnavtriplesec", 40, v -> tripleSeconds = v,
 				"How long you take to build a triple; picks the fastest solo line");
 		addSeconds(section, prefs, "Solo end single (s)", "dnavsinglesec", 12, v -> singleSeconds = v,
 				"How long a single takes at the very end of a solo line");
+		addSeconds(section, prefs, "Solo donkey (s)", "dnavdonkeysec", 51, v -> donkeySeconds = v,
+				"<html>How long the x5 takes after its Booch (the Booch itself is " + DnavPlan.BOOCH_SECONDS + " s).<br>"
+				+ "A Booch-donkey scores 625 and leaves a 173 board, like a triple.</html>");
 		addVolume(section, prefs);
 		createDnavTab();
 		createRumbleTab();
@@ -276,7 +279,7 @@ final class WoodhallowTools {
 	}
 
 	/** Seconds per triple and per end single for the solo line (DnavPlan). */
-	private volatile int tripleSeconds = 40, singleSeconds = 12;
+	private volatile int tripleSeconds = 40, singleSeconds = 12, donkeySeconds = 51;
 
 	private static void addSeconds(JPanel section, Preferences prefs, String label, String key, int defaultValue,
 								   java.util.function.IntConsumer apply, String tip) {
@@ -304,7 +307,7 @@ final class WoodhallowTools {
 	private List<DnavPlan.Line> plan(int fray) {
 		int crew = stationClock.crew();
 		if (crew <= 0 || fray < 2 || fray > 6) return List.of();
-		return DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds);
+		return DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds, donkeySeconds);
 	}
 
 	private static void addVolume(JPanel section, Preferences prefs) {
@@ -500,8 +503,7 @@ final class WoodhallowTools {
 		List<DnavPlan.Line> lines = plan(stationClock.frayNumber());
 		String strategy = lines.isEmpty() ? (startingWolves >= 0 ? nz(SoloNavStrategy.forWerewolves(startingWolves))
 				: half >= 0 ? twoStrategies(2 * half, 2 * half + 1) : strategiesWithOdds(odds))
-				: lines.get(0).name() + " (" + lines.get(0).time() + ")"
-				+ (lines.size() > 1 ? "\nor " + lines.get(1).name() + " (" + lines.get(1).time() + ")" : "");
+				: lines.stream().map(l -> l.name() + " (" + l.time() + ")").collect(java.util.stream.Collectors.joining("\nor "));
 		if (!("Solo: " + strategy).equals(labelStrategy.getText())) {
 			labelStrategy.setText("Solo: " + strategy);
 			panelDnav.revalidate();
@@ -647,7 +649,7 @@ final class WoodhallowTools {
 					+ ", expected end " + timeOfDay(stationClock.expectedEnd(p)) + (p.lair ? " (lair)" : ""));
 		}
 		line.accept("");
-		line.accept("Solo settings: triple " + tripleSeconds + " s, end single " + singleSeconds + " s, Booch "
+		line.accept("Solo settings: triple " + tripleSeconds + " s, end single " + singleSeconds + " s, donkey " + donkeySeconds + " s, Booch "
 				+ DnavPlan.BOOCH_SECONDS + " s");
 		for (int f : new int[]{fray - 1, fray}) {
 			if (crew <= 0 || f < 2 || f > 6) continue;
