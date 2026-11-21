@@ -29,6 +29,6 @@ class ProductionWolfLinesTest {
 
 	private static WolfCount.Reading read(WolfCount wolves, StationClock clock, StationClock.Period period,
 										  int ahoy, long now) {
-		return wolves.read(false, () -> ahoy, clock.wolfProgress(period), 1_000, now, List.of());
+		return wolves.read(() -> ahoy, clock.wolfProgress(period), 1_000, now, List.of());
 	}
 }

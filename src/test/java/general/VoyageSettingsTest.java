@@ -139,7 +139,7 @@ class VoyageSettingsTest {
                 "2026-11-16T12:00", crew, new int[]{5, 3, 1}, loot).contains("5 beats 4"));
         var copied = new VoyageRecords(folder).claimMessage();
         assertTrue(copied.contains("Meridian"));
-        assertTrue(copied.contains("Alice (2), Bob (3), Cora (0)"));
+        assertTrue(copied.contains("Bob (3), Alice (2), Cora (0)"));   // biggest share first
         Files.writeString(known, Files.readString(known).replace("\"value\":4", "\"value\":5"));
         assertNull(new VoyageRecords(folder).claimMessage());
     }

@@ -241,6 +241,48 @@ final class WoodhallowTools {
 	/** Seconds for each move in the solo line (DnavPlan); -1 = left blank, so that move isn't used. */
 	private volatile int tripleSeconds = 40, doubleSeconds = -1, singleSeconds = 12, donkeySeconds = 51;
 
+	/**
+	 * Time-left warnings: a 30 s and a 15 s box per activity, each its own setting. Ticking both warns
+	 * twice. The ticked-by-default cells are the old single options, under their old keys.
+	 */
+	private void addWarningMatrix(JPanel section, Preferences prefs) {
+		JLabel title = new JLabel("Time-left warning sounds");
+		title.setAlignmentX(Component.LEFT_ALIGNMENT);
+		section.add(title);
+		JPanel grid = new JPanel(new GridBagLayout());
+		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(0, 0, 0, 10);
+		c.anchor = GridBagConstraints.WEST;
+		c.gridy = 0;
+		c.gridx = 1;
+		grid.add(new JLabel("30 s"), c);
+		c.gridx = 2;
+		grid.add(new JLabel("15 s"), c);
+		String[] when = {
+				"Woodhallow: %s s before stations end (from the chat's \"30 seconds!\" line)",
+				"Cursed Isles: %s s left to forage",
+				"Vampire Lair: %s s left of the round" };
+		for (TimeLeftWarnings.Activity activity : TimeLeftWarnings.Activity.values()) {
+			int row = activity.ordinal();
+			c.gridy = row + 1;
+			c.gridx = 0;
+			grid.add(new JLabel(activity.label), c);
+			for (int col = 0; col < 2; col++) {
+				String key = col == 0 ? activity.key30 : activity.key15;
+				boolean on = prefs.getBoolean(key, col == 0 ? activity.default30 : activity.default15);
+				JCheckBox box = new JCheckBox((String) null, on);
+				box.setToolTipText(String.format(when[row], col == 0 ? "30" : "15"));
+				box.addActionListener(ev -> prefs.putBoolean(key, box.isSelected()));
+				c.gridx = col + 1;
+				grid.add(box, c);
+				warningSounds[row][col] = box;
+			}
+		}
+		grid.setMaximumSize(grid.getPreferredSize());
+		section.add(grid);
+	}
+
 	/** A time box: whole seconds 1-300, or blank to leave that move out of the plan. */
 	private static void addSeconds(JPanel section, Preferences prefs, String label, String key, String defaultValue,
 								   java.util.function.IntConsumer apply, String tip) {
