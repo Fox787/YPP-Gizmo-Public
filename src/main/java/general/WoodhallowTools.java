@@ -121,13 +121,15 @@ final class WoodhallowTools {
 		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
 		checkBoxExtendedDnav = option(section, prefs, "Extended Dnav (solo strategies in Next Dnav)", "extendeddnav", false);
 		checkBoxExtendedDnav.setToolTipText("Also show the fastest solo lines (with and without a Booch, and with a Booch-donkey) under the Next Dnav forecast");
-		addSeconds(section, prefs, "Solo triple (s)", "dnavtriplesec", 40, v -> tripleSeconds = v,
-				"How long you take to build a triple; picks the fastest solo line");
-		addSeconds(section, prefs, "Solo end single (s)", "dnavsinglesec", 12, v -> singleSeconds = v,
-				"How long a single takes at the very end of a solo line");
-		addSeconds(section, prefs, "Solo donkey (s)", "dnavdonkeysec", 51, v -> donkeySeconds = v,
+		addSeconds(section, prefs, "Time to triple (s)", "dnavtriplesec", "40", v -> tripleSeconds = v,
+				"<html>How long you take to build a triple (3 x the board). Leave blank to plan without triples.</html>");
+		addSeconds(section, prefs, "Time to double (s)", "dnavdoublesec", "", v -> doubleSeconds = v,
+				"<html>How long you take to build a double (2 x the board). Leave blank to plan without doubles.</html>");
+		addSeconds(section, prefs, "Time to single (s)", "dnavsinglesec", "12", v -> singleSeconds = v,
+				"<html>How long a single takes at the very end of a solo line. Leave blank to plan without it.</html>");
+		addSeconds(section, prefs, "Time to donkey (s)", "dnavdonkeysec", "51", v -> donkeySeconds = v,
 				"<html>How long the x5 takes after its Booch (the Booch itself is " + DnavPlan.BOOCH_SECONDS + " s).<br>"
-				+ "A Booch-donkey scores 625 and leaves a 173 board, like a triple.</html>");
+				+ "A Booch-donkey scores 625 and leaves a 173 board, like a triple. Leave blank to plan without it.</html>");
 		addVolume(section, prefs);
 		createDnavTab();
 		createRumbleTab();
@@ -236,78 +238,44 @@ final class WoodhallowTools {
 		return option;
 	}
 
-	/**
-	 * Time-left warnings: a 30 s and a 15 s box per activity, each its own setting. Ticking both warns
-	 * twice. The ticked-by-default cells are the old single options, under their old keys.
-	 */
-	private void addWarningMatrix(JPanel section, Preferences prefs) {
-		JLabel title = new JLabel("Time-left warning sounds");
-		title.setAlignmentX(Component.LEFT_ALIGNMENT);
-		section.add(title);
-		JPanel grid = new JPanel(new GridBagLayout());
-		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
-		GridBagConstraints c = new GridBagConstraints();
-		c.insets = new Insets(0, 0, 0, 10);
-		c.anchor = GridBagConstraints.WEST;
-		c.gridy = 0;
-		c.gridx = 1;
-		grid.add(new JLabel("30 s"), c);
-		c.gridx = 2;
-		grid.add(new JLabel("15 s"), c);
-		String[] when = {
-				"Woodhallow: %s s before stations end (from the chat's \"30 seconds!\" line)",
-				"Cursed Isles: %s s left to forage",
-				"Vampire Lair: %s s left of the round" };
-		for (TimeLeftWarnings.Activity activity : TimeLeftWarnings.Activity.values()) {
-			int row = activity.ordinal();
-			c.gridy = row + 1;
-			c.gridx = 0;
-			grid.add(new JLabel(activity.label), c);
-			for (int col = 0; col < 2; col++) {
-				String key = col == 0 ? activity.key30 : activity.key15;
-				boolean on = prefs.getBoolean(key, col == 0 ? activity.default30 : activity.default15);
-				JCheckBox box = new JCheckBox((String) null, on);
-				box.setToolTipText(String.format(when[row], col == 0 ? "30" : "15"));
-				box.addActionListener(ev -> prefs.putBoolean(key, box.isSelected()));
-				c.gridx = col + 1;
-				grid.add(box, c);
-				warningSounds[row][col] = box;
-			}
-		}
-		grid.setMaximumSize(grid.getPreferredSize());
-		section.add(grid);
-	}
+	/** Seconds for each move in the solo line (DnavPlan); -1 = left blank, so that move isn't used. */
+	private volatile int tripleSeconds = 40, doubleSeconds = -1, singleSeconds = 12, donkeySeconds = 51;
 
-	/** Seconds per triple and per end single for the solo line (DnavPlan). */
-	private volatile int tripleSeconds = 40, singleSeconds = 12, donkeySeconds = 51;
-
-	private static void addSeconds(JPanel section, Preferences prefs, String label, String key, int defaultValue,
+	/** A time box: whole seconds 1-300, or blank to leave that move out of the plan. */
+	private static void addSeconds(JPanel section, Preferences prefs, String label, String key, String defaultValue,
 								   java.util.function.IntConsumer apply, String tip) {
-		int value = Math.max(1, Math.min(300, prefs.getInt(key, defaultValue)));
-		apply.accept(value);
-		JSpinner spinner = new JSpinner(new SpinnerNumberModel(value, 1, 300, 1));
-		spinner.setToolTipText(tip);
-		spinner.addChangeListener(ev -> {
-			int v = (Integer) spinner.getValue();
+		JTextField field = new JTextField(prefs.get(key, defaultValue).trim(), 4);
+		field.setHorizontalAlignment(JTextField.RIGHT);
+		field.setToolTipText(tip);
+		Runnable read = () -> {
+			String text = field.getText().trim();
+			int v = -1;
+			try { if (!text.isEmpty()) v = Math.max(1, Math.min(300, Integer.parseInt(text))); } catch (NumberFormatException ignored) { }
 			apply.accept(v);
-			prefs.putInt(key, v);
+			prefs.put(key, v < 0 ? "" : String.valueOf(v));
+		};
+		read.run();
+		field.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+			@Override public void insertUpdate(javax.swing.event.DocumentEvent e) { read.run(); }
+			@Override public void removeUpdate(javax.swing.event.DocumentEvent e) { read.run(); }
+			@Override public void changedUpdate(javax.swing.event.DocumentEvent e) { read.run(); }
 		});
 		JLabel name = new JLabel(label);
-		name.setLabelFor(spinner);
+		name.setLabelFor(field);
 		name.setToolTipText(tip);
 		JPanel row = new JPanel(new BorderLayout(6, 0));
 		row.setAlignmentX(Component.LEFT_ALIGNMENT);
 		row.add(name, BorderLayout.CENTER);
-		row.add(spinner, BorderLayout.EAST);
-		row.setMaximumSize(new Dimension(Integer.MAX_VALUE, spinner.getPreferredSize().height));
+		row.add(field, BorderLayout.EAST);
+		row.setMaximumSize(new Dimension(Integer.MAX_VALUE, field.getPreferredSize().height));
 		section.add(row);
 	}
 
-	/** The two solo lines for the Dnav before {@code fray}: the fastest, then the fastest with the other Booch choice. */
+	/** The solo lines for the Dnav before {@code fray}, fastest first (moves with a blank time left out). */
 	private List<DnavPlan.Line> plan(int fray) {
 		int crew = stationClock.crew();
 		if (crew <= 0 || fray < 2 || fray > 6) return List.of();
-		return DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds, donkeySeconds);
+		return DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds);
 	}
 
 	private static void addVolume(JPanel section, Preferences prefs) {
@@ -649,8 +617,8 @@ final class WoodhallowTools {
 					+ ", expected end " + timeOfDay(stationClock.expectedEnd(p)) + (p.lair ? " (lair)" : ""));
 		}
 		line.accept("");
-		line.accept("Solo settings: triple " + tripleSeconds + " s, end single " + singleSeconds + " s, donkey " + donkeySeconds + " s, Booch "
-				+ DnavPlan.BOOCH_SECONDS + " s");
+		line.accept("Solo settings (-1 = not used): triple " + tripleSeconds + " s, double " + doubleSeconds + " s, end single " + singleSeconds
+				+ " s, donkey " + donkeySeconds + " s, Booch " + DnavPlan.BOOCH_SECONDS + " s");
 		for (int f : new int[]{fray - 1, fray}) {
 			if (crew <= 0 || f < 2 || f > 6) continue;
 			line.accept(String.format(java.util.Locale.ROOT, "Dnav before fray %d: pack %.3f x share %.1f = %.3f werewolves,"

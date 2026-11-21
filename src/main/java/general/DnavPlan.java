@@ -48,12 +48,13 @@ final class DnavPlan {
 	record Step(String what, int seconds, int points) { }
 
 	/** Optional Booch (or Booch-donkeys), then triples, then optionally one single at the very end. */
-	record Line(boolean booch, int donkeys, int triples, boolean single, int seconds, int points, List<Step> steps) {
+	record Line(boolean booch, int donkeys, int triples, int doubles, boolean single, int seconds, int points, List<Step> steps) {
 		String name() {
 			List<String> parts = new ArrayList<>();
 			if (donkeys > 0) parts.add(donkeys == 1 ? "Booch-donkey" : donkeys + " Booch-donkeys");
 			else if (booch) parts.add("Booch");
 			if (triples > 0) parts.add(triples + (triples == 1 ? " Trip" : " Trips"));
+			if (doubles > 0) parts.add(doubles + (doubles == 1 ? " Double" : " Doubles"));
 			if (single) parts.add("Single");
 			return String.join(", ", parts);
 		}
@@ -62,11 +63,19 @@ final class DnavPlan {
 	}
 
 	static Line line(boolean booch, int triples, boolean single, int tripleSeconds, int singleSeconds) {
-		return line(booch, 0, triples, single, tripleSeconds, singleSeconds, 0);
+		return line(booch, 0, triples, 0, single, tripleSeconds, singleSeconds, 0, 0);
 	}
 
-	/** {@code donkeys} Booch-donkeys first (each a Booch then a x5), then the triples and the single. */
 	static Line line(boolean booch, int donkeys, int triples, boolean single, int tripleSeconds, int singleSeconds, int donkeySeconds) {
+		return line(booch, donkeys, triples, 0, single, tripleSeconds, singleSeconds, donkeySeconds, 0);
+	}
+
+	/**
+	 * {@code donkeys} Booch-donkeys first (each a Booch then a x5), then the triples, the doubles and the
+	 * single. A double scores 2 x the board; it's taken to leave the board as it was (not yet checked).
+	 */
+	static Line line(boolean booch, int donkeys, int triples, int doubles, boolean single, int tripleSeconds, int singleSeconds,
+					 int donkeySeconds, int doubleSeconds) {
 		List<Step> steps = new ArrayList<>();
 		int board = START_BOARD, points = 0, t = 0;
 		for (int i = 0; i < donkeys; i++) {
@@ -83,8 +92,13 @@ final class DnavPlan {
 			board = TRIPLE_BOARD;
 			steps.add(new Step("Triple " + (i + 1), t, points));
 		}
+		for (int i = 0; i < doubles; i++) {
+			points += 2 * board;
+			t += doubleSeconds;
+			steps.add(new Step("Double " + (i + 1), t, points));
+		}
 		if (single) { points += board; t += singleSeconds; steps.add(new Step("Single", t, points)); }
-		return new Line(opening, donkeys, triples, single, t, points, List.copyOf(steps));
+		return new Line(opening, donkeys, triples, doubles, single, t, points, List.copyOf(steps));
 	}
 
 	/** The fastest line, then the fastest with the other Booch choice (no Booch-donkeys). */
@@ -97,16 +111,28 @@ final class DnavPlan {
 	 * other Booch choice, and (when {@code donkeySeconds} > 0) the fastest with at least one Booch-donkey.
 	 */
 	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds) {
+		return options(needed, tripleSeconds, singleSeconds, donkeySeconds, -1);
+	}
+
+	/** As above; a move whose time is -1 (left blank in Options) is never used. */
+	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds, int doubleSeconds) {
 		List<Line> plain = new ArrayList<>(), donkey = new ArrayList<>();
+		int maxTriples = tripleSeconds > 0 ? 40 : 0, maxDoubles = doubleSeconds > 0 ? 40 : 0;
+		boolean[] singles = singleSeconds > 0 ? new boolean[]{false, true} : new boolean[]{false};
 		for (int d = 0; d <= (donkeySeconds > 0 ? 12 : 0); d++)
 			for (boolean booch : new boolean[]{false, true}) {
 				if (d > 0 && booch) continue;   // a Booch-donkey already starts with its Booch
-				for (int n = 0; n <= 40; n++)
-					for (boolean single : new boolean[]{false, true}) {
-						if (d == 0 && n == 0 && !single) continue;
-						Line l = line(booch, d, n, single, tripleSeconds, singleSeconds, Math.max(donkeySeconds, 0));
-						if (l.points() >= needed) (d > 0 ? donkey : plain).add(l);
-					}
+				for (int n = 0; n <= maxTriples; n++) {
+					boolean cleared = false;
+					for (int m = 0; m <= maxDoubles && !cleared; m++)   // once a count of doubles clears, more only add time
+						for (boolean single : singles) {
+							if (d == 0 && n == 0 && m == 0 && !single) continue;
+							Line l = line(booch, d, n, m, single, Math.max(tripleSeconds, 0), Math.max(singleSeconds, 0),
+									Math.max(donkeySeconds, 0), Math.max(doubleSeconds, 0));
+							if (l.points() >= needed) { (d > 0 ? donkey : plain).add(l); cleared = true; }
+						}
+					if (cleared && maxDoubles == 0 && n > 0) break;   // more triples only add time too
+				}
 			}
 		java.util.Comparator<Line> fastest = (a, b) -> a.seconds() != b.seconds() ? Integer.compare(a.seconds(), b.seconds())
 				: Integer.compare(b.points(), a.points());
