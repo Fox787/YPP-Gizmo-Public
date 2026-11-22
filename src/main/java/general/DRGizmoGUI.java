@@ -502,7 +502,23 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	private void printRecordLines(List<String> lines) {
-		for (String line : lines) if (!line.isEmpty()) printStatus(line, false);
+		boolean newRecord = false;
+		for (String line : lines) {
+			if (line.isEmpty()) continue;
+			printStatus(line, false);
+			newRecord |= line.startsWith("New record");
+		}
+		if (newRecord) printClaimMessage();
+	}
+
+	/**
+	 * After a new record: the message to send in Puzzle Practice's format (numbered lines, then
+	 * "Data for the records:" and the JSON), the same text as Copy records to send.
+	 */
+	private void printClaimMessage() {
+		String message = voyageRecords.claimMessage();
+		if (message == null) return;
+		printStatus("To send to Puzzle Practice (also on Copy records to send):\n" + message, false);
 	}
 
 	/** A small window listing every record Gizmo has from Puzzle Practice, one voyage at a time. */
@@ -1878,7 +1894,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			java.time.LocalDateTime end = i + 1 < runs.size() ? runs.get(i + 1).arrivedAt : booty.chat.openedAt;
 			Map<String, int[]> pirateLoot = RunLog.pirateLoot(booty.runFiles, run, end);
 			String result = voyageRecords.check(run, names.size(), booty.ocean(), names, pirateLoot);
-			if (!result.isEmpty()) printStatus(result, false);
+			if (!result.isEmpty()) printRecordLines(List.of(result.split("\n")));
 		}
 	}
 
