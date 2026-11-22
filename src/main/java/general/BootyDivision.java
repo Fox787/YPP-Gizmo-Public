@@ -79,7 +79,7 @@ public class BootyDivision {
 		StringBuilder sb = new StringBuilder();
 		if (chat != null) {
 			for (ChatLog.Line l : chat.lines) {
-				if (l.text.startsWith("Ye have taken aboard") || l.text.startsWith("Ye abandoned "))
+				if (l.text.startsWith("Ye have taken aboard") || l.text.startsWith("Ye abandoned ") || l.text.contains(" reclaimed "))
 					sb.append(l.text).append(nl);
 			}
 		}
@@ -151,6 +151,9 @@ public class BootyDivision {
 			j.close();
 			j.key("abandoned_hold_full").open();
 			for (Map.Entry<String, Integer> e : chat.abandoned.entrySet()) j.field(e.getKey(), e.getValue());
+			j.close();
+			j.key("reclaimed_after_loss").open();
+			for (Map.Entry<String, Integer> e : chat.reclaimed.entrySet()) j.field(e.getKey(), e.getValue());
 			j.close();
 			writeRunEvidence(j);
 			j.key("chat").openArray();
