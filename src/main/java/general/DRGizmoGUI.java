@@ -129,7 +129,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private JLabel labelRecordStatus;
 	private final Map<String, JPanel> recordPanels = new LinkedHashMap<>();
 	/** The Records tab: the voyage records (Puzzle Practice), their alerts and actions. */
-	private JComponent recordsTab;
 	private String logPirate; // Accessed by the log worker only.
 	private RunLog runLog;
 	private StationClock stationClock;
@@ -892,20 +891,11 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		files.add(folderRow("Data folder", textFieldDataFolder, buttonDataBrowse));
 	}
 
-	/** Builds the Records tab's content; the per-voyage boxes fold open like the Options sections. */
+	/** Voyage records, folded away in Options (closed until opened); the per-voyage boxes fold open inside it. */
 	private void createRecordOptions(OptionsPanel options) {
-		JPanel records = new JPanel();
-		records.setLayout(new BoxLayout(records, BoxLayout.Y_AXIS));
-		records.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
-		JPanel top = new JPanel(new BorderLayout());
-		top.add(records, BorderLayout.NORTH);
-		JScrollPane scroll = new JScrollPane(top, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setBorder(BorderFactory.createEmptyBorder());
-		scroll.getVerticalScrollBar().setUnitIncrement(22);
-		recordsTab = scroll;
+		JPanel records = options.section("Voyage records", "records", false);
 		checkBoxBrokenRecordAlert = new JCheckBox("Record alerts");
-		// Saved as soon as it changes: the Records tab has no Save button of its own.
+		// Saved as soon as it changes, like the other live options.
 		checkBoxBrokenRecordAlert.addActionListener(ev -> {
 			if (currentPrefs != null) currentPrefs.putBoolean(BROKENRECORDALERT, checkBoxBrokenRecordAlert.isSelected());
 		});
@@ -1285,7 +1275,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			runLog = new RunLog(globalPrefs);
 			tabbedPane.addTab("Options", createOptions(tabbedPane, integerFormatter));
 			tabsArea.add(woodhallowTools.forageBar(), BorderLayout.NORTH);
-			tabbedPane.addTab("Records", null, recordsTab, "Voyage records from Puzzle Practice, and record alerts");
 
 				JPanel panelTests = new JPanel();
 				if (DRGizmoMain.DEVELOPERS) {
