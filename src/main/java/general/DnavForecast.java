@@ -63,9 +63,9 @@ public final class DnavForecast {
 	}
 
 	/** Each werewolf takes 200 points to turn back; a Dnav score point is worth 125, so 1.6 per werewolf. */
-	static final double POINTS_PER_WEREWOLF = 200, POINTS_PER_SCORE = 125;
-	private static final double TRIPLE_STRATEGY_POINTS_PER_SCORE = 176;
-	private static final double STARTING_BOARD_POINTS_PER_SCORE = 71;
+	static final double POINTS_PER_WEREWOLF = 200, POINTS_PER_SCORE = DnavPlan.BOOCH_BOARD;
+	private static final double TRIPLE_STRATEGY_POINTS_PER_SCORE = DnavPlan.TRIPLE_BOARD;
+	private static final double STARTING_BOARD_POINTS_PER_SCORE = DnavPlan.START_BOARD;
 
 	public static int dnavNeeded(int werewolves) {
 		return (int) Math.ceil(werewolves * POINTS_PER_WEREWOLF / POINTS_PER_SCORE - 1e-9);
@@ -74,7 +74,7 @@ public final class DnavForecast {
 	/**
 	 * Werewolf points from one navigator's moons [singles, doubles, triples] (score 1, 2, 3 each).
 	 * With at least one triple and at most one other combo, the first triple uses 125 points per
-	 * score and every other combo uses 176. Otherwise, one highest combo uses the starting
+	 * score and every other combo uses 173. Otherwise, one highest combo uses the starting
 	 * board's rate of 71 points per score and the rest use 125.
 	 */
 	public static double navPoints(int[] moons) {

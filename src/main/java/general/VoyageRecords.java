@@ -28,11 +28,12 @@ public final class VoyageRecords {
 
 	static final String BASE = "https://raw.githubusercontent.com/puzzle-practice/Puzzle_Practice/main/src/voyage-records/";
 	static final String RECORDS = "records.json";
+	static final String MANUAL = "manual-records.json";
 	/** Puzzle Practice's older two files, still read from the cache until records.json has been downloaded. */
 	static final String KNOWN = "known-records.json", SHEET = "sheet-records.json";
 
 	public static final class Record {
-		public String voyage, ocean, kind, category, date, source;
+		public String voyage, ocean, kind, category, date, source, notes;
 		/** The value as the file writes it (sheet records can be text, e.g. a time). */
 		public String valueText;
 		/** 0 for a one-pirate record. */
@@ -45,6 +46,8 @@ public final class VoyageRecords {
 	private record Snapshot(List<Record> records, long loadedAt) { }
 
 	private volatile Snapshot snapshot = new Snapshot(List.of(), 0);
+	private Snapshot downloaded = new Snapshot(List.of(), 0);
+	private List<Record> manual = List.of();
 	private final Path folder;
 
 	public VoyageRecords() {
@@ -65,13 +68,31 @@ public final class VoyageRecords {
 				// Either cache can stand on its own.
 			}
 		}
-		snapshot = new Snapshot(List.copyOf(cached), loadedAt);
+		downloaded = new Snapshot(List.copyOf(cached), loadedAt);
+		try {
+			manual = List.copyOf(parse(Files.readString(folder.resolve(MANUAL))));
+		} catch (IOException | IllegalArgumentException ignored) {
+			// Manual records are optional; downloaded records still work on their own.
+		}
+		publishRecords();
 	}
 
 	Path folder() { return folder; }
 
 	public int size() { return snapshot.records().size(); }
 	public long loadedAt() { return snapshot.loadedAt(); }
+	synchronized List<Record> manualRecords() { return List.copyOf(manual); }
+	synchronized boolean isManual(Record record) {
+		return manual.stream().anyMatch(r -> recordKey(r).equals(recordKey(record)));
+	}
+
+	enum RefreshPolicy { KEEP_MANUAL, KEEP_HIGHER, REPLACE_MANUAL }
+	record Download(byte[] contents, List<Record> records) { }
+	record ManualReplacement(Record manual, Record incoming) {
+		boolean incomingIsHigher() {
+			return incoming.value > manual.value && (incoming.valueText == null || incoming.valueText.trim().matches("\\d+"));
+		}
+	}
 
 	private static byte[] fetch(String name) throws IOException {
 		HttpURLConnection connection = (HttpURLConnection) new URL(BASE + name).openConnection();
@@ -89,13 +110,122 @@ public final class VoyageRecords {
 
 	/** Fetches and parses records.json off the UI thread, then publishes the new records. */
 	public int download() throws IOException {
-		byte[] all = fetch(RECORDS);
+		return applyDownload(fetchDownload(), RefreshPolicy.KEEP_MANUAL, List.of());
+	}
+
+	static Download fetchDownload() throws IOException { return prepareDownload(fetch(RECORDS)); }
+
+	static Download prepareDownload(byte[] all) throws IOException {
 		List<Record> parsed = parse(new String(all, StandardCharsets.UTF_8));
 		if (parsed.isEmpty()) throw new IOException("records.json contained no usable records");
+		return new Download(all.clone(), List.copyOf(parsed));
+	}
+
+	int cacheDownloaded(byte[] all) throws IOException {
+		return applyDownload(prepareDownload(all), RefreshPolicy.KEEP_MANUAL, List.of());
+	}
+
+	/** Preview only the manual benchmarks present in this download, using the global best for ties. */
+	synchronized List<ManualReplacement> manualReplacements(Download download) {
+		Map<String, Record> incoming = new java.util.LinkedHashMap<>();
+		for (Record r : download.records()) {
+			Record previous = incoming.get(recordKey(r));
+			if (previous == null || r.value > previous.value) incoming.put(recordKey(r), r);
+		}
+		List<ManualReplacement> replacements = new ArrayList<>();
+		for (Record r : manual) {
+			Record next = incoming.get(recordKey(r));
+			if (next != null) replacements.add(new ManualReplacement(r, next));
+		}
+		replacements.sort(java.util.Comparator.comparing((ManualReplacement r) -> r.manual().voyage)
+				.thenComparingInt(r -> r.manual().crewSize).thenComparing(r -> r.manual().kind));
+		return List.copyOf(replacements);
+	}
+
+	/** Apply only reviewed replacements; manual edits made since the preview are kept. */
+	synchronized int applyDownload(Download download, RefreshPolicy policy, List<ManualReplacement> reviewed) throws IOException {
+		Map<String, ManualReplacement> approved = new java.util.LinkedHashMap<>();
+		for (ManualReplacement replacement : reviewed) approved.put(recordKey(replacement.manual()), replacement);
+		List<Record> retained = new ArrayList<>();
+		for (Record r : manual) {
+			ManualReplacement replacement = approved.get(recordKey(r));
+			boolean replace = replacement != null && replacement.manual() == r
+					&& (policy == RefreshPolicy.REPLACE_MANUAL || policy == RefreshPolicy.KEEP_HIGHER && replacement.incomingIsHigher());
+			if (!replace) retained.add(r);
+		}
 		Files.createDirectories(folder);
-		writeCache(folder.resolve(RECORDS), all);
-		snapshot = new Snapshot(List.copyOf(parsed), System.currentTimeMillis());
-		return parsed.size();
+		writeCache(folder.resolve(RECORDS), download.contents());
+		if (retained.size() != manual.size()) writeManualRecords(retained);
+		manual = List.copyOf(retained);
+		downloaded = new Snapshot(download.records(), System.currentTimeMillis());
+		publishRecords();
+		return size();
+	}
+
+	/** Benchmarks are global across oceans, just like get(); each unrelated category stays separate. */
+	private static String recordKey(Record r) {
+		return r.voyage.toLowerCase(Locale.ROOT) + "|" + r.crewSize + "|" + r.kind
+				+ ("other".equals(r.kind) ? "|" + r.category + "|" + (r.notes == null ? "" : r.notes) : "");
+	}
+
+	private void publishRecords() {
+		java.util.Set<String> keys = new HashSet<>();
+		for (Record r : manual) keys.add(recordKey(r));
+		List<Record> records = new ArrayList<>();
+		for (Record r : downloaded.records()) if (!keys.contains(recordKey(r))) records.add(r);
+		records.addAll(manual);
+		snapshot = new Snapshot(List.copyOf(records), downloaded.loadedAt());
+	}
+
+	/** Save edits from the current settings. A blank value restores the downloaded benchmark. */
+	synchronized void saveManualValues(Map<Record, Integer> edits) throws IOException {
+		if (edits.isEmpty()) return;
+		Map<String, Record> updated = new java.util.LinkedHashMap<>();
+		for (Record r : manual) updated.put(recordKey(r), r);
+		for (var edit : edits.entrySet()) {
+			Record original = edit.getKey();
+			Integer value = edit.getValue();
+			if (value == null) {
+				updated.remove(recordKey(original));
+				continue;
+			}
+			if (value < 0) throw new IllegalArgumentException("A record must be a non-negative whole number.");
+			Record r = new Record();
+			r.voyage = original.voyage;
+			r.ocean = original.ocean;
+			r.kind = original.kind;
+			r.category = original.category;
+			r.crewSize = original.crewSize;
+			r.value = value;
+			r.valueText = Integer.toString(value);
+			r.date = original.date;
+			r.source = original.source;
+			r.notes = original.notes;
+			r.pirates = List.copyOf(original.pirates);
+			r.pirateScores = List.copyOf(original.pirateScores);
+			updated.put(recordKey(r), r);
+		}
+		writeManualRecords(List.copyOf(updated.values()));
+		manual = List.copyOf(updated.values());
+		publishRecords();
+	}
+
+	private void writeManualRecords(List<Record> records) throws IOException {
+		StringBuilder json = new StringBuilder("[");
+		for (Record r : records) {
+			if (json.length() > 1) json.append(',');
+			json.append("{\"voyage\":").append(q(r.voyage)).append(",\"ocean\":").append(q(r.ocean))
+					.append(",\"kind\":").append(q(r.kind)).append(",\"crewSize\":").append(r.crewSize)
+					.append(",\"category\":").append(q(r.category)).append(",\"value\":").append(r.value)
+					.append(",\"date\":").append(q(r.date)).append(",\"source\":").append(q(r.source))
+					.append(",\"notes\":").append(q(r.notes))
+					.append(",\"pirates\":[");
+			for (int i = 0; i < r.pirates.size(); i++) json.append(i == 0 ? "" : ",").append(q(r.pirates.get(i)));
+			json.append(']').append(scoresField(r.pirateScores)).append('}');
+		}
+		json.append(']');
+		Files.createDirectories(folder);
+		writeCache(folder.resolve(MANUAL), json.toString().getBytes(StandardCharsets.UTF_8));
 	}
 
 	private static void writeCache(Path path, byte[] contents) throws IOException {
@@ -172,6 +302,58 @@ public final class VoyageRecords {
 					&& (best == null || r.value > best.value))
 				best = r;
 		return best;
+	}
+
+	/** Match an editor's complete category, including a particular forage's notes. */
+	Record get(Record template) {
+		Record best = null;
+		String key = recordKey(template);
+		for (Record r : snapshot.records())
+			if (recordKey(r).equals(key) && (best == null || r.value > best.value)) best = r;
+		return best;
+	}
+
+	static boolean isIndividual(Record record) {
+		return record.crewSize == 0 && (!"other".equals(record.kind)
+				|| record.category != null && record.category.toLowerCase(Locale.ROOT).contains("one pirate"));
+	}
+
+	/** All individual categories, including imported categories Gizmo cannot automatically verify. */
+	List<Record> individualRecords(String voyage) {
+		Map<String, Record> records = new java.util.LinkedHashMap<>();
+		for (String[] category : SHEET_KINDS) {
+			if (!category[0].equals(voyage) || category[3].isEmpty()) continue;
+			Record template = new Record();
+			template.voyage = voyage;
+			template.ocean = "global";
+			template.kind = category[2];
+			template.category = category[1];
+			records.put(recordKey(template), template);
+		}
+		Map<String, Record> imported = new java.util.LinkedHashMap<>();
+		for (Record record : forVoyage(voyage))
+			if (isIndividual(record)) imported.merge(recordKey(record), record, (a, b) -> b.value > a.value ? b : a);
+		records.putAll(imported);
+		return List.copyOf(records.values());
+	}
+
+	List<Record> otherRecords(String voyage) {
+		Map<String, Record> records = new java.util.LinkedHashMap<>();
+		for (Record record : forVoyage(voyage)) {
+			if (record.crewSize != 0 || isIndividual(record)) continue;
+			Record existing = records.get(recordKey(record));
+			if (existing == null || record.value > existing.value) records.put(recordKey(record), record);
+		}
+		return List.copyOf(records.values());
+	}
+
+	static String recordLabel(Record record) {
+		String category = record.category != null ? record.category : describe(record.voyage, record.kind, record.crewSize);
+		return category + (record.notes == null || record.notes.isBlank() ? "" : " — " + record.notes);
+	}
+
+	static String recordScope(Record record) {
+		return record.crewSize > 0 ? Integer.toString(record.crewSize) : isIndividual(record) ? "Individual" : "All crews";
 	}
 
 	static String voyageName(String voyage) {
@@ -272,13 +454,12 @@ public final class VoyageRecords {
 		return sum == value ? totals : List.of();
 	}
 
-	/** One run of a booty division: its chests and score. */
-	public String check(ChatLog.Run run, int crewSize, String ocean, List<String> pirates) {
-		return check(run, crewSize, ocean, pirates, Map.of());
-	}
-
-	String check(ChatLog.Run run, int crewSize, String ocean, List<String> pirates, Map<String, int[]> pirateLoot) {
+	/** One run's chests and score, using its combat crew rather than the division's recipients. */
+	String check(ChatLog.Run run, String ocean, Map<String, int[]> pirateLoot) {
 		if (run == null || run.voyage == null) return "";
+		List<String> pirates = run.recordCrew();
+		if (pirates.isEmpty() || !pirates.containsAll(pirateLoot.keySet())) return "";
+		int crewSize = pirates.size();
 		String time = run.arrivedAt == null ? null : run.arrivedAt.toString();
 		StringBuilder sb = new StringBuilder();
 		for (String kind : new String[]{CHESTS, SCORE}) {
@@ -434,6 +615,7 @@ public final class VoyageRecords {
 					case "date": r.date = v; break;
 					case "source": r.source = v; break;
 					case "category": r.category = v; break;
+					case "notes": r.notes = v; break;
 					case "value": r.valueText = v; if (v.trim().matches("\\d+")) r.value = Integer.parseInt(v.trim()); break;
 					default:
 				}

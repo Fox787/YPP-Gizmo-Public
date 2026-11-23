@@ -203,6 +203,13 @@ public class BootyDivision {
 			j.open();
 			j.field("voyage", run.voyage);
 			j.field("arrived_at", run.arrivedAt);
+			List<String> crew = run.recordCrew();
+			if (!crew.isEmpty()) {
+				j.field("crew_size", crew.size());
+				j.key("crew").openArray();
+				for (String pirate : crew) j.value(pirate);
+				j.closeArray();
+			}
 			writeChestTiers(j, "chests_taken_aboard", run.tiers);
 			Map<String, int[]> evidence = RunLog.pirateLoot(runFiles, run, end);
 			if (!evidence.isEmpty()) {

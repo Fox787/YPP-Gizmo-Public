@@ -7,11 +7,17 @@ import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Standalone helper. Only the Ctrl+P chord is reported; no typed text is stored or transmitted. */
+/** Standalone helper. Reports next-piece and paste shortcuts, with no typed text. */
 public final class CopyHotkeyHelper implements NativeKeyListener {
 	private boolean held;
+	private boolean pasteHeld;
 
 	@Override public void nativeKeyPressed(NativeKeyEvent event) {
+		if (!pasteHeld && isPasteChord(event.getKeyCode(), event.getModifiers())) {
+			pasteHeld = true;
+			System.out.println("PASTE");
+			System.out.flush();
+		}
 		if (event.getKeyCode() != NativeKeyEvent.VC_P) return;
 		if (!held && isCopyChord(event.getKeyCode(), event.getModifiers())) {
 			held = true;
@@ -22,11 +28,20 @@ public final class CopyHotkeyHelper implements NativeKeyListener {
 
 	@Override public void nativeKeyReleased(NativeKeyEvent event) {
 		if (event.getKeyCode() == NativeKeyEvent.VC_P) held = false;
+		if (event.getKeyCode() == NativeKeyEvent.VC_V || event.getKeyCode() == NativeKeyEvent.VC_INSERT) pasteHeld = false;
 	}
 
 	static boolean isCopyChord(int code, int modifiers) {
 		int extra = NativeInputEvent.SHIFT_MASK | NativeInputEvent.ALT_MASK | NativeInputEvent.META_MASK;
 		return code == NativeKeyEvent.VC_P && (modifiers & NativeInputEvent.CTRL_MASK) != 0 && (modifiers & extra) == 0;
+	}
+
+	static boolean isPasteChord(int code, int modifiers) {
+		int extra = NativeInputEvent.ALT_MASK | NativeInputEvent.META_MASK;
+		if ((modifiers & extra) != 0) return false;
+		boolean ctrl = (modifiers & NativeInputEvent.CTRL_MASK) != 0;
+		boolean shift = (modifiers & NativeInputEvent.SHIFT_MASK) != 0;
+		return code == NativeKeyEvent.VC_V && ctrl || code == NativeKeyEvent.VC_INSERT && shift && !ctrl;
 	}
 
 	public static void main(String[] args) {

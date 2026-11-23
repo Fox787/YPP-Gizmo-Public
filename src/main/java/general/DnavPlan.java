@@ -3,6 +3,9 @@ package main.java.general;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.PriorityQueue;
 
 /**
  * Solo Dnav plan from the crew size and the fray, using the exact (unrounded) size of the wave:
@@ -47,19 +50,31 @@ final class DnavPlan {
 	/** One step of a line: what to do, when it's done (s from the start) and the points by then. */
 	record Step(String what, int seconds, int points) { }
 
-	/** Optional Booch (or Booch-donkeys), then triples, then optionally one single at the very end. */
-	record Line(boolean booch, int donkeys, int triples, int doubles, boolean single, int seconds, int points, List<Step> steps) {
+	/** A solo line with optional Booch combinations, scoring moves and a final single. */
+	record Line(boolean booch, int donkeys, int triples, int doubles, int bingos, int vegases,
+			boolean single, int seconds, int points, List<Step> steps) {
 		String name() {
 			List<String> parts = new ArrayList<>();
-			if (donkeys > 0) parts.add(donkeys == 1 ? "Booch-donkey" : donkeys + " Booch-donkeys");
-			else if (booch) parts.add("Booch");
-			if (triples > 0) parts.add(triples + (triples == 1 ? " Trip" : " Trips"));
-			if (doubles > 0) parts.add(doubles + (doubles == 1 ? " Double" : " Doubles"));
-			if (single) parts.add("Single");
+			String previous = null;
+			int count = 0;
+			for (Step step : steps) {
+				String move = step.what().replaceFirst(" \\d+$", "");
+				if (!move.equals(previous) && previous != null) { parts.add(moveName(previous, count)); count = 0; }
+				previous = move;
+				count++;
+			}
+			if (previous != null) parts.add(moveName(previous, count));
 			return String.join(", ", parts);
 		}
 
 		String time() { return String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60); }
+	}
+
+	private static String moveName(String move, int count) {
+		if (move.equals("Single") || move.equals("Booch")) return move;
+		if (move.startsWith("Booch-") && count == 1) return move;
+		String label = move.equals("Triple") ? "Trip" : move;
+		return count + " " + label + (count == 1 ? "" : move.equals("Booch-Vegas") ? "es" : "s");
 	}
 
 	static Line line(boolean booch, int triples, boolean single, int tripleSeconds, int singleSeconds) {
@@ -99,7 +114,7 @@ final class DnavPlan {
 			steps.add(new Step("Double " + (i + 1), t, points));
 		}
 		if (single) { points += board; t += singleSeconds; steps.add(new Step("Single", t, points)); }
-		return new Line(opening, donkeys, triples, doubles, single, t, points, List.copyOf(steps));
+		return new Line(opening, donkeys, triples, doubles, 0, 0, single, t, points, List.copyOf(steps));
 	}
 
 	/** The fastest line, then the fastest with the other Booch choice (no Booch-donkeys). */
@@ -148,5 +163,88 @@ final class DnavPlan {
 		if (!donkey.isEmpty()) out.add(donkey.get(0));
 		out.sort(fastest);
 		return out;
+	}
+
+	/** Bingo works on the current board; Donkey and Vegas each include their own preceding Booch. */
+	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds,
+			int doubleSeconds, int bingoSeconds, int vegasSeconds) {
+		return options(needed, tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds, bingoSeconds, vegasSeconds, BOOCH_SECONDS);
+	}
+
+	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds,
+			int doubleSeconds, int bingoSeconds, int vegasSeconds, int boochSeconds) {
+		if (bingoSeconds <= 0 && vegasSeconds <= 0 && boochSeconds == BOOCH_SECONDS)
+			return options(needed, tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds);
+		if (!Double.isFinite(needed) || needed <= 0) return List.of();
+		int[] times = {singleSeconds, doubleSeconds, tripleSeconds, bingoSeconds, donkeySeconds, vegasSeconds};
+		var queue = new PriorityQueue<Search>((a, b) -> a.seconds != b.seconds
+				? Integer.compare(a.seconds, b.seconds) : Integer.compare(b.points, a.points));
+		Map<SearchKey, Integer> fastest = new HashMap<>();
+		Search start = new Search(START_BOARD, 0, 0, false, false, null, null);
+		queue.add(start);
+		if (boochSeconds > 0) queue.add(new Search(BOOCH_BOARD, 0, boochSeconds, true, false, start, Move.BOOCH));
+		Search[] best = new Search[3]; // plain, other Booch choice, and a line with Donkey/Vegas
+		while (!queue.isEmpty()) {
+			Search current = queue.remove();
+			int category = current.special ? 2 : current.booch ? 1 : 0;
+			if (best[category] != null && current.seconds > best[category].seconds) continue;
+			SearchKey key = new SearchKey(current.board, current.points, current.booch, current.special);
+			Integer seen = fastest.get(key);
+			if (seen != null && seen < current.seconds) continue;
+			if (current.points >= needed) {
+				if (best[category] == null || current.seconds < best[category].seconds
+						|| current.seconds == best[category].seconds && current.points > best[category].points)
+					best[category] = current;
+				continue;
+			}
+			for (Move move : Move.values()) {
+				if (move == Move.BOOCH || times[move.ordinal()] <= 0) continue;
+				boolean needsBooch = move == Move.DONKEY || move == Move.VEGAS;
+				if (needsBooch && boochSeconds <= 0) continue;
+				int points = current.points + move.multiplier * (needsBooch ? BOOCH_BOARD : current.board);
+				if (move == Move.SINGLE && points < needed) continue; // singles finish the line
+				int seconds = current.seconds + times[move.ordinal()] + (needsBooch ? boochSeconds : 0);
+				Search next = new Search(move.board, points, seconds, current.booch,
+						current.special || needsBooch, current, move);
+				SearchKey nextKey = new SearchKey(next.board, next.points, next.booch, next.special);
+				Integer previous = fastest.get(nextKey);
+				if (previous == null || seconds < previous) { fastest.put(nextKey, seconds); queue.add(next); }
+			}
+		}
+		List<Line> lines = new ArrayList<>();
+		for (Search result : best) if (result != null) lines.add(result.line());
+		lines.sort(java.util.Comparator.comparingInt(Line::seconds).thenComparing(
+				java.util.Comparator.comparingInt(Line::points).reversed()));
+		return List.copyOf(lines);
+	}
+
+	private enum Move {
+		SINGLE(1, TRIPLE_BOARD, "Single"), DOUBLE(2, BOOCH_BOARD, "Double"),
+		TRIPLE(3, TRIPLE_BOARD, "Triple"), BINGO(4, TRIPLE_BOARD, "Bingo"),
+		DONKEY(5, TRIPLE_BOARD, "Booch-donkey"), VEGAS(6, TRIPLE_BOARD, "Booch-Vegas"),
+		BOOCH(0, BOOCH_BOARD, "Booch");
+		final int multiplier, board;
+		final String label;
+		Move(int multiplier, int board, String label) { this.multiplier = multiplier; this.board = board; this.label = label; }
+	}
+
+	private record SearchKey(int board, int points, boolean booch, boolean special) { }
+	private record Search(int board, int points, int seconds, boolean booch, boolean special, Search previous, Move move) {
+		Line line() {
+			List<Search> path = new ArrayList<>();
+			for (Search node = this; node.previous != null; node = node.previous) path.add(node);
+			java.util.Collections.reverse(path);
+			int[] counts = new int[Move.values().length];
+			List<Step> steps = new ArrayList<>();
+			for (Search node : path) {
+				int count = ++counts[node.move.ordinal()];
+				String label = node.move.label;
+				if (node.move != Move.BOOCH && node.move != Move.SINGLE) label += " " + count;
+				steps.add(new Step(label, node.seconds, node.points));
+			}
+			return new Line(booch, counts[Move.DONKEY.ordinal()], counts[Move.TRIPLE.ordinal()], counts[Move.DOUBLE.ordinal()],
+					counts[Move.BINGO.ordinal()], counts[Move.VEGAS.ordinal()], counts[Move.SINGLE.ordinal()] > 0,
+					seconds, points, List.copyOf(steps));
+		}
 	}
 }

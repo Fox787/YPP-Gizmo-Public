@@ -11,13 +11,15 @@ import javax.swing.SwingUtilities;
 /** Runs native keyboard detection in an isolated JVM, never on the game's UI thread. */
 final class GlobalCopyHotkey {
 	private final Runnable advance;
+	private final Runnable paste;
 	private final Consumer<String> status;
 	private volatile long generation;
 	private boolean active;
 	private Process helper;
 
-	GlobalCopyHotkey(Runnable advance, Consumer<String> status) {
+	GlobalCopyHotkey(Runnable advance, Runnable paste, Consumer<String> status) {
 		this.advance = advance;
+		this.paste = paste;
 		this.status = status;
 	}
 
@@ -49,6 +51,7 @@ final class GlobalCopyHotkey {
 				for (String line; (line = lines.readLine()) != null;) {
 					if (line.equals("READY")) dispatch(token, () -> status.accept("Global Ctrl+P ready; chat-log fallback remains enabled"));
 					else if (line.equals("NEXT")) dispatch(token, advance);
+					else if (line.equals("PASTE")) dispatch(token, paste);
 				}
 			}
 		} catch (Exception | LinkageError ignored) {

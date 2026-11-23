@@ -9,6 +9,11 @@ import java.util.Arrays;
 public class DRIndividualData implements Serializable {
     private static final long serialVersionUID = 1302284232672156036L;
 
+    public record StationWeights(int navSingle, int navDouble, int navTriple,
+                                 int carpSlipshod, int carpCreaky, int carpProof) {
+        public static final StationWeights DEFAULT = new StationWeights(1, 2, 3, -1, 1, 2);
+    }
+
     private String station;
     private String name;
     private String rating;
@@ -103,6 +108,13 @@ public class DRIndividualData implements Serializable {
      */
     public void calculateCustomTokenScore(int circle, int diamond, int plus, int cross, int thrall,
                                           int cannonball, int smallChest, int mediumChest, int largeChest) {
+        calculateCustomTokenScore(circle, diamond, plus, cross, thrall, cannonball, smallChest,
+                mediumChest, largeChest, StationWeights.DEFAULT);
+    }
+
+    public void calculateCustomTokenScore(int circle, int diamond, int plus, int cross, int thrall,
+                                          int cannonball, int smallChest, int mediumChest, int largeChest,
+                                          StationWeights weights) {
         if (tokens == null) {
             tokenScore = 0;
             return;
@@ -120,13 +132,13 @@ public class DRIndividualData implements Serializable {
         } else if (station.matches("Gunning")) {
             result += tokens[0] * cannonball;
         } else if (station.matches("Carpentry") && tokens.length == 3) {
-            result += tokens[0] * -1;
-            result += tokens[1];
-            result += tokens[2] * 2;
+            result += tokens[0] * weights.carpSlipshod();
+            result += tokens[1] * weights.carpCreaky();
+            result += tokens[2] * weights.carpProof();
         } else if (station.matches("Navigating")) {
-            result += tokens[0];
-            result += tokens[1] * 2;
-            result += tokens[2] * 3;
+            result += tokens[0] * weights.navSingle();
+            result += tokens[1] * weights.navDouble();
+            result += tokens[2] * weights.navTriple();
         } else {
             result += tokens[0] * diamond;
             result += tokens[1] * circle;

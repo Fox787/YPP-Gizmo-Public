@@ -14,15 +14,18 @@ import java.util.stream.Collectors;
 final class ReportClipboard {
 	static final int CHAT_LIMIT = 240;
 	static final String VESSEL_COMMAND = "/ve ";
+	static final int WAIT_SECONDS = 5;
 
 	private final ArrayDeque<String> pending = new ArrayDeque<>();
 	private String waitingFor;
 	private LocalDateTime copiedAt;
+	private LocalDateTime expiresAt;
 
 	void replace(List<String> messages) {
 		pending.clear();
 		pending.addAll(messages);
 		waitingFor = null;
+		copiedAt = expiresAt = null;
 	}
 
 	boolean hasPending() {
@@ -30,19 +33,36 @@ final class ReportClipboard {
 	}
 
 	/** Ctrl+P: copy the next piece now, without waiting for the chat log to show the last one was sent. */
-	void advance(LocalDateTime now, Consumer<String> copy) {
+	boolean advance(LocalDateTime now, Consumer<String> copy) {
+		if (expire(now) || pending.isEmpty()) return false;
 		waitingFor = null;
+		int before = pending.size();
 		update(List.of(), now, copy);
+		return pending.size() < before;
+	}
+
+	/** A paste keeps the current piece alive while the player finishes sending it. */
+	void pasted(LocalDateTime now) {
+		if (!expire(now) && waitingFor != null) expiresAt = now.plusSeconds(WAIT_SECONDS);
+	}
+
+	private boolean expire(LocalDateTime now) {
+		if (expiresAt == null || now.isBefore(expiresAt)) return false;
+		replace(List.of());
+		return true;
 	}
 
 	void update(List<ChatLog.Line> sent, LocalDateTime now, Consumer<String> copy) {
 		if (pending.isEmpty()) return;
 		if (waitingFor != null) {
 			boolean confirmed = sent.stream().anyMatch(line ->
-					!line.time.isBefore(copiedAt) && normalize(line.text).equals(waitingFor));
-			if (!confirmed) return;
+					!line.time.isBefore(copiedAt) && line.time.isBefore(expiresAt)
+					&& normalize(line.text).equals(waitingFor));
+			if (!confirmed) { expire(now); return; }
 			waitingFor = null;
+			expiresAt = null;
 		}
+		if (expire(now)) return;
 		String next = pending.getFirst();
 		try {
 			copy.accept(next);
@@ -50,10 +70,12 @@ final class ReportClipboard {
 			return; // The clipboard can be busy. Retry on the next tick.
 		}
 		pending.removeFirst();
+		expiresAt = null;
 		if (!pending.isEmpty()) {
 			String body = next.startsWith(VESSEL_COMMAND) ? next.substring(VESSEL_COMMAND.length()) : next;
 			waitingFor = normalize(body);
 			copiedAt = now.truncatedTo(ChronoUnit.SECONDS);
+			expiresAt = now.plusSeconds(WAIT_SECONDS);
 		}
 	}
 

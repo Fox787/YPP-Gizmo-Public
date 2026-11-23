@@ -10,6 +10,22 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class DRDatasTest {
+    @Test
+    void customStationWeightsApplyToIndividualGroupAndStoredReports() {
+        var weights = new DRIndividualData.StationWeights(4, 5, 6, -2, 3, 7);
+        var group = new DRGroupData();
+        group.put("Navigating", "Nav", "Swift", new int[]{2, 3, 4}, 0);
+        group.put("Carpentry", "Carp", "Swift", new int[]{2, 3, 4}, 0);
+        group.calculateCustomTokenScore(1, 1, 1, 1, 1, 1, 1, 2, 3, weights);
+        assertEquals(47, group.get("Navigating", "Nav").getTokenScore());
+        assertEquals(33, group.get("Carpentry", "Carp").getTokenScore());
+        var all = new DRPersistantData();
+        all.add(group);
+        all.calculateCustomTokenScore(1, 1, 1, 1, 1, 1, 1, 2, 3);
+        assertEquals(20, all.groups().get(0).get("Navigating", "Nav").getTokenScore());
+        assertEquals(9, all.groups().get(0).get("Carpentry", "Carp").getTokenScore());
+    }
+
 
     @Test
     public void testIndividualDataConstructorAndFields() {

@@ -24,7 +24,6 @@ final class WoodhallowTools {
 	private final JCheckBox[][] warningSounds = new JCheckBox[TimeLeftWarnings.Activity.values().length][2];
 	private final TimeLeftWarnings timeLeftWarnings = new TimeLeftWarnings();
 	private final JCheckBox checkBoxRumbleBoard, checkBoxRumbleShorthand;
-	private final JCheckBox checkBoxRatingsExport;
 	// Cursed Isles forage timer (Thalassa's), merc plank warning (PP_Timer's), and the rumble minute warning.
 	private final JCheckBox checkBoxPlankSound, checkBoxRumbleSound;
 	// The row next to the Scan button: the running timer on the left, the shorthand (or wolves left) on the right.
@@ -55,10 +54,12 @@ final class WoodhallowTools {
 	private static final Color FORAGE_RED = new Color(0xff6666);
 	/** Above the tabs, whichever is open: the Cursed Isles forage countdown, then the plank alert. */
 	private JPanel forageBar;
+	private final JPanel timerArea = new JPanel();
+	private final HomunculusCounter homunculi = new HomunculusCounter();
+	private String selectedActivity = "";
+	private long homunculiRound = -1;
+	void setActivity(String activity) { selectedActivity = activity; }
 	private JLabel labelForage, labelForageDetail;
-
-	/** Whether timed Woodhallow periods are appended to dr_ratings.jsonl in the data folder. */
-	boolean exportRatings() { return scorePerMinute() && checkBoxRatingsExport.isSelected(); }
 
 	/** Master switch for all score-per-minute work (timing, rates in run files, dr_ratings.jsonl, /ve rates). */
 	private final JCheckBox checkBoxScorePerMinute;
@@ -98,39 +99,56 @@ final class WoodhallowTools {
 	private String lastDnavShown = "";
 
 	WoodhallowTools(Window game, JTabbedPane tabs, Preferences prefs, StationClock clock, ActivityTracker tracker,
-					JPanel section) {
+					JPanel woodhallow, JPanel rumble, JPanel sounds) {
 		this.game = game;
 		tabbedPane = tabs;
 		stationClock = clock;
 		activityTracker = tracker;
 
-		checkBoxScorePerMinute = option(section, prefs, "Score per minute", "scoreperminute", true);
-		checkBoxScorePerMinute.setToolTipText("Time Woodhallow duty reports from the chat log and your own game log, and show score per minute");
-		checkBoxRumbleBoard = option(section, prefs, "Rumble board", "rumbleboard", true);
-		checkBoxRumbleShorthand = option(section, prefs, "Rumble shorthand", "rumbleshorthand", true);
-		checkBoxClearSound = option(section, prefs, "Last wolf sound", "clearsound", true);
-		addWarningMatrix(section, prefs);
-		checkBoxRumbleSound = option(section, prefs, "Rumble: warning 5 s before punch sizes change", "rumblesound", true);
+		checkBoxScorePerMinute = option(woodhallow, prefs, "Score/min", "scoreperminute", true);
+		checkBoxScorePerMinute.setToolTipText("Time Woodhallow duty reports from the chat log and your own game log."
+				+ " Select Score/min in Scan format to add rates to each pirate's row.");
+		checkBoxClearSound = option(woodhallow, prefs, "Last wolf sound", "clearsound", true);
+		checkBoxExtendedDnav = option(woodhallow, prefs, "Dnav strategies", "extendeddnav", false);
+		checkBoxExtendedDnav.setToolTipText("Show the fastest solo lines under Next Dnav using the move times below. Blank times leave a move out.");
+		JPanel times = new JPanel();
+		times.setLayout(new BoxLayout(times, BoxLayout.Y_AXIS));
+		times.setAlignmentX(Component.LEFT_ALIGNMENT);
+		times.setBorder(BorderFactory.createEmptyBorder(2, 12, 0, 0));
+		woodhallow.add(times);
+		addSeconds(times, prefs, "Booch time (s)", "dnavboochsec", "9", v -> boochSeconds = v,
+				"<html>Time to Booch before a strategy or a Donkey/Vegas. Default 9 s. Leave blank to exclude Booches.</html>");
+		addSeconds(times, prefs, "Single time (s)", "dnavsinglesec", "12", v -> singleSeconds = v,
+				"<html>How long a single takes at the very end of a solo line. Leave blank to plan without it.</html>");
+		addSeconds(times, prefs, "Double time (s)", "dnavdoublesec", "", v -> doubleSeconds = v,
+				"<html>How long you take to build a double (2 x the board). Leave blank to plan without doubles.</html>");
+		addSeconds(times, prefs, "Triple time (s)", "dnavtriplesec", "40", v -> tripleSeconds = v,
+				"<html>How long you take to build a triple (3 x the board). Leave blank to plan without triples.</html>");
+		addSeconds(times, prefs, "Bingo time (s)", "dnavbingosec", "", v -> bingoSeconds = v,
+				"<html>How long you take to build a bingo (4 x the board). Leave blank to plan without bingos.</html>");
+		addSeconds(times, prefs, "Donkey time (s)", "dnavdonkeysec", "51", v -> donkeySeconds = v,
+				"<html>How long the x5 takes after its Booch (Booch time is added separately).<br>"
+				+ "A Booch-donkey scores 625 and leaves a 173 board, like a triple. Leave blank to plan without it.</html>");
+		addSeconds(times, prefs, "Vegas time (s)", "dnavvegassec", "", v -> vegasSeconds = v,
+				"<html>How long the x6 takes after its Booch (Booch time is added separately).<br>"
+				+ "A Booch-Vegas scores 750 and leaves a 173 board. Leave blank to plan without it.</html>");
+		OptionsPanel.showWhenSelected(checkBoxExtendedDnav, times);
+
+		checkBoxRumbleBoard = option(rumble, prefs, "Rumble board", "rumbleboard", true);
+		checkBoxRumbleShorthand = option(rumble, prefs, "Rumble shorthand", "rumbleshorthand", true);
+		checkBoxRumbleSound = option(rumble, prefs, "55s warning", "rumblesound", true);
 		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
-		comboTimerPlace = timerPlace(section, prefs);
-		checkBoxPlankSound = option(section, prefs, "Cursed Isles: plank merc voice line", "planksound", true);
+
+		comboTimerPlace = timerPlace(sounds, prefs);
+		addWarningMatrix(sounds, prefs);
+		checkBoxPlankSound = option(sounds, prefs, "CI: Plank reminder", "planksound", true);
 		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
 		// Chat log: mercs and pirates leaving the vessel, for the plank check.
-		clock.setOnLiveMessage(rumbleClock.plank()::chat);
-		checkBoxRatingsExport = option(section, prefs, "Export dr_ratings.jsonl", "drratingsexport", true);
-		checkBoxRatingsExport.setToolTipText("Append each timed Woodhallow period's ratings to dr_ratings.jsonl in the data folder");
-		checkBoxExtendedDnav = option(section, prefs, "Extended Dnav (solo strategies in Next Dnav)", "extendeddnav", false);
-		checkBoxExtendedDnav.setToolTipText("Also show the fastest solo lines (with and without a Booch, and with a Booch-donkey) under the Next Dnav forecast");
-		addSeconds(section, prefs, "Time to triple (s)", "dnavtriplesec", "40", v -> tripleSeconds = v,
-				"<html>How long you take to build a triple (3 x the board). Leave blank to plan without triples.</html>");
-		addSeconds(section, prefs, "Time to double (s)", "dnavdoublesec", "", v -> doubleSeconds = v,
-				"<html>How long you take to build a double (2 x the board). Leave blank to plan without doubles.</html>");
-		addSeconds(section, prefs, "Time to single (s)", "dnavsinglesec", "12", v -> singleSeconds = v,
-				"<html>How long a single takes at the very end of a solo line. Leave blank to plan without it.</html>");
-		addSeconds(section, prefs, "Time to donkey (s)", "dnavdonkeysec", "51", v -> donkeySeconds = v,
-				"<html>How long the x5 takes after its Booch (the Booch itself is " + DnavPlan.BOOCH_SECONDS + " s).<br>"
-				+ "A Booch-donkey scores 625 and leaves a 173 board, like a triple. Leave blank to plan without it.</html>");
-		addVolume(section, prefs);
+		clock.setOnLiveMessage(message -> {
+			rumbleClock.plank().chat(message);
+			rumbleClock.ciSwordfight().chat(message);
+		});
+		addVolume(sounds, prefs);
 		createDnavTab();
 		createRumbleTab();
 		rumbleForecast.setExtended(checkBoxExtendedDnav.isSelected());
@@ -239,16 +257,15 @@ final class WoodhallowTools {
 	}
 
 	/** Seconds for each move in the solo line (DnavPlan); -1 = left blank, so that move isn't used. */
-	private volatile int tripleSeconds = 40, doubleSeconds = -1, singleSeconds = 12, donkeySeconds = 51;
+	private volatile int boochSeconds = 9, tripleSeconds = 40, doubleSeconds = -1, singleSeconds = 12, donkeySeconds = 51,
+			bingoSeconds = -1, vegasSeconds = -1;
 
 	/**
 	 * Time-left warnings: a 30 s and a 15 s box per activity, each its own setting. Ticking both warns
 	 * twice. The ticked-by-default cells are the old single options, under their old keys.
 	 */
 	private void addWarningMatrix(JPanel section, Preferences prefs) {
-		JLabel title = new JLabel("Time-left warning sounds");
-		title.setAlignmentX(Component.LEFT_ALIGNMENT);
-		section.add(title);
+		JPanel countdowns = OptionsPanel.subsection(section, "Countdown sounds");
 		JPanel grid = new JPanel(new GridBagLayout());
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
 		GridBagConstraints c = new GridBagConstraints();
@@ -280,7 +297,7 @@ final class WoodhallowTools {
 			}
 		}
 		grid.setMaximumSize(grid.getPreferredSize());
-		section.add(grid);
+		countdowns.add(grid);
 	}
 
 	/** A time box: whole seconds 1-300, or blank to leave that move out of the plan. */
@@ -314,10 +331,21 @@ final class WoodhallowTools {
 	}
 
 	/** The solo lines for the Dnav before {@code fray}, fastest first (moves with a blank time left out). */
+	private record PlanSettings(int crew, int fray, int booch, int single, int doubles, int triple, int bingo, int donkey, int vegas) { }
+	private PlanSettings lastPlanSettings;
+	private List<DnavPlan.Line> lastPlan = List.of();
+
 	private List<DnavPlan.Line> plan(int fray) {
 		int crew = stationClock.crew();
 		if (crew <= 0 || fray < 2 || fray > 6) return List.of();
-		return DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds);
+		PlanSettings settings = new PlanSettings(crew, fray, boochSeconds, singleSeconds, doubleSeconds, tripleSeconds,
+				bingoSeconds, donkeySeconds, vegasSeconds);
+		if (!settings.equals(lastPlanSettings)) {
+			lastPlan = DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds, donkeySeconds,
+					doubleSeconds, bingoSeconds, vegasSeconds, boochSeconds);
+			lastPlanSettings = settings;
+		}
+		return lastPlan;
 	}
 
 	private static void addVolume(JPanel section, Preferences prefs) {
@@ -444,7 +472,7 @@ final class WoodhallowTools {
 		ahoyRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel ahoyLabel = new JLabel("Starting wolves: ");
 		ahoyLabel.setForeground(Color.WHITE);
-		ahoyLabel.setToolTipText("Click the werewolf count the Ahoy tab shows, for the exact strategy and pace");
+		ahoyLabel.setToolTipText("Click the starting werewolf count the Ahoy tab shows, for the pace estimate");
 		ahoyRow.add(ahoyLabel);
 		ahoyButtons = new JPanel();
 		ahoyButtons.setLayout(new BoxLayout(ahoyButtons, BoxLayout.X_AXIS));
@@ -511,8 +539,7 @@ final class WoodhallowTools {
 		int startingWolves = reading.starting() >= 0 ? reading.starting() : manualStartingWolves;
 		// The work is the wave's exact size from the crew and fray, whatever count it shows (DnavPlan).
 		List<DnavPlan.Line> lines = plan(stationClock.frayNumber());
-		String strategy = lines.isEmpty() ? (startingWolves >= 0 ? nz(SoloNavStrategy.forWerewolves(startingWolves))
-				: half >= 0 ? twoStrategies(2 * half, 2 * half + 1) : strategiesWithOdds(odds))
+		String strategy = lines.isEmpty() ? "no plan available"
 				: lines.stream().map(l -> l.name() + " (" + l.time() + ")").collect(java.util.stream.Collectors.joining("\nor "));
 		if (!("Solo: " + strategy).equals(labelStrategy.getText())) {
 			labelStrategy.setText("Solo: " + strategy);
@@ -535,7 +562,7 @@ final class WoodhallowTools {
 		for (int count : choices) {
 			JToggleButton button = new JToggleButton(String.valueOf(count), count == manualStartingWolves);
 			button.setMargin(new Insets(1, 8, 1, 8));
-			button.setToolTipText("Confirm the starting count for the solo strategy and pace");
+			button.setToolTipText("Confirm the starting count for the pace estimate");
 			button.addActionListener(ev -> manualStartingWolves = count);
 			group.add(button);
 			ahoyButtons.add(button);
@@ -568,14 +595,6 @@ final class WoodhallowTools {
 		}
 		labelWolvesLeft.setText(text);
 		labelWolvesLeft.setForeground(late ? Color.RED : labelWolvesLeftColor);
-	}
-
-	private static String strategiesWithOdds(Map<Integer, Double> odds) {
-		List<String> lines = new ArrayList<>();
-		for (var entry : odds.entrySet())
-			lines.add(String.format("%d: %s (%.0f%%)", entry.getKey(),
-					nz(SoloNavStrategy.forWerewolves(entry.getKey())), entry.getValue() * 100));
-		return String.join("\nor ", lines);
 	}
 
 	private void createRumbleTab() {
@@ -613,7 +632,14 @@ final class WoodhallowTools {
 	}
 
 	/** The timer bar, for the main window to put above the tabs. Hidden unless a timer or the plank alert is on. */
-	JComponent forageBar() { return forageBar; }
+	JComponent forageBar() {
+		if (forageBar.getParent() != timerArea) {
+			timerArea.setLayout(new BoxLayout(timerArea, BoxLayout.Y_AXIS));
+			timerArea.add(forageBar);
+			timerArea.add(homunculi);
+		}
+		return timerArea;
+	}
 
 	/**
 	 * The main window's Dnav area: the Dnav box (wolves left, solo strategy, starting count) while stations
@@ -659,8 +685,9 @@ final class WoodhallowTools {
 					+ ", expected end " + timeOfDay(stationClock.expectedEnd(p)) + (p.lair ? " (lair)" : ""));
 		}
 		line.accept("");
-		line.accept("Solo settings (-1 = not used): triple " + tripleSeconds + " s, double " + doubleSeconds + " s, end single " + singleSeconds
-				+ " s, donkey " + donkeySeconds + " s, Booch " + DnavPlan.BOOCH_SECONDS + " s");
+		line.accept("Solo settings (-1 = not used): single " + singleSeconds + " s, double " + doubleSeconds
+				+ " s, triple " + tripleSeconds + " s, bingo " + bingoSeconds + " s, donkey " + donkeySeconds
+				+ " s, Vegas " + vegasSeconds + " s, Booch " + boochSeconds + " s");
 		for (int f : new int[]{fray - 1, fray}) {
 			if (crew <= 0 || f < 2 || f > 6) continue;
 			line.accept(String.format(java.util.Locale.ROOT, "Dnav before fray %d: pack %.3f x share %.1f = %.3f werewolves,"
@@ -715,6 +742,11 @@ final class WoodhallowTools {
 	}
 
 	private void updateRumble(long now) {
+		CiSwordfight sword = rumbleClock.ciSwordfight();
+		boolean ci = RecordChecker.CI.equals(selectedActivity);
+		if (sword.round() != homunculiRound) { homunculiRound = sword.round(); homunculi.reset(); }
+		boolean colours = ci && sword.showColours();
+		if (homunculi.isVisible() != colours) { homunculi.setVisible(colours); timerArea.revalidate(); timerArea.repaint(); }
 		long elapsed = rumbleClock.elapsed(now);
 		long forageLeft = rumbleClock.forageLeft(now);
 		playTimerSounds(now, elapsed, forageLeft);
@@ -836,14 +868,6 @@ final class WoodhallowTools {
 	 */
 	private long denForageLeft(long now) {
 		return denEnds > now ? denEnds - now : -1;
-	}
-
-	private static String nz(String strategy) { return strategy == null ? "not on the sheet" : strategy; }
-
-	/** "A" if both counts share a strategy, else "A (n) or B (n+1)". */
-	private static String twoStrategies(int a, int b) {
-		String sa = nz(SoloNavStrategy.forWerewolves(a)), sb = nz(SoloNavStrategy.forWerewolves(b));
-		return sa.equals(sb) ? sa : sa + " (" + a + ")\nor " + sb + " (" + b + ")";
 	}
 
 	private boolean updateForecast() {

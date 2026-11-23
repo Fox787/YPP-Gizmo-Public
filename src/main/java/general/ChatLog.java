@@ -21,6 +21,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -65,6 +66,31 @@ public final class ChatLog {
 		String voyage;
 		LocalDateTime arrivedAt;
 		final int[] tiers = new int[3];
+		int crewSize;
+		final TreeSet<String> pirates = new TreeSet<>();
+		private boolean returned;
+
+		/** A booty recipient need not have entered this run. Require the run's own crew evidence. */
+		List<String> recordCrew() {
+			return crewSize > 0 && pirates.size() == crewSize ? List.copyOf(pirates) : List.of();
+		}
+
+		private void observeCrew(String message) {
+			if (returned || arrivedAt == null) return;
+			Matcher result = FRAY_WINNERS.matcher(message);
+			if (result.matches()) {
+				for (String name : result.group(1).split(",\\s*")) {
+					// NPCs and thralls have spaces in their names. Winners includes knocked-out teammates.
+					if (PIRATE_NAME.matcher(name).matches()) pirates.add(name);
+				}
+				if (!"woodhallow".equals(voyage)) crewSize = pirates.size();
+			}
+			if ("woodhallow".equals(voyage)) {
+				Matcher standing = StationClock.SURVIVORS.matcher(message);
+				// Keep the full crew count, not the survivors or a smaller count after somebody leaves.
+				if (standing.matches()) crewSize = Math.max(crewSize, Integer.parseInt(standing.group(2)));
+			}
+		}
 	}
 
 	private static final String[][] CHESTS = {
@@ -75,6 +101,12 @@ public final class ChatLog {
 
 	private static final Pattern DATE = Pattern.compile("^=+ (\\d{4})/(\\d{1,2})/(\\d{1,2}) =+$");
 	private static final Pattern LINE = Pattern.compile("^\\[(\\d{1,2}):(\\d{2}):(\\d{2})\\] (.*)$");
+	private static final Pattern FRAY_WINNERS = Pattern.compile("^Game over\\.\\s+Winners: (.+)\\.$");
+	private static final Pattern PIRATE_NAME = Pattern.compile("[\\w'-]+");
+
+	private static boolean crewEvidence(String message) {
+		return FRAY_WINNERS.matcher(message).matches() || StationClock.SURVIVORS.matcher(message).matches();
+	}
 
 	private static final Pattern TAKEN_ABOARD = Pattern.compile("^Ye have taken aboard ([\\d,]+) (.+)!$");
 	private static final Pattern ABANDONED = Pattern.compile("^Ye abandoned ([\\d,]+) (.+?) as the booty is full!$");
@@ -138,11 +170,13 @@ public final class ChatLog {
 				segment.runs.add(run);
 			}
 			run.tiers[cargo.tier()] += count;
+			run.returned = true;
 		} else if (run != null) {
 			String name = item.toLowerCase(Locale.ROOT);
 			if (name.contains("_large_")) run.tiers[0] += count;
 			else if (name.contains("_medium_")) run.tiers[1] += count;
 			else if (name.contains("_small_")) run.tiers[2] += count;
+			run.returned = true;
 		}
 		return run;
 	}
@@ -327,7 +361,8 @@ public final class ChatLog {
 		IOException failure = null;
 		for (Path file : files) {
 			try {
-				batches.put(file, read(file, line -> BOOTY_LINE.matcher(line.text).find() || arrivalVoyage(line.text) != null));
+				batches.put(file, read(file, line -> BOOTY_LINE.matcher(line.text).find()
+						|| arrivalVoyage(line.text) != null || crewEvidence(line.text)));
 			} catch (IOException e) {
 				failure = e;
 			}
@@ -368,7 +403,8 @@ public final class ChatLog {
 				run.arrivedAt = l.time;
 				s.runs.add(run);
 			}
-			if (!BOOTY_LINE.matcher(l.text).find()) continue;
+			if (run != null) run.observeCrew(l.text);
+			if (!BOOTY_LINE.matcher(l.text).find() && !crewEvidence(l.text)) continue;
 			s.lines.add(l);
 			Matcher m;
 			if ((m = TAKEN_ABOARD.matcher(l.text)).matches()) {

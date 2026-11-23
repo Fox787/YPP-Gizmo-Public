@@ -3,7 +3,6 @@ package main.java.general;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -11,8 +10,8 @@ import java.util.Map;
  *   Wolves 10      Score 16
  *   Need   3.88    Now   -1.68
  *   Time   4:37    Left  -2:38
- *   Booch, 4 Trips          90%   (these two lines only with the Extended Dnav option)
- *   Booch, 4 Trips, Single  10%   (grey)
+ *   Booch, 4 Trips          2:49   (these two lines only with the Dnav strategies option)
+ *   Booch, 4 Trips, Single  3:01   (grey)
  */
 public final class DnavPanel extends JPanel {
 
@@ -26,7 +25,7 @@ public final class DnavPanel extends JPanel {
 	private final JLabel[] stratPct = {new JLabel(), new JLabel()};
 	private final Color normal;
 	private String shown;
-	/** The two solo strategy lines are the "Extended Dnav" option (off by default: most crews don't solo nav). */
+	/** The two solo strategy lines are the "Dnav strategies" option (off by default: most crews don't solo nav). */
 	private boolean extended;
 
 	public void setExtended(boolean on) {
@@ -122,8 +121,8 @@ public final class DnavPanel extends JPanel {
 			if (i > 1 || !extended) break;
 			strat[i].setText(e.getKey());
 			stratPct[i].setText(e.getValue());
-			strat[i].setToolTipText(i == 0 ? "Fastest solo line for this crew and fray (Options: triple and single times)"
-					: "The fastest line with the other Booch choice");
+			strat[i].setToolTipText(i == 0 ? "Fastest solo line for this crew and fray (Options: Dnav move times)"
+					: "Another fast solo line using the enabled moves");
 			stratPct[i].setToolTipText("How long the line takes");
 			strat[i].setVisible(true); stratPct[i].setVisible(true);
 			i++;
@@ -131,20 +130,4 @@ public final class DnavPanel extends JPanel {
 		for (; i < 2; i++) { strat[i].setVisible(false); stratPct[i].setVisible(false); }
 	}
 
-	/** Solo strategies for the next fray's werewolf count, with the chance of each, most likely first. */
-	public static Map<String, Double> strategies(Map<Integer, Double> werewolfOdds) {
-		Map<String, Double> m = new LinkedHashMap<>();
-		for (Map.Entry<Integer, Double> e : werewolfOdds.entrySet()) add(m, e.getKey(), e.getValue());
-		// Most likely first (counts with the same strategy were merged).
-		Map<String, Double> sorted = new LinkedHashMap<>();
-		m.entrySet().stream().sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
-				.forEach(e -> sorted.put(e.getKey(), e.getValue()));
-		return sorted;
-	}
-
-	private static void add(Map<String, Double> m, int werewolves, double p) {
-		String s = SoloNavStrategy.forWerewolves(werewolves);
-		if (s == null) s = werewolves + " werewolves: no strategy on the sheet";
-		m.merge(s, p, Double::sum);
-	}
 }

@@ -35,9 +35,16 @@ public class DRPersistantData implements Serializable {
 
     public void calculateCustomTokenScore(int circle, int diamond, int plus, int cross, int thrall,
                                           int cannonball, int smallChest, int mediumChest, int largeChest) {
+        calculateCustomTokenScore(circle, diamond, plus, cross, thrall, cannonball, smallChest,
+                mediumChest, largeChest, DRIndividualData.StationWeights.DEFAULT);
+    }
+
+    public void calculateCustomTokenScore(int circle, int diamond, int plus, int cross, int thrall,
+                                          int cannonball, int smallChest, int mediumChest, int largeChest,
+                                          DRIndividualData.StationWeights weights) {
 
         for (DRGroupData d : data) {
-            d.calculateCustomTokenScore(circle, diamond, plus, cross, thrall, cannonball, smallChest, mediumChest, largeChest);
+            d.calculateCustomTokenScore(circle, diamond, plus, cross, thrall, cannonball, smallChest, mediumChest, largeChest, weights);
         }
     }
 
