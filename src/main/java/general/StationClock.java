@@ -53,6 +53,7 @@ public final class StationClock {
 	private final List<Period> periods = new ArrayList<>();
 	private String arrivalVoyage;
 	private long arrivalAt;
+	private final Map<Long, ChatLog.Run> recordEntries = new LinkedHashMap<>();
 	private final Map<Path, Tail> tails = new LinkedHashMap<>();
 	private final ArrayDeque<ChatLog.Line> ownChat = new ArrayDeque<>();
 	private Path mainLog;
@@ -286,6 +287,8 @@ public final class StationClock {
 	/** Called with each live message (not ones replayed while catching up on the log at startup). */
 	private volatile java.util.function.Consumer<String> onLiveMessage;
 	void setOnLiveMessage(java.util.function.Consumer<String> c) { onLiveMessage = c; }
+	private volatile java.util.function.BiConsumer<String, Long> onRecordArrival;
+	void setOnRecordArrival(java.util.function.BiConsumer<String, Long> listener) { onRecordArrival = listener; }
 
 	/** The last chat messages seen, oldest first (for the "That didn't work" Dnav report). */
 	private final java.util.ArrayDeque<String> recent = new java.util.ArrayDeque<>();
@@ -303,12 +306,20 @@ public final class StationClock {
 		trackLair(msg, now);
 		String voyage = ChatLog.arrivalVoyage(msg);
 		if (voyage != null) {
+			ChatLog.Run entry = new ChatLog.Run();
+			entry.voyage = voyage;
+			entry.arrivedAt = java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(now), ZoneId.systemDefault());
+			recordEntries.put(now, entry);
 			arrivalVoyage = voyage;
 			arrivalAt = now;
 			resetRun();
 			inDen = "woodhallow".equals(voyage);
+			var listener = onRecordArrival;
+			if (listener != null && Math.abs(System.currentTimeMillis() - now) < 120_000) listener.accept(voyage, now);
 			return;
 		}
+		ChatLog.Run entry = recordEntries.get(arrivalAt);
+		if (entry != null) entry.observe(msg);
 		Matcher sv = SURVIVORS.matcher(msg);
 		if (!inDen && !sv.matches()) return;
 		Matcher hw = HALF.matcher(msg);
@@ -378,6 +389,12 @@ public final class StationClock {
 
 	synchronized long lastArrival(String voyage) {
 		return voyage != null && voyage.equals(arrivalVoyage) ? arrivalAt : 0;
+	}
+	synchronized long latestArrival() { return arrivalAt; }
+
+	synchronized ChatLog.Run recordEntry(long arrival) {
+		ChatLog.Run entry = recordEntries.get(arrival);
+		return entry == null ? null : entry.copy();
 	}
 
 	private void clearArrival() {

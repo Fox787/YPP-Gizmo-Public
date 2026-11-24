@@ -121,6 +121,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private ActivityTracker activityTracker;
 	/** Voyage records, their alerts and actions live in Options. */
 	private VoyageRecords voyageRecords;
+	private final Map<RunRecordAlerts.Run, RunRecordAlerts> runRecordAlerts = new LinkedHashMap<>();
+	private final java.util.Set<RunRecordAlerts.Run> checkedRecordEntries = new java.util.HashSet<>();
 	private JButton buttonGetRecords;
 	private JLabel labelRecordStatus;
 	private final Map<String, JPanel> recordPanels = new LinkedHashMap<>();
@@ -466,8 +468,14 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		String ocean = recordsOcean();
 		if (voyage == null || ocean == null || voyageRecords.size() == 0) return;
 		String time = java.time.LocalDateTime.now().withNano(0).toString();
+		String activity = RecordChecker.activityOf(data);
+		long arrival = data.lairArrival() != 0 ? data.lairArrival() : stationClock.lastArrival(voyage);
+		if (arrival == 0) arrival = woodhallowTools.recordArrival(activity);
+		RunRecordAlerts alerts = recordAlertsFor(voyage, ocean, arrival);
 		if (LairRecordChecks.VOYAGE.equals(voyage)) {
-			printRecordLines(LairRecordChecks.fray(voyageRecords, data, ocean, time));
+			printRecordLines(LairRecordChecks.fray(voyageRecords, data, ocean, time, alerts::compare).stream()
+					.filter(DRGizmoGUI::isRecordAlert).toList());
+			finishRunRecords(System.currentTimeMillis());
 			return;
 		}
 		List<String> lines = new ArrayList<>();
@@ -491,15 +499,68 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			int[] own = {t[2], t[1], t[0]};
 			pirateLoot.put(d.getName(), own);
 			List<String> me = List.of(d.getName());
-			lines.add(voyageRecords.compare(voyage, ocean, 0, VoyageRecords.DR_CHESTS, own[0], time, me, own));
-			lines.add(voyageRecords.compare(voyage, ocean, 0, VoyageRecords.DR_SCORE, VoyageRecords.lootScore(voyage, own), time, me, own));
+			lines.add(alerts.compare(0, VoyageRecords.DR_CHESTS, own[0], time, me, own));
+			lines.add(alerts.compare(0, VoyageRecords.DR_SCORE, VoyageRecords.lootScore(voyage, own), time, me, own));
 		}
 		List<String> pirates = data.data.values().stream().flatMap(m -> m.keySet().stream()).distinct().sorted().toList();
 		int crew = pirates.size();
-		lines.add(voyageRecords.compare(voyage, ocean, crew, VoyageRecords.DR_CHESTS, loot[0], time, pirates, loot, pirateLoot));
-		lines.add(voyageRecords.compare(voyage, ocean, crew, VoyageRecords.DR_SCORE,
+		lines.add(alerts.compare(crew, VoyageRecords.DR_CHESTS, loot[0], time, pirates, loot, pirateLoot));
+		lines.add(alerts.compare(crew, VoyageRecords.DR_SCORE,
 				VoyageRecords.lootScore(voyage, loot), time, pirates, loot, pirateLoot));
 		printRecordLines(lines);
+		finishRunRecords(System.currentTimeMillis());
+	}
+
+	private RunRecordAlerts recordAlertsFor(String voyage, String ocean, long arrival) {
+		RunRecordAlerts.Run run = new RunRecordAlerts.Run(voyage, ocean, arrival);
+		return runRecordAlerts.computeIfAbsent(run, key -> new RunRecordAlerts(voyageRecords, key));
+	}
+
+	/** Publish deferred first records after leaving; established records are already checked live. */
+	private void finishRunRecords(long now) {
+		if (!checkBoxBrokenRecordAlert.isSelected()) return;
+		for (RunRecordAlerts alerts : runRecordAlerts.values()) {
+			RunRecordAlerts.Run run = alerts.run;
+			String activity = switch (run.voyage()) {
+				case "cursedIsles" -> RecordChecker.CI;
+				case "woodhallow" -> RecordChecker.DEN;
+				default -> RecordChecker.LAIR;
+			};
+			long left = woodhallowTools.recordRunEnd(activity, run.arrival());
+			ChatLog.Run entry = stationClock.recordEntry(run.arrival());
+			if (entry != null && entry.returned()) alerts.end(now);
+			if (left > 0) alerts.end(left);
+			if (stationClock.latestArrival() > run.arrival()) alerts.end(now);
+			if (!alerts.ready(now)) continue;
+			List<String> lines = new ArrayList<>(alerts.finish());
+			lines.addAll(completedEntryRecords(run, entry));
+			printRecordLines(lines);
+		}
+	}
+
+	private List<String> completedEntryRecords(RunRecordAlerts.Run run, ChatLog.Run entry) {
+		if (checkedRecordEntries.contains(run)) return List.of();
+		List<String> lines;
+		if (LairRecordChecks.VOYAGE.equals(run.voyage())) {
+			List<DRGroupData> reports = drTreeToPersistantData().groups().stream()
+					.filter(report -> report.lairArrival() == run.arrival()).toList();
+			StationClock.LairEntry evidence = stationClock.lairEntry(run.arrival());
+			List<DRGroupData> rounds = LairRecordChecks.verifiedRounds(reports, evidence);
+			if (rounds.isEmpty()) return List.of();
+			lines = LairRecordChecks.entry(voyageRecords, rounds, evidence, run.ocean());
+		} else {
+			if (entry == null || !entry.returned() || entry.recordCrew().isEmpty()) return List.of();
+			GameLog.Info identity = GameLog.read();
+			Map<String, int[]> shares = identity == null ? Map.of() : RunLog.pirateLoot(
+					runLog.pending(identity.pirate, run.ocean()), entry, java.time.LocalDateTime.now());
+			lines = List.of(voyageRecords.check(entry, run.ocean(), shares).split("\n"));
+		}
+		checkedRecordEntries.add(run);
+		return lines.stream().filter(DRGizmoGUI::isRecordAlert).toList();
+	}
+
+	private static boolean isRecordAlert(String line) {
+		return line.startsWith("New record") || line.startsWith("Record tied:");
 	}
 
 	private void printRecordLines(List<String> lines) {
@@ -575,6 +636,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 		boolean missingEvidence = false;
 		for (var group : byArrival.entrySet()) {
+			RunRecordAlerts.Run run = new RunRecordAlerts.Run(LairRecordChecks.VOYAGE, recordsOcean(), group.getKey());
+			if (checkedRecordEntries.contains(run)) continue;
 			var evidence = stationClock.lairEntry(group.getKey());
 			List<DRGroupData> rounds = LairRecordChecks.verifiedRounds(group.getValue(), evidence);
 			if (rounds.isEmpty()) {
@@ -582,6 +645,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				continue;
 			}
 			printRecordLines(LairRecordChecks.entry(voyageRecords, rounds, evidence, recordsOcean()));
+			checkedRecordEntries.add(run);
 		}
 		if (missingEvidence)
 			printStatus("Lair entry checks need a scan of every fray and matching loot in the chat log.", false);
@@ -1533,7 +1597,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			});
 
 			// Auto scan checks every second (it only reads the duty report window once a trigger is armed).
-			new javax.swing.Timer(AUTOSCAN_TICK_MS, ev -> autoScanTick()).start();
+			new javax.swing.Timer(AUTOSCAN_TICK_MS, ev -> {
+				autoScanTick();
+				finishRunRecords(System.currentTimeMillis());
+			}).start();
 
 		JPanel panelScore = new JPanel();
 		panelGeneral.add(panelScore, BorderLayout.NORTH);
@@ -1564,6 +1631,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelScore.add(rigidArea);
 
 		loadSettings();
+		stationClock.setOnRecordArrival((voyage, arrival) -> SwingUtilities.invokeLater(() -> {
+			String ocean = recordsOcean();
+			if (ocean != null && checkBoxBrokenRecordAlert.isSelected()) recordAlertsFor(voyage, ocean, arrival);
+		}));
 
 		// Diagnosis for blurry text until clicked: is the client's repaint manager (and its 2x scaling)
 		// drawing Gizmo's window too? Printed once, after the window is up.
@@ -2067,10 +2138,14 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		List<ChatLog.Run> runs = booty.chat.runs;
 		for (int i = 0; i < runs.size(); i++) {
 			ChatLog.Run run = runs.get(i);
+			long arrival = run.arrivedAt == null ? 0 : run.arrivedAt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+			RunRecordAlerts.Run recordRun = new RunRecordAlerts.Run(run.voyage, booty.ocean(), arrival);
+			boolean alreadyAnnounced = checkedRecordEntries.contains(recordRun);
 			java.time.LocalDateTime end = i + 1 < runs.size() ? runs.get(i + 1).arrivedAt : booty.chat.openedAt;
 			Map<String, int[]> pirateLoot = RunLog.pirateLoot(booty.runFiles, run, end);
 			String result = voyageRecords.check(run, booty.ocean(), pirateLoot);
-			if (!result.isEmpty()) printRecordLines(List.of(result.split("\n")));
+			if (!alreadyAnnounced && !result.isEmpty()) printRecordLines(List.of(result.split("\n")));
+			if (!run.recordCrew().isEmpty()) checkedRecordEntries.add(recordRun);
 		}
 	}
 
@@ -2093,6 +2168,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		GameLog.setDataFolder(!data.isEmpty() ? Paths.get(data) : chat.isEmpty() ? null : Paths.get(chat, "Gizmo"));
 		Path folder = GameLog.dataFolder().toAbsolutePath().normalize();
 		if (voyageRecords == null || !voyageRecords.folder().equals(folder)) {
+			runRecordAlerts.clear();
+			checkedRecordEntries.clear();
 			voyageRecords = new VoyageRecords(folder);
 			updateRecordPanels();
 			refreshRecords(false);

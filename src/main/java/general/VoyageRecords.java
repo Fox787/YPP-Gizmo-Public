@@ -421,7 +421,7 @@ public final class VoyageRecords {
 		String line;
 		if (r == null) line = String.format("New record? %s: %d (there is no %s record yet, so this would be the first)", what, value,
 				crewSize > 0 ? crewSize + "-pirate" : "one-pirate");
-		else if (r.value <= 0 && r.valueText != null) return "";
+		else if (r.value <= 0 && r.valueText != null && !r.valueText.trim().matches("\\d+")) return "";
 		else if (value > r.value) line = String.format("New record! %s: %d beats %d (%s, %s)", what, value, r.value, r.date, String.join(", ", r.pirates));
 		else if (value == r.value) return String.format("Record tied: %s: %d (%s, %s)", what, value, r.date, String.join(", ", r.pirates));
 		else return "";

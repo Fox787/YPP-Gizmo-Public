@@ -75,6 +75,31 @@ public final class ChatLog {
 			return crewSize > 0 && pirates.size() == crewSize ? List.copyOf(pirates) : List.of();
 		}
 
+		boolean returned() { return returned; }
+
+		Run copy() {
+			Run copy = new Run();
+			copy.voyage = voyage;
+			copy.arrivedAt = arrivedAt;
+			copy.crewSize = crewSize;
+			copy.pirates.addAll(pirates);
+			System.arraycopy(tiers, 0, copy.tiers, 0, tiers.length);
+			copy.returned = returned;
+			return copy;
+		}
+
+		/** Live equivalent of the booty parser: keep crew evidence until the chests reach the ship. */
+		void observe(String message) {
+			observeCrew(message);
+			Matcher taken = TAKEN_ABOARD.matcher(message);
+			if (!taken.matches()) return;
+			Cargo cargo = namedCargo(taken.group(2));
+			if (cargo != null && cargo.voyage().equals(voyage)) {
+				tiers[cargo.tier()] += parseInt(taken.group(1));
+				returned = true;
+			}
+		}
+
 		private void observeCrew(String message) {
 			if (returned || arrivedAt == null) return;
 			Matcher result = FRAY_WINNERS.matcher(message);

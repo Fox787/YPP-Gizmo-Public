@@ -49,6 +49,12 @@ saved. Automatic startup refreshes keep manual values without replacing them.
 Each voyage's Individual group includes its Puzzle Practice individual categories,
 including Dnav, carpentry, frays, gifts and the separate CI points records for each forage.
 Compact tables show Entry and DR once; expand Points by forage to edit the numbered values.
+Every scanned CI, Den and Lair DR checks records automatically. Existing nonzero DR chest/score
+benchmarks alert live for screenshots. Missing/zero benchmarks keep only the best qualifying
+results until returning to the ship, with five seconds for the final report to settle. Rescans
+do not repeat those alerts. Automatic output contains record alerts, not an entry summary.
+Entry records are checked on return without needing Score All or a booty export; Lair entry
+checks still require all frays and matching three-tier haul evidence. Dnav and carpentry stay live.
 
 Options > Scan & output:
 - "Wolf count from scene" reads the active Woodhallow scene, with no need to open Ahoy.

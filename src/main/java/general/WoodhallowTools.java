@@ -411,6 +411,9 @@ final class WoodhallowTools {
 		return rumbleClock.scene().activity(now, stationClock.lastArrival("vampireLairs"));
 	}
 
+	long recordArrival(String activity) { return rumbleClock.scene().enteredAt(activity); }
+	long recordRunEnd(String activity, long arrival) { return rumbleClock.scene().leftAt(activity, arrival); }
+
 	/** When the client last showed a duty report no new game followed (game log), 0 if none. For auto scan. */
 	long lastFinalReport() { return rumbleClock.lastFinalReport(); }
 
