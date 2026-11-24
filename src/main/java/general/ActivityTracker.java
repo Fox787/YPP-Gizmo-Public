@@ -78,7 +78,17 @@ public final class ActivityTracker {
 		self = name;
 	}
 
+	/** This client's last puzzle starts from the game log, oldest first (for the Dnav report). */
+	private final java.util.ArrayDeque<String> recentPuzzles = new java.util.ArrayDeque<>();
+
+	synchronized java.util.List<String> recentPuzzles() { return java.util.List.copyOf(recentPuzzles); }
+
 	void ownPuzzle(String object, long now) {
+		synchronized (this) {
+			recentPuzzles.addLast(java.time.LocalTime.ofInstant(java.time.Instant.ofEpochMilli(now), java.time.ZoneId.systemDefault())
+					+ "  " + object);
+			if (recentPuzzles.size() > 100) recentPuzzles.removeFirst();
+		}
 		int code = "NaviObject".equals(object) ? NAV : "ForageObject".equals(object) ? FORAGE : 0;
 		if (code != 0) recordStation(ownStations, code, now);
 	}
@@ -264,7 +274,17 @@ public final class ActivityTracker {
 		public boolean exact;
 		/** Time on the station; 0 if unknown. */
 		public long ms;
+
+		/** A measured visit under two seconds: left out of scoring, the saved tree and copied lists. */
+		public boolean tooBrief() { return ms > 0 && ms < MIN_SCORE_MS; }
+		/** A measured visit of at least five seconds, the shortest that gets a score per minute. */
+		public boolean hasRate() { return ms >= MIN_RATE_MS; }
 	}
+
+	/** Visits shorter than this are left out of scoring; exactly two seconds still counts. */
+	static final long MIN_SCORE_MS = 2_000;
+	/** Visits from 2 s up to this still score, but show "-" for score per minute. */
+	static final long MIN_RATE_MS = 5_000;
 
 	/** One scanned duty report (station period). */
 	public static final class Period {
@@ -351,8 +371,8 @@ public final class ActivityTracker {
 				row.tokens = d.getTokens();
 				row.score = d.getTokenScore();
 				row.woodhallowNav = woodhallow && code == NAV;
-				row.ms = time < 5_000 ? 0 : time;
-				row.exact = row.ms > 0 && (singleStation || local);
+				row.ms = time;
+				row.exact = row.hasRate() && (singleStation || local);
 				period.rows.add(row);
 			}
 		}
@@ -399,7 +419,8 @@ public final class ActivityTracker {
 	/** As above; without the station name line when header is false (for copying). */
 	public static List<String> blocks(Period period, String sep, boolean header) {
 		Map<String, List<Row>> byStation = new LinkedHashMap<>();
-		for (Row r : period.rows) byStation.computeIfAbsent(r.station, k -> new ArrayList<>()).add(r);
+		for (Row r : period.rows)
+			if (!r.tooBrief()) byStation.computeIfAbsent(r.station, k -> new ArrayList<>()).add(r);
 		List<String> order = new ArrayList<>(byStation.keySet());
 		order.sort(Comparator.comparingInt(ActivityTracker::stationOrder));
 		List<String> out = new ArrayList<>();
@@ -410,7 +431,7 @@ public final class ActivityTracker {
 			for (Row r : rows) {
 				if (sb.length() > 0) sb.append('\n');
 				sb.append(r.pirate).append(sep);
-				sb.append(r.ms > 0 ? String.format("%.2f", rate(r)) : "-");
+				sb.append(r.hasRate() ? String.format("%.2f", rate(r)) : "-");
 			}
 			out.add(sb.toString());
 		}
@@ -426,7 +447,8 @@ public final class ActivityTracker {
 					addChatRow(byStation, station.getKey(), row.getName(), row.getTokenScore(), "-", ignoreNpc);
 		} else {
 			for (Row row : period.rows) {
-				String rate = row.ms > 0 ? String.format("%.2f", rate(row)) : "-";
+				if (row.tooBrief()) continue;
+				String rate = row.hasRate() ? String.format("%.2f", rate(row)) : "-";
 				addChatRow(byStation, row.station, row.pirate, row.score, rate, ignoreNpc);
 			}
 		}
@@ -473,17 +495,31 @@ public final class ActivityTracker {
 		};
 	}
 
+	/** The report without measured visits under two seconds; the scanned report itself is left intact. */
+	static DRGroupData scoredReport(DRGroupData report, Period period) {
+		DRGroupData result = report.copy();
+		if (period == null) return result;
+		for (Row row : period.rows) {
+			if (!row.tooBrief()) continue;
+			Map<String, DRIndividualData> station = result.data.get(row.station);
+			if (station == null) continue;
+			station.remove(row.pirate);
+			if (station.isEmpty()) result.data.remove(row.station);
+		}
+		return result;
+	}
+
 	/** station -> pirate -> score per minute, for rows with a known time; empty if period is null. */
 	public static Map<String, Map<String, Double>> rates(Period period) {
 		Map<String, Map<String, Double>> out = new HashMap<>();
 		if (period == null) return out;
 		for (Row r : period.rows)
-			if (r.ms > 0) out.computeIfAbsent(r.station, k -> new HashMap<>()).put(r.pirate, rate(r));
+			if (r.hasRate()) out.computeIfAbsent(r.station, k -> new HashMap<>()).put(r.pirate, rate(r));
 		return out;
 	}
 
 	static double rate(Row r) {
-		if (r.ms <= 0) return -1;
+		if (!r.hasRate()) return -1;
 		double score = r.woodhallowNav ? DnavForecast.navPoints(r.tokens) / DnavForecast.POINTS_PER_SCORE : r.score;
 		return score / (r.ms / 60_000.0);
 	}

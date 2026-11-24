@@ -18,6 +18,8 @@ public final class DnavForecast {
 	public double teamRate;
 	/** When the team would reach the needed score, from stations opening; 0 if no pace. */
 	public long clearMs;
+	/** The wave's real size in werewolves (unrounded, see DnavPlan), and the points it takes to clear it. */
+	public double realWerewolves, neededPoints;
 
 	/**
 	 * The game rounds the count at random by its fraction: 14.1 is 14 nine times in ten and 15 one
@@ -61,9 +63,9 @@ public final class DnavForecast {
 	}
 
 	/** Each werewolf takes 200 points to turn back; a Dnav score point is worth 125, so 1.6 per werewolf. */
-	static final double POINTS_PER_WEREWOLF = 200, POINTS_PER_SCORE = 125;
-	private static final double TRIPLE_STRATEGY_POINTS_PER_SCORE = 176;
-	private static final double STARTING_BOARD_POINTS_PER_SCORE = 71;
+	static final double POINTS_PER_WEREWOLF = 200, POINTS_PER_SCORE = DnavPlan.BOOCH_BOARD;
+	private static final double TRIPLE_STRATEGY_POINTS_PER_SCORE = DnavPlan.TRIPLE_BOARD;
+	private static final double STARTING_BOARD_POINTS_PER_SCORE = DnavPlan.START_BOARD;
 
 	public static int dnavNeeded(int werewolves) {
 		return (int) Math.ceil(werewolves * POINTS_PER_WEREWOLF / POINTS_PER_SCORE - 1e-9);
@@ -72,7 +74,7 @@ public final class DnavForecast {
 	/**
 	 * Werewolf points from one navigator's moons [singles, doubles, triples] (score 1, 2, 3 each).
 	 * With at least one triple and at most one other combo, the first triple uses 125 points per
-	 * score and every other combo uses 176. Otherwise, one highest combo uses the starting
+	 * score and every other combo uses 173. Otherwise, one highest combo uses the starting
 	 * board's rate of 71 points per score and the rest use 125.
 	 */
 	public static double navPoints(int[] moons) {
@@ -105,8 +107,11 @@ public final class DnavForecast {
 		f.rawPack = packRaw(people, f.nextFray);
 		f.odds = werewolfOdds(people, f.nextFray);
 		f.werewolves = f.odds.keySet().iterator().next();
-		f.needed = dnavNeeded(f.werewolves);
-		double neededPoints = f.werewolves * POINTS_PER_WEREWOLF;
+		// The work is the wave's exact size, whatever count it shows (DnavPlan).
+		f.realWerewolves = DnavPlan.werewolves(people, f.nextFray);
+		f.neededPoints = DnavPlan.needed(people, f.nextFray);
+		f.needed = (int) Math.ceil(f.neededPoints / POINTS_PER_SCORE - 1e-9);
+		double neededPoints = f.neededPoints;
 		f.stationsMs = stationsMs(people, deaths, fray);
 		f.teamRate = teamPointsPerMin / POINTS_PER_SCORE;
 		if (teamPointsPerMin > 0) f.clearMs = Math.round(neededPoints / teamPointsPerMin * 60_000);
@@ -121,7 +126,7 @@ public final class DnavForecast {
 	/** Score per minute the whole team needs to finish with 30 s to spare. */
 	public double needRate() {
 		long target = stationsMs - 30_000;
-		return target > 0 ? werewolves * POINTS_PER_WEREWOLF / POINTS_PER_SCORE / (target / 60_000.0) : 0;
+		return target > 0 ? neededPoints / POINTS_PER_SCORE / (target / 60_000.0) : 0;
 	}
 
 }

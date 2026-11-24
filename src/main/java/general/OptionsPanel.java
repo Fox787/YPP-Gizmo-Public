@@ -35,6 +35,33 @@ final class OptionsPanel extends JPanel {
 		return section(sections, title, "options." + key + ".expanded", initiallyOpen);
 	}
 
+	/** Hide dependent controls without changing their saved values; also follows settings loaded in code. */
+	static void showWhenSelected(AbstractButton toggle, JComponent... controls) {
+		Runnable update = () -> {
+			for (JComponent control : controls) {
+				control.setVisible(toggle.isSelected());
+				Container parent = control.getParent();
+				if (parent != null) { parent.revalidate(); parent.repaint(); }
+			}
+		};
+		toggle.addItemListener(event -> update.run());
+		update.run();
+	}
+
+	/** A compact heading and body within a section, without another disclosure control. */
+	static JPanel subsection(JPanel parent, String title) {
+		JPanel subsection = new JPanel();
+		subsection.setLayout(new BoxLayout(subsection, BoxLayout.Y_AXIS));
+		subsection.setAlignmentX(LEFT_ALIGNMENT);
+		subsection.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
+		JLabel heading = new JLabel(title);
+		heading.setFont(heading.getFont().deriveFont(Font.BOLD));
+		heading.setAlignmentX(LEFT_ALIGNMENT);
+		subsection.add(heading);
+		parent.add(subsection);
+		return subsection;
+	}
+
 	JPanel section(JPanel parent, String title, String preference, boolean initiallyOpen) {
 		JPanel card = new JPanel(new BorderLayout());
 		card.setAlignmentX(LEFT_ALIGNMENT);
@@ -95,7 +122,7 @@ final class OptionsPanel extends JPanel {
 		@Override public boolean getScrollableTracksViewportHeight() { return false; }
 	}
 
-	private record DisclosureIcon(boolean open) implements Icon {
+	record DisclosureIcon(boolean open) implements Icon {
 		@Override public int getIconWidth() { return 9; }
 		@Override public int getIconHeight() { return 9; }
 

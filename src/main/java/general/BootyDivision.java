@@ -79,7 +79,7 @@ public class BootyDivision {
 		StringBuilder sb = new StringBuilder();
 		if (chat != null) {
 			for (ChatLog.Line l : chat.lines) {
-				if (l.text.startsWith("Ye have taken aboard") || l.text.startsWith("Ye abandoned "))
+				if (l.text.startsWith("Ye have taken aboard") || l.text.startsWith("Ye abandoned ") || l.text.contains(" reclaimed "))
 					sb.append(l.text).append(nl);
 			}
 		}
@@ -152,6 +152,9 @@ public class BootyDivision {
 			j.key("abandoned_hold_full").open();
 			for (Map.Entry<String, Integer> e : chat.abandoned.entrySet()) j.field(e.getKey(), e.getValue());
 			j.close();
+			j.key("reclaimed_after_loss").open();
+			for (Map.Entry<String, Integer> e : chat.reclaimed.entrySet()) j.field(e.getKey(), e.getValue());
+			j.close();
 			writeRunEvidence(j);
 			j.key("chat").openArray();
 			for (ChatLog.Line l : chat.lines) j.value(l.raw);
@@ -200,6 +203,13 @@ public class BootyDivision {
 			j.open();
 			j.field("voyage", run.voyage);
 			j.field("arrived_at", run.arrivedAt);
+			List<String> crew = run.recordCrew();
+			if (!crew.isEmpty()) {
+				j.field("crew_size", crew.size());
+				j.key("crew").openArray();
+				for (String pirate : crew) j.value(pirate);
+				j.closeArray();
+			}
 			writeChestTiers(j, "chests_taken_aboard", run.tiers);
 			Map<String, int[]> evidence = RunLog.pirateLoot(runFiles, run, end);
 			if (!evidence.isEmpty()) {

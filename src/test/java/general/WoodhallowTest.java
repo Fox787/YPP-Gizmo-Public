@@ -244,7 +244,8 @@ class WoodhallowTest {
 		assertTrue(Sounds.scaled(Sounds.CLEAR, 50).length > 44);
 		assertTrue(Sounds.scaled(Sounds.THIRTY_SECONDS, 0).length > 44);
 		assertTrue(Sounds.scaled(Sounds.LAIR_WARNING, 50).length > 44);
-		assertEquals(120_000, DnavForecast.during(1, 4, 0, 300).clearMs);
+		// The wave before fray 2 is 3.12 werewolves for a crew of 4: 624 points, cleared at 524 (DnavPlan).
+		assertEquals(104_800, DnavForecast.during(1, 4, 0, 300).clearMs);
 	}
 
 	@Test

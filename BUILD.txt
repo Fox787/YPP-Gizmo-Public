@@ -1,0 +1,109 @@
+Building Gizmo
+==============
+
+You need a Java Development Kit (JDK), version 17 or newer. The global copy shortcut uses
+the bundled lib/jnativehook-2.2.2.jar. The other jars in lib/ are only for unit tests.
+
+Windows (PowerShell)
+--------------------
+    powershell -ExecutionPolicy Bypass -File build.ps1
+or, if your JDK is somewhere else:
+    powershell -ExecutionPolicy Bypass -File build.ps1 -Jdk "C:\path\to\jdk"
+
+The result is dist\Gizmo.jar.
+For an existing installation whose runtime package is gizmobeta, preserve its settings and
+saved reports with: powershell -ExecutionPolicy Bypass -File build.ps1 -PackageRoot gizmobeta
+
+Any system, by hand
+-------------------
+From the project root, compile into a clean out directory and include the bundled sounds:
+    javac --release 16 -g -encoding UTF-8 -cp lib/jnativehook-2.2.2.jar -d out $(find src/main/java -name "*.java")
+    (cd out && jar xf ../lib/jnativehook-2.2.2.jar com/github/kwhat/jnativehook)
+    jar cfm Gizmo.jar src/META-INF/MANIFEST.MF -C out . -C src/main/resources .
+
+Installing
+----------
+1. Close Puzzle Pirates. (Replacing the jar while the game runs breaks it until a restart.)
+2. Copy dist\Gizmo.jar into the game's app folder, replacing the previous Gizmo.jar.
+   The standard Windows location is:
+       %LOCALAPPDATA%\Puzzle Pirates\app\
+3. In that folder, use a single Gizmo agent entry in extra.txt:
+       -javaagent:Gizmo.jar
+4. Start the game. The Gizmo window opens once you are logged in.
+
+Settings
+--------
+Profiles store only Options > Scan format, Score All format and Scoring values. Switching
+profiles saves edits to the profile you are leaving. All other options are shared.
+The built-in profiles are Cursed Isles, Werewolf Den and Vampire Lair. Their old CI/Den/Lair
+names migrate with their saved values and selection. Detected activities select a matching
+profile through the same validation and saving path as a manual switch.
+Scan format's "Score/min" adds rates to the existing player rows. Leaving it off
+omits the rates; station timing and exports continue without printing another report.
+The values in Options > Voyage records are editable. Press Enter, leave the box or use
+Save settings to save. Clear a value to restore its downloaded record. Bold values were
+entered manually and are tracked in the Data folder's manual-records.json across restarts.
+Refresh lists and counts the manual records Puzzle Practice would replace. Choose Keep
+higher values, Replace all listed, or Cancel. Manual records absent from the download stay
+saved. Automatic startup refreshes keep manual values without replacing them.
+Each voyage's Individual group includes its Puzzle Practice individual categories,
+including Dnav, carpentry, frays, gifts and the separate CI points records for each forage.
+Compact tables show Entry and DR once; expand Points by forage to edit the numbered values.
+
+Options > Scan & output:
+- "Wolf count from scene" reads the active Woodhallow scene, with no need to open Ahoy.
+  When off, "Wolf count from chat only" selects chat instead of visible Ahoy text.
+- Ctrl+P advances queued vessel-chat scans from any application automatically; there is no option to enable.
+  A separate helper JVM observes the shortcut; it does not consume it, so other applications
+  can also respond (for example, opening Print). Chat-log confirmation always remains available.
+  Global detection supports Windows, macOS (with input permission), and X11 Linux. Wayland,
+  missing permissions or helper failures fall back to chat logs. The helper runs only while
+  more scans are queued. A copied piece expires after five seconds without a paste or send;
+  a paste shortcut renews that five-second window. Expiry cancels the remaining queue and
+  stops the helper, leaving the current clipboard text intact. It records no typed text.
+- Dnav move times include Booch (default 9 s), Single, Double, Triple, Bingo, Donkey and Vegas. Double,
+  Bingo and Vegas start blank; a blank time excludes that move from strategies. Bingo
+  scores 4 x the current board and can replace triples anywhere. Donkey and Vegas
+  each follow a Booch (the configured Booch time, added separately), scoring 625 and 750 respectively.
+  Triple, Bingo, Donkey and Vegas leave a 173-point board; Double leaves 125.
+Gameplay options are grouped into Woodhallow, Rumble, and Timers & sounds. Dnav timing
+fields appear only with Dnav strategies enabled. Copy as /ve appears with Auto-copy;
+the missing run prompt and text-copy folder appear
+with booty export. Hiding these controls preserves their saved values.
+Scoring values uses compact Tokens, Forage, Dnav and Lair carpentry subsections. Dnav and
+Lair carpentry weights are editable profile settings, defaulting to 1/2/3 for Dnav and
+-1/1/2 for carpentry. Their groups appear only in the matching selected profile, including
+automatic activity switches. Folders and countdown
+sounds use the same compact subsection headings without extra foldouts.
+- Measured station visits shorter than two seconds are excluded from scoring and copied scans.
+  Exactly two seconds qualifies. Unmeasured visits remain eligible; raw run logs retain the data.
+
+Options > Timers & sounds has separate den, vampire lair and CI warning switches. Warnings
+use 30 seconds before the forage/haul deadline, including the vampire scene's live haul timer.
+If the scene cannot be read, lairs use chat timing, with the coffin-rustling cue (15 seconds)
+as a last fallback. "Plank merc reminder" starts disabled and uses
+Thalassa's original recording and CI thresholds after forage (4, 3, 3, 2, then 2 crew; thralls
+excluded). It reminds you only when a merc is still present and the crew exceeds that limit.
+During CI swordfights only homunculus colour controls appear. Cultist pre-fight shouts prepare a
+homunculus counter, and the SwordObject enemy list confirms whether to show it. Rumbles,
+forage, game-over messages and scene exits clear it. The counter uses Thalassa's mappings:
+white/yellow swords -> blue drops; purple/orange -> green; blue/red -> red; green/black -> yellow.
+Click a sword colour to add one, right-click to subtract, and use Copy for /ve drop totals.
+Middle-click a sword colour also marks its drop colour as the target. Each fray starts fresh.
+
+Gizmo uses the standard Gizmo Java preferences for profiles and saved duty reports.
+In Options > Booty & files, set the folder your chat logs are saved to (the game's chat log
+setting). Station timing, score per minute and the booty export's chat details need it.
+You can point Data folder at an existing export directory to continue using those files.
+Export DR ratings is under Booty & files and appends every scanned activity's ratings to
+dr_ratings.jsonl, independently of booty export and Score/min. Known timings are included;
+untimed reports store null period/rate values.
+
+What it writes
+--------------
+Under the configured Data folder, in <ocean>\:
+    booty_divisions_<pirate>.jsonl      one line per booty division
+    runs\run_<start>_<pirate>.jsonl     one line per duty report, with station timings
+and a readable N.txt per booty division in the "Text copies" folder set in Options.
+The Data folder defaults to a Gizmo folder inside your chat log folder. Until a chat log
+folder is known, Gizmo uses exported_data in the game's app folder.

@@ -28,6 +28,8 @@ public final class RumbleClock {
 	private volatile long startedAt;   // 0 when no rumble is on (written on the file thread, read on the UI thread)
 	private volatile long forageEndsAt;   // 0 when no forage period is on
 	private final MercPlank plank = new MercPlank();
+	private final CiSwordfight ciSwordfight = new CiSwordfight();
+	CiSwordfight ciSwordfight() { return ciSwordfight; }
 
 	/** Cursed Isles merc count and plank check, from the same game log. */
 	public MercPlank plank() { return plank; }
@@ -78,12 +80,14 @@ public final class RumbleClock {
 		try {
 			Path newest = GameLog.activeLog();
 			if (newest == null) {
+				ciSwordfight.reset();
 				file = null;
 				startedAt = 0;
 				forageEndsAt = 0;
 				return;
 			}
 			if (!newest.equals(file)) {           // new session log: start at its end
+				ciSwordfight.reset();
 				file = newest;
 				offset = Files.size(newest);
 				startedAt = 0;
@@ -119,7 +123,7 @@ public final class RumbleClock {
 	/**
 	 * Gizmo started (or the client began a new log) mid-session: take the scene the client is already in
 	 * from the log so far, so activity tagging and the parlor check work before the next scene change.
-	 * Only the scene lines are used; timers start fresh from the log's end.
+ * Rumble and forage timers start fresh; CI homunculus controls can recover the current team.
 	 */
 	private void seedScene(Path log, long size) throws IOException {
 		long from = Math.max(0, size - SEED_MAX_BYTES);
@@ -133,8 +137,10 @@ public final class RumbleClock {
 	}
 
 	void seedScene(String logText, long now) {
-		for (String line : logText.split("\r?\n"))
+		for (String line : logText.split("\r?\n")) {
 			if (line.contains("chat display for ")) scene.feed(line, lineTime(line, now));
+			ciSwordfight.feed(line);
+		}
 	}
 
 	/** Called (on the file thread) when this client enters a duty puzzle: its data object's name and the log time. */
@@ -163,6 +169,7 @@ public final class RumbleClock {
 	private static final java.util.regex.Pattern FORAGE = java.util.regex.Pattern.compile("Stopping foraging in (\\d+) seconds");
 
 	void feed(String line, long now) {
+		ciSwordfight.feed(line);
 		plank.feed(line);
 		if (line.contains("chat display for ")) {
 			scene.feed(line, lineTime(line, now));

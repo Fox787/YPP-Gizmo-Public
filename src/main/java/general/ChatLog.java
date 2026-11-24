@@ -21,6 +21,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -50,6 +51,8 @@ public final class ChatLog {
 		public final List<Line> lines = new ArrayList<>();
 		public final Map<String, Integer> takenAboard = new LinkedHashMap<>();
 		public final Map<String, Integer> abandoned = new LinkedHashMap<>();
+		/** Chests taken back after a lost fray: "The islanders reclaimed 8 cursed chests!". */
+		public final Map<String, Integer> reclaimed = new LinkedHashMap<>();
 		public final List<Run> runs = new ArrayList<>();
 		public Integer chestsOpened, chestItems;
 		public Long chestPoe;
@@ -63,6 +66,31 @@ public final class ChatLog {
 		String voyage;
 		LocalDateTime arrivedAt;
 		final int[] tiers = new int[3];
+		int crewSize;
+		final TreeSet<String> pirates = new TreeSet<>();
+		private boolean returned;
+
+		/** A booty recipient need not have entered this run. Require the run's own crew evidence. */
+		List<String> recordCrew() {
+			return crewSize > 0 && pirates.size() == crewSize ? List.copyOf(pirates) : List.of();
+		}
+
+		private void observeCrew(String message) {
+			if (returned || arrivedAt == null) return;
+			Matcher result = FRAY_WINNERS.matcher(message);
+			if (result.matches()) {
+				for (String name : result.group(1).split(",\\s*")) {
+					// NPCs and thralls have spaces in their names. Winners includes knocked-out teammates.
+					if (PIRATE_NAME.matcher(name).matches()) pirates.add(name);
+				}
+				if (!"woodhallow".equals(voyage)) crewSize = pirates.size();
+			}
+			if ("woodhallow".equals(voyage)) {
+				Matcher standing = StationClock.SURVIVORS.matcher(message);
+				// Keep the full crew count, not the survivors or a smaller count after somebody leaves.
+				if (standing.matches()) crewSize = Math.max(crewSize, Integer.parseInt(standing.group(2)));
+			}
+		}
 	}
 
 	private static final String[][] CHESTS = {
@@ -73,6 +101,12 @@ public final class ChatLog {
 
 	private static final Pattern DATE = Pattern.compile("^=+ (\\d{4})/(\\d{1,2})/(\\d{1,2}) =+$");
 	private static final Pattern LINE = Pattern.compile("^\\[(\\d{1,2}):(\\d{2}):(\\d{2})\\] (.*)$");
+	private static final Pattern FRAY_WINNERS = Pattern.compile("^Game over\\.\\s+Winners: (.+)\\.$");
+	private static final Pattern PIRATE_NAME = Pattern.compile("[\\w'-]+");
+
+	private static boolean crewEvidence(String message) {
+		return FRAY_WINNERS.matcher(message).matches() || StationClock.SURVIVORS.matcher(message).matches();
+	}
 
 	private static final Pattern TAKEN_ABOARD = Pattern.compile("^Ye have taken aboard ([\\d,]+) (.+)!$");
 	private static final Pattern ABANDONED = Pattern.compile("^Ye abandoned ([\\d,]+) (.+?) as the booty is full!$");
@@ -80,11 +114,16 @@ public final class ChatLog {
 			"^The crew opens ([\\d,]+) chests? and finds (no|[\\d,]+) items? and ([\\d,]+) pieces? of eight\\.");
 	private static final Pattern PLUNDERED = Pattern.compile("^The victors plundered ([\\d,]+) pieces? of eight");
 	private static final Pattern MY_CUT = Pattern.compile("^You received ([\\d,]+) pieces? of eight as your cut of the booty!$");
+	/** Cursed Isles words the cut differently: "Ye received 28,139 pieces of eight from cursed chests!". */
+	private static final Pattern CHEST_CUT = Pattern.compile("^Ye received ([\\d,]+) pieces? of eight from .+!$");
+	/** A lost fray: "The islanders reclaimed 8 cursed chests!" (one line per kind of chest). */
+	private static final Pattern RECLAIMED = Pattern.compile("^The [\\w-]+ reclaimed ([\\d,]+) (.+)!$");
 	private static final String DIVIDED = "The booty has been divided!";
 
 	/** Lines worth keeping alongside the booty screen. */
 	private static final Pattern BOOTY_LINE = Pattern.compile(
 			"^(Ye have taken aboard |Ye abandoned |The crew opens |The victors plundered |Ye received .* initial cut|You received .* cut of the booty"
+			+ "|Ye received [\\d,]+ pieces? of eight from |The [\\w-]+ reclaimed [\\d,]+ "
 			+ "|The defeat cost ye |The mercenaries have taken |.* is dividing the booty\\.$|The booty has been divided!)");
 
 	private ChatLog() { }
@@ -131,11 +170,13 @@ public final class ChatLog {
 				segment.runs.add(run);
 			}
 			run.tiers[cargo.tier()] += count;
+			run.returned = true;
 		} else if (run != null) {
 			String name = item.toLowerCase(Locale.ROOT);
 			if (name.contains("_large_")) run.tiers[0] += count;
 			else if (name.contains("_medium_")) run.tiers[1] += count;
 			else if (name.contains("_small_")) run.tiers[2] += count;
+			run.returned = true;
 		}
 		return run;
 	}
@@ -320,7 +361,8 @@ public final class ChatLog {
 		IOException failure = null;
 		for (Path file : files) {
 			try {
-				batches.put(file, read(file, line -> BOOTY_LINE.matcher(line.text).find() || arrivalVoyage(line.text) != null));
+				batches.put(file, read(file, line -> BOOTY_LINE.matcher(line.text).find()
+						|| arrivalVoyage(line.text) != null || crewEvidence(line.text)));
 			} catch (IOException e) {
 				failure = e;
 			}
@@ -351,6 +393,7 @@ public final class ChatLog {
 		int end = closingEnd(lines, anchor);
 
 		Run run = null;
+		LocalDateTime lastLossAt = null;
 		for (int i = start; i <= end; i++) {
 			Line l = lines.get(i);
 			String voyage = arrivalVoyage(l.text);
@@ -360,7 +403,8 @@ public final class ChatLog {
 				run.arrivedAt = l.time;
 				s.runs.add(run);
 			}
-			if (!BOOTY_LINE.matcher(l.text).find()) continue;
+			if (run != null) run.observeCrew(l.text);
+			if (!BOOTY_LINE.matcher(l.text).find() && !crewEvidence(l.text)) continue;
 			s.lines.add(l);
 			Matcher m;
 			if ((m = TAKEN_ABOARD.matcher(l.text)).matches()) {
@@ -369,6 +413,12 @@ public final class ChatLog {
 				run = recordCargo(s, run, m.group(2), n);
 			} else if ((m = ABANDONED.matcher(l.text)).matches()) {
 				s.abandoned.merge(m.group(2), parseInt(m.group(1)), Integer::sum);
+			} else if ((m = RECLAIMED.matcher(l.text)).matches()) {
+				s.reclaimed.merge(m.group(2), parseInt(m.group(1)), Integer::sum);
+				// One lost fray per burst of "reclaimed" lines (they share a time); "The defeat cost ye" is the
+				// other wording, so a burst right after one isn't counted twice.
+				if (lastLossAt == null || Duration.between(lastLossAt, l.time).getSeconds() > 10) s.battlesLost++;
+				lastLossAt = l.time;
 			} else if (i == anchor && (m = CREW_OPENS.matcher(l.text)).find()) {
 				s.chestsOpened = parseInt(m.group(1));
 				s.chestItems = m.group(2).equals("no") ? 0 : parseInt(m.group(2));
@@ -377,8 +427,9 @@ public final class ChatLog {
 				s.battlesWon++;
 				s.plunderedPoe += parseInt(m.group(1));
 			} else if (l.text.startsWith("The defeat cost ye ")) {
-				s.battlesLost++;
-			} else if ((m = MY_CUT.matcher(l.text)).matches()) {
+				if (lastLossAt == null || Duration.between(lastLossAt, l.time).getSeconds() > 10) s.battlesLost++;
+				lastLossAt = l.time;
+			} else if ((m = MY_CUT.matcher(l.text)).matches() || (m = CHEST_CUT.matcher(l.text)).matches()) {
 				s.myCut = (long) parseInt(m.group(1));
 			}
 		}
@@ -391,7 +442,8 @@ public final class ChatLog {
 		int end = i;
 		while (end + 1 < lines.size() && Duration.between(t, lines.get(end + 1).time).getSeconds() <= 10) {
 			String next = lines.get(end + 1).text;
-			if (!next.equals(DIVIDED) && !MY_CUT.matcher(next).matches() && !next.endsWith(" is dividing the booty.")) break;
+			if (!next.equals(DIVIDED) && !MY_CUT.matcher(next).matches() && !CHEST_CUT.matcher(next).matches()
+					&& !next.endsWith(" is dividing the booty.")) break;
 			end++;
 		}
 		return end;

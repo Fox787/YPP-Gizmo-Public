@@ -115,8 +115,14 @@ public final class RunLog {
 	}
 
 	Path recordUntimed(DRGroupData report, String voyage, long arrival) throws IOException {
+		ActivityTracker.Period period = untimedPeriod(report, System.currentTimeMillis());
+		String key = Integer.toHexString(report.toString(true, false, true).hashCode());
+		return record(period, voyage, arrival, key);
+	}
+
+	static ActivityTracker.Period untimedPeriod(DRGroupData report, long scannedAt) {
 		ActivityTracker.Period period = new ActivityTracker.Period();
-		period.start = period.end = System.currentTimeMillis();
+		period.start = period.end = scannedAt;
 		report.data.forEach((station, pirates) -> pirates.values().forEach(pirate -> {
 			ActivityTracker.Row row = new ActivityTracker.Row();
 			row.station = station;
@@ -126,8 +132,7 @@ public final class RunLog {
 			row.tokens = pirate.getTokens();
 			period.rows.add(row);
 		}));
-		String key = Integer.toHexString(report.toString(true, false, true).hashCode());
-		return record(period, voyage, arrival, key);
+		return period;
 	}
 
 	/** Appends one timed report, reusing the file for this arrival after a restart. */
@@ -270,12 +275,16 @@ public final class RunLog {
 				StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 	}
 
+	void recordRatings(DRGroupData report, long scannedAt) throws IOException {
+		recordRatings(untimedPeriod(report, scannedAt));
+	}
+
 	static String ratingsJsonl(ActivityTracker.Period period) {
 		StringBuilder lines = new StringBuilder();
 		for (ActivityTracker.Row row : period.rows) {
 			var json = new BootyDivision.Json().open()
 					.field("time", period.end)
-					.field("periodMs", period.end - period.start)
+					.field("periodMs", period.timedToTimer ? period.end - period.start : null)
 					.field("station", row.station)
 					.field("pirate", row.pirate)
 					.field("rating", row.rating)
@@ -317,7 +326,7 @@ public final class RunLog {
 			if (r.tokens != null) for (int t : r.tokens) j.value(t);
 			j.closeArray();
 			j.field("seconds", r.ms > 0 ? r.ms / 1000.0 : null);
-			j.field("score_per_minute", r.ms > 0 ? Math.round(ActivityTracker.rate(r) * 100) / 100.0 : null);
+			j.field("score_per_minute", r.hasRate() ? Math.round(ActivityTracker.rate(r) * 100) / 100.0 : null);
 			j.close();
 		}
 		j.closeArray();

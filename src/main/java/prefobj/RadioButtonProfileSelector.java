@@ -2,11 +2,12 @@ package main.java.prefobj;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Set;
 import java.util.prefs.*;
 
 /**
  * A panel that allows users to create, switch between, and delete preference profiles.
- * Each profile stores a complete set of application preferences separately.
+ * Each profile stores the two output formats and scoring values separately.
  */
 public class RadioButtonProfileSelector extends JPanel {
     private ButtonGroup profileGroup;
@@ -16,7 +17,15 @@ public class RadioButtonProfileSelector extends JPanel {
     private final String PROFILE_ROOT = "profiles";
     private final String CURRENT_PROFILE_KEY = "currentProfile";
     private static final String DEN_PROFILE_ADDED = "denProfileAdded";
-    private final String DEFAULT_PROFILE = "Default";
+    private static final Set<String> PROFILE_SETTING_KEYS = Set.of(
+            "copyscantovessel", "copyscoretovessel",
+            "scanwritedate", "scanusetabs", "scanocean", "scanstationheaders", "scanstation",
+            "scanpirate", "scanrating", "scantokenscore", "scantokenarray", "scansheetcombo", "scanscoreperminute",
+            "scorewritedate", "scoreusetabs", "scoreocean", "scorestationheaders", "scorestation",
+            "scorepirate", "scorerating", "scoretokenscore", "scoretokenarray", "scoresheetcombo",
+            "tokencircle", "tokendiamond", "tokenplus", "tokencross", "tokenthrall", "tokencannonball",
+            "chestsmall", "chestmedium", "chestlarge", "activityMode",
+            "navsingle", "navdouble", "navtriple", "carpslipshod", "carpcreaky", "carpproof");
     private String selectedProfile = null;
     private ProfileChangeListener changeListener;
 
@@ -24,6 +33,9 @@ public class RadioButtonProfileSelector extends JPanel {
      * Interface for listening to profile changes
      */
     public interface ProfileChangeListener {
+        /** Saves pending edits before leaving, copying or renaming the selected profile. */
+        default boolean beforeProfileChange() { return true; }
+
         /**
          * Called when a profile is selected (switched to)
          * @param profileName the name of the newly selected profile
@@ -70,13 +82,14 @@ public class RadioButtonProfileSelector extends JPanel {
 
         // Load the last selected profile or create default
         selectedProfile = globalPrefs.get(CURRENT_PROFILE_KEY, null);
+        migrateDefaultNames();
 
         if (selectedProfile == null) {
            createDefaultProfile();
            // Nothing selected on a fresh install left every option off (and the ocean on Obsidian),
            // so DR lines printed only the ocean. Start on the CI template (dens score the same way),
            // which createDefaultProfile made.
-           selectedProfile = "CI";
+           selectedProfile = "Cursed Isles";
            globalPrefs.put(CURRENT_PROFILE_KEY, selectedProfile);
         }
 
@@ -128,12 +141,15 @@ public class RadioButtonProfileSelector extends JPanel {
                 return;
             }
 
+            if (changeListener != null && !changeListener.beforeProfileChange()) return;
+
+            String oldName = selectedProfile;
             // Copy preferences from old to new
             Preferences oldNode = profileRoot.node(selectedProfile);
             Preferences newNode = profileRoot.node(newName);
 
             for (String key : oldNode.keys()) {
-                newNode.put(key, oldNode.get(key, null));
+                if (PROFILE_SETTING_KEYS.contains(key)) newNode.put(key, oldNode.get(key, null));
             }
 
             newNode.flush();
@@ -147,7 +163,7 @@ public class RadioButtonProfileSelector extends JPanel {
             loadProfiles();
 
             if (changeListener != null) {
-                changeListener.onProfileDeleted(selectedProfile); // old name
+                changeListener.onProfileDeleted(oldName);
                 changeListener.onProfileChanged(newName);
             }
 
@@ -186,19 +202,79 @@ public class RadioButtonProfileSelector extends JPanel {
         return globalPrefs.node(PROFILE_ROOT).node(selectedProfile);
     }
 
+    public String getCurrentActivity() {
+        Preferences profile = getCurrentProfilePrefs();
+        return profile == null ? "" : profile.get("activityMode", activityForName(selectedProfile));
+    }
+
+    private static String activityForName(String name) {
+        if (name == null) return "";
+        return switch (name.toLowerCase(java.util.Locale.ROOT)) {
+            case "ci", "cursed isles" -> "CI";
+            case "den", "werewolf den" -> "Den";
+            case "lair", "vampire lair" -> "Lair";
+            default -> "";
+        };
+    }
+
+    /** Uses the same save/validate/load path as a manual profile change. */
+    public boolean selectForActivity(String activity) {
+        if (activity == null || activity.isEmpty()) return false;
+        if (activity.equals(getCurrentActivity())) return true;
+        try {
+            Preferences root = globalPrefs.node(PROFILE_ROOT);
+            for (String name : root.childrenNames()) {
+                Preferences profile = root.node(name);
+                if (!activity.equals(profile.get("activityMode", activityForName(name)))) continue;
+                selectProfile(name);
+                loadProfiles();
+                return activity.equals(getCurrentActivity());
+            }
+        } catch (BackingStoreException e) {
+            return false;
+        }
+        return false;
+    }
+
+    private void migrateDefaultNames() {
+        try {
+            Preferences root = globalPrefs.node(PROFILE_ROOT);
+            String[][] names = {{"CI", "Cursed Isles"}, {"Den", "Werewolf Den"}, {"Lair", "Vampire Lair"}};
+            for (String[] pair : names) {
+                if (!root.nodeExists(pair[0]) || root.nodeExists(pair[1])) continue;
+                Preferences old = root.node(pair[0]), renamed = root.node(pair[1]);
+                copyNode(old, renamed);
+                renamed.put("activityMode", activityForName(pair[1]));
+                renamed.flush();
+                old.removeNode();
+                if (pair[0].equals(selectedProfile)) {
+                    selectedProfile = pair[1];
+                    globalPrefs.put(CURRENT_PROFILE_KEY, selectedProfile);
+                }
+            }
+            root.flush();
+            globalPrefs.flush();
+        } catch (BackingStoreException e) {
+            throw new IllegalStateException("Could not rename default profiles", e);
+        }
+    }
+
+    private static void copyNode(Preferences source, Preferences target) throws BackingStoreException {
+        for (String key : source.keys()) target.put(key, source.get(key, ""));
+        for (String child : source.childrenNames()) copyNode(source.node(child), target.node(child));
+    }
+
     /**
      * Creates the default profile if it doesn't exist
      */
     private void createDefaultProfile() {
         try {
             Preferences profileRoot = globalPrefs.node(PROFILE_ROOT);
-            createForageProfile(profileRoot, "CI");
+            createForageProfile(profileRoot, "Cursed Isles");
 
             // Template 2: "Lair"
-            if (!profileRoot.nodeExists("Lair")) {
-                Preferences lairProfile = profileRoot.node("Lair");
-
-                lairProfile.putBoolean("autocopy", true);
+            if (!profileRoot.nodeExists("Vampire Lair")) {
+                Preferences lairProfile = profileRoot.node("Vampire Lair");
 
                 lairProfile.putInt("scanocean", 4);
                 lairProfile.putBoolean("scanusetabs", false);
@@ -236,7 +312,7 @@ public class RadioButtonProfileSelector extends JPanel {
     private void addDenProfile() {
         if (globalPrefs.getBoolean(DEN_PROFILE_ADDED, false)) return;
         try {
-            createForageProfile(globalPrefs.node(PROFILE_ROOT), "Den");
+            createForageProfile(globalPrefs.node(PROFILE_ROOT), "Werewolf Den");
             // Only seed it once so the user can rename or delete it.
             globalPrefs.putBoolean(DEN_PROFILE_ADDED, true);
         } catch (BackingStoreException e) {
@@ -247,7 +323,6 @@ public class RadioButtonProfileSelector extends JPanel {
     private static void createForageProfile(Preferences root, String name) throws BackingStoreException {
         if (root.nodeExists(name)) return;
         Preferences profile = root.node(name);
-        profile.putBoolean("autocopy", true);
         profile.putInt("scanocean", 4);
         profile.putBoolean("scanusetabs", false);
         profile.putBoolean("scanpirate", true);
@@ -286,10 +361,19 @@ public class RadioButtonProfileSelector extends JPanel {
             // If no profiles exist, create default
             if (profiles.length == 0) {
                 createDefaultProfile();
-                profiles = new String[] { DEFAULT_PROFILE };
+                profiles = profileRoot.childrenNames();
+            }
+
+            // Recover a missing/stale selection without creating an invisible profile node.
+            if (selectedProfile == null || !java.util.Arrays.asList(profiles).contains(selectedProfile)) {
+                selectedProfile = java.util.Arrays.asList(profiles).contains("Cursed Isles") ? "Cursed Isles" : profiles[0];
+                globalPrefs.put(CURRENT_PROFILE_KEY, selectedProfile);
             }
 
             for (String profile : profiles) {
+                Preferences node = profileRoot.node(profile);
+                if (node.get("activityMode", null) == null && !activityForName(profile).isEmpty())
+                    node.put("activityMode", activityForName(profile));
                 JRadioButton rb = new JRadioButton(profile);
                 rb.addActionListener(e -> selectProfile(profile));
                 profileGroup.add(rb);
@@ -318,6 +402,12 @@ public class RadioButtonProfileSelector extends JPanel {
     private void selectProfile(String profile) {
         if (profile.equals(selectedProfile)) {
             return; // Already selected
+        }
+
+        // The listener must still see the outgoing profile while saving its controls.
+        if (changeListener != null && !changeListener.beforeProfileChange()) {
+            loadProfiles();
+            return;
         }
 
         selectedProfile = profile;
@@ -366,8 +456,14 @@ public class RadioButtonProfileSelector extends JPanel {
                 return;
             }
 
-            // Create new profile node
+            if (changeListener != null && !changeListener.beforeProfileChange()) return;
+
+            // Start with an independent copy of the current scan/score settings.
             Preferences newProfile = profileRoot.node(name);
+            Preferences oldProfile = getCurrentProfilePrefs();
+            for (String key : oldProfile.keys()) {
+                if (PROFILE_SETTING_KEYS.contains(key)) newProfile.put(key, oldProfile.get(key, null));
+            }
             newProfile.flush();
 
             // Switch to new profile
