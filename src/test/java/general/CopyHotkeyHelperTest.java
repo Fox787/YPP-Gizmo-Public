@@ -1,7 +1,8 @@
-package main.java.general;
+package test.java.general;
 
 import com.github.kwhat.jnativehook.NativeInputEvent;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
+import main.java.general.CopyHotkeyHelper;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 

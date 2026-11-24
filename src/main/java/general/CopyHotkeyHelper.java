@@ -31,12 +31,12 @@ public final class CopyHotkeyHelper implements NativeKeyListener {
 		if (event.getKeyCode() == NativeKeyEvent.VC_V || event.getKeyCode() == NativeKeyEvent.VC_INSERT) pasteHeld = false;
 	}
 
-	static boolean isCopyChord(int code, int modifiers) {
+	public static boolean isCopyChord(int code, int modifiers) {
 		int extra = NativeInputEvent.SHIFT_MASK | NativeInputEvent.ALT_MASK | NativeInputEvent.META_MASK;
 		return code == NativeKeyEvent.VC_P && (modifiers & NativeInputEvent.CTRL_MASK) != 0 && (modifiers & extra) == 0;
 	}
 
-	static boolean isPasteChord(int code, int modifiers) {
+	public static boolean isPasteChord(int code, int modifiers) {
 		int extra = NativeInputEvent.ALT_MASK | NativeInputEvent.META_MASK;
 		if ((modifiers & extra) != 0) return false;
 		boolean ctrl = (modifiers & NativeInputEvent.CTRL_MASK) != 0;
