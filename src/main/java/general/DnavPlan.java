@@ -173,10 +173,21 @@ final class DnavPlan {
 
 	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds,
 			int doubleSeconds, int bingoSeconds, int vegasSeconds, int boochSeconds) {
-		if (bingoSeconds <= 0 && vegasSeconds <= 0 && boochSeconds == BOOCH_SECONDS)
+		return options(needed, tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds, bingoSeconds, vegasSeconds,
+				boochSeconds, -1);
+	}
+
+	/**
+	 * As above, plus a cascade single: 1 x the board, leaving a 125 board. Unlike the finishing single it
+	 * can go anywhere, since the board is set up to keep playing, so it takes its own, longer time.
+	 */
+	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds,
+			int doubleSeconds, int bingoSeconds, int vegasSeconds, int boochSeconds, int cascadeSeconds) {
+		if (bingoSeconds <= 0 && vegasSeconds <= 0 && cascadeSeconds <= 0 && boochSeconds == BOOCH_SECONDS)
 			return options(needed, tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds);
 		if (!Double.isFinite(needed) || needed <= 0) return List.of();
-		int[] times = {singleSeconds, doubleSeconds, tripleSeconds, bingoSeconds, donkeySeconds, vegasSeconds};
+		// In Move order; BOOCH (index 6) is never a move here.
+		int[] times = {singleSeconds, doubleSeconds, tripleSeconds, bingoSeconds, donkeySeconds, vegasSeconds, 0, cascadeSeconds};
 		var queue = new PriorityQueue<Search>((a, b) -> a.seconds != b.seconds
 				? Integer.compare(a.seconds, b.seconds) : Integer.compare(b.points, a.points));
 		Map<SearchKey, Integer> fastest = new HashMap<>();
@@ -222,7 +233,7 @@ final class DnavPlan {
 		SINGLE(1, TRIPLE_BOARD, "Single"), DOUBLE(2, BOOCH_BOARD, "Double"),
 		TRIPLE(3, TRIPLE_BOARD, "Triple"), BINGO(4, TRIPLE_BOARD, "Bingo"),
 		DONKEY(5, TRIPLE_BOARD, "Booch-donkey"), VEGAS(6, TRIPLE_BOARD, "Booch-Vegas"),
-		BOOCH(0, BOOCH_BOARD, "Booch");
+		BOOCH(0, BOOCH_BOARD, "Booch"), CASCADE(1, BOOCH_BOARD, "Cascade single");
 		final int multiplier, board;
 		final String label;
 		Move(int multiplier, int board, String label) { this.multiplier = multiplier; this.board = board; this.label = label; }

@@ -31,6 +31,23 @@ class DnavPlanTest {
 	}
 
 	@Test
+	void aCascadeSingleCanGoAnywhereAndLeavesA125Board() {
+		// A cascade single on the 71 start board leaves 125, so both triples then score more:
+		// 71, then 3 x 125 = 375, then 3 x 173 = 519. 965 in 85 s beats Booch + 3 triples (99 s).
+		var line = DnavPlan.options(900, 30, -1, -1, -1, -1, -1, 9, 25).get(0);
+		assertEquals(List.of("Cascade single 1", "Triple 1", "Triple 2"),
+				line.steps().stream().map(DnavPlan.Step::what).toList(), line.name());
+		assertEquals(List.of(71, 446, 965), line.steps().stream().map(DnavPlan.Step::points).toList());
+		assertEquals(85, line.seconds());
+	}
+
+	@Test
+	void blankCascadeTimeKeepsTheOldPlans() {
+		assertEquals(DnavPlan.options(1900, 40, 12, 51, -1, 30, 60, 9),
+				DnavPlan.options(1900, 40, 12, 51, -1, 30, 60, 9, -1));
+	}
+
+	@Test
 	void blankBingoAndVegasPreserveExistingPlans() {
 		assertEquals(DnavPlan.options(1900, 40, 12, 51, -1),
 				DnavPlan.options(1900, 40, 12, 51, -1, -1, -1));

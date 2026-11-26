@@ -120,6 +120,9 @@ final class WoodhallowTools {
 				"<html>Time to Booch before a strategy or a Donkey/Vegas. Default 9 s. Leave blank to exclude Booches.</html>");
 		addSeconds(times, prefs, "Single time (s)", "dnavsinglesec", "12", v -> singleSeconds = v,
 				"<html>How long a single takes at the very end of a solo line. Leave blank to plan without it.</html>");
+		addSeconds(times, prefs, "Cascade single time (s)", "dnavcascadesec", "", v -> cascadeSeconds = v,
+				"<html>How long a single takes when you set the board up to keep playing (1 x the board, leaves 125).<br>"
+				+ "Unlike the finishing single it can go anywhere in a line. Leave blank to plan without it.</html>");
 		addSeconds(times, prefs, "Double time (s)", "dnavdoublesec", "", v -> doubleSeconds = v,
 				"<html>How long you take to build a double (2 x the board). Leave blank to plan without doubles.</html>");
 		addSeconds(times, prefs, "Triple time (s)", "dnavtriplesec", "40", v -> tripleSeconds = v,
@@ -258,7 +261,7 @@ final class WoodhallowTools {
 
 	/** Seconds for each move in the solo line (DnavPlan); -1 = left blank, so that move isn't used. */
 	private volatile int boochSeconds = 9, tripleSeconds = 40, doubleSeconds = -1, singleSeconds = 12, donkeySeconds = 51,
-			bingoSeconds = -1, vegasSeconds = -1;
+			bingoSeconds = -1, vegasSeconds = -1, cascadeSeconds = -1;
 
 	/**
 	 * Time-left warnings: a 30 s and a 15 s box per activity, each its own setting. Ticking both warns
@@ -331,7 +334,7 @@ final class WoodhallowTools {
 	}
 
 	/** The solo lines for the Dnav before {@code fray}, fastest first (moves with a blank time left out). */
-	private record PlanSettings(int crew, int fray, int booch, int single, int doubles, int triple, int bingo, int donkey, int vegas) { }
+	private record PlanSettings(int crew, int fray, int booch, int single, int doubles, int triple, int bingo, int donkey, int vegas, int cascade) { }
 	private PlanSettings lastPlanSettings;
 	private List<DnavPlan.Line> lastPlan = List.of();
 
@@ -339,10 +342,10 @@ final class WoodhallowTools {
 		int crew = stationClock.crew();
 		if (crew <= 0 || fray < 2 || fray > 6) return List.of();
 		PlanSettings settings = new PlanSettings(crew, fray, boochSeconds, singleSeconds, doubleSeconds, tripleSeconds,
-				bingoSeconds, donkeySeconds, vegasSeconds);
+				bingoSeconds, donkeySeconds, vegasSeconds, cascadeSeconds);
 		if (!settings.equals(lastPlanSettings)) {
 			lastPlan = DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds, donkeySeconds,
-					doubleSeconds, bingoSeconds, vegasSeconds, boochSeconds);
+					doubleSeconds, bingoSeconds, vegasSeconds, boochSeconds, cascadeSeconds);
 			lastPlanSettings = settings;
 		}
 		return lastPlan;
@@ -690,7 +693,7 @@ final class WoodhallowTools {
 		line.accept("");
 		line.accept("Solo settings (-1 = not used): single " + singleSeconds + " s, double " + doubleSeconds
 				+ " s, triple " + tripleSeconds + " s, bingo " + bingoSeconds + " s, donkey " + donkeySeconds
-				+ " s, Vegas " + vegasSeconds + " s, Booch " + boochSeconds + " s");
+				+ " s, Vegas " + vegasSeconds + " s, cascade single " + cascadeSeconds + " s, Booch " + boochSeconds + " s");
 		for (int f : new int[]{fray - 1, fray}) {
 			if (crew <= 0 || f < 2 || f > 6) continue;
 			line.accept(String.format(java.util.Locale.ROOT, "Dnav before fray %d: pack %.3f x share %.1f = %.3f werewolves,"
