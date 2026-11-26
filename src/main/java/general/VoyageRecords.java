@@ -523,6 +523,24 @@ public final class VoyageRecords {
 	 * pirateScores biggest first, loot). Null if none. Only the best claim for each record is sent.
 	 */
 	public synchronized String claimMessage() {
+		Claims claims = claims();
+		if (claims == null) return null;
+		int i = claims.count();
+		return (i == 1 ? "Hi Jice, I've beaten a voyage record on Puzzle Practice:" : "Hi Jice, I've beaten " + i + " voyage records on Puzzle Practice:")
+				+ "\n" + claims.text() + "\n"
+				+ "I'll send a picture, image or video of " + (i == 1 ? "it" : "each one") + ", numbered as above.\n\n"
+				+ "Data for the records:\n" + claims.data();
+	}
+
+	/** Just the JSON list from claimMessage, which is all Puzzle Practice needs. Null if there are no claims. */
+	public synchronized String claimData() {
+		Claims claims = claims();
+		return claims == null ? null : claims.data();
+	}
+
+	private record Claims(int count, String text, String data) { }
+
+	private Claims claims() {
 		record Claim(Record record, String json, Record known) {}
 		Map<String, Claim> best = new java.util.LinkedHashMap<>();
 		try {
@@ -586,10 +604,7 @@ public final class VoyageRecords {
 					anyLoot ? ",\"loot\":[" + loot[0] + "," + loot[1] + "," + loot[2] + "]" : ""));
 		}
 		data.append("]");
-		return (i == 1 ? "Hi Jice, I've beaten a voyage record on Puzzle Practice:" : "Hi Jice, I've beaten " + i + " voyage records on Puzzle Practice:")
-				+ "\n" + text + "\n"
-				+ "I'll send a picture, image or video of " + (i == 1 ? "it" : "each one") + ", numbered as above.\n\n"
-				+ "Data for the records:\n" + data;
+		return new Claims(i, text.toString(), data.toString());
 	}
 
 	// The file is a flat list of objects with string, number and string-array fields.

@@ -19,6 +19,8 @@ final class RunRecordAlerts {
 	private final Map<Category, Integer> announced = new LinkedHashMap<>();
 	private final Map<Benchmark, Integer> beforeRun = new LinkedHashMap<>();
 	private long ended;
+	/** A report came in after the end (a Den's last one comes just after the lair is plundered). */
+	private boolean reportSinceEnd;
 
 	RunRecordAlerts(VoyageRecords records, Run run) {
 		this.records = records;
@@ -32,6 +34,7 @@ final class RunRecordAlerts {
 	}
 
 	String compare(int crew, String kind, int value, String time, List<String> pirates, int[] loot, Map<String, int[]> shares) {
+		if (ended != 0) reportSinceEnd = true;
 		if (!VoyageRecords.DR_CHESTS.equals(kind) && !VoyageRecords.DR_SCORE.equals(kind))
 			return records.compare(run.voyage, run.ocean, crew, kind, value, time, pirates, loot, shares);
 		Category category = new Category(crew, kind, crew == 0 ? List.copyOf(pirates) : List.of());
@@ -55,7 +58,8 @@ final class RunRecordAlerts {
 	}
 
 	void end(long at) { if (ended == 0) ended = at; }
-	boolean ready(long now) { return ended != 0 && now - ended >= SETTLE_MS; }
+	/** Over, and either a report came in after that (a Den's last one) or long enough has passed for one to. */
+	boolean ready(long now) { return ended != 0 && (reportSinceEnd || now - ended >= SETTLE_MS); }
 
 	List<String> finish() {
 		List<String> lines = new java.util.ArrayList<>();

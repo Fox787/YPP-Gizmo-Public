@@ -123,6 +123,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private VoyageRecords voyageRecords;
 	private final Map<RunRecordAlerts.Run, RunRecordAlerts> runRecordAlerts = new LinkedHashMap<>();
 	private final java.util.Set<RunRecordAlerts.Run> checkedRecordEntries = new java.util.HashSet<>();
+	private final java.util.Set<String> printedRecordAlerts = new java.util.HashSet<>();
 	private JButton buttonGetRecords;
 	private JLabel labelRecordStatus;
 	private final Map<String, JPanel> recordPanels = new LinkedHashMap<>();
@@ -528,7 +529,9 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			};
 			long left = woodhallowTools.recordRunEnd(activity, run.arrival());
 			ChatLog.Run entry = stationClock.recordEntry(run.arrival());
-			if (entry != null && entry.returned()) alerts.end(now);
+			// Over as soon as the chat says so (Den lair plundered or overrun, Cursed Isles lost or retreated,
+			// Lair chests loaded), not when the crew gets back to the ship.
+			if (entry != null && entry.over()) alerts.end(now);
 			if (left > 0) alerts.end(left);
 			if (stationClock.latestArrival() > run.arrival()) alerts.end(now);
 			if (!alerts.ready(now)) continue;
@@ -549,7 +552,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			if (rounds.isEmpty()) return List.of();
 			lines = LairRecordChecks.entry(voyageRecords, rounds, evidence, run.ocean());
 		} else {
-			if (entry == null || !entry.returned() || entry.recordCrew().isEmpty()) return List.of();
+			if (entry == null || !entry.finished() || entry.recordCrew().isEmpty()) return List.of();
 			GameLog.Info identity = GameLog.read();
 			Map<String, int[]> shares = identity == null ? Map.of() : RunLog.pirateLoot(
 					runLog.pending(identity.pirate, run.ocean()), entry, java.time.LocalDateTime.now());
@@ -567,20 +570,15 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		boolean newRecord = false;
 		for (String line : lines) {
 			if (line.isEmpty()) continue;
+			// Live checks, rescans and booty exports can find the same record again.
+			if (isRecordAlert(line) && !printedRecordAlerts.add(
+					String.valueOf(recordsOcean()).toLowerCase(java.util.Locale.ROOT) + "|" + line)) continue;
 			printStatus(line, false);
 			newRecord |= line.startsWith("New record");
 		}
-		if (newRecord) printClaimMessage();
-	}
-
-	/**
-	 * After a new record: the message to send in Puzzle Practice's format (numbered lines, then
-	 * "Data for the records:" and the JSON), the same text as Copy records to send.
-	 */
-	private void printClaimMessage() {
-		String message = voyageRecords.claimMessage();
-		if (message == null) return;
-		printStatus("To send to Puzzle Practice (also on Copy records to send):\n" + message, false);
+		// Just the data Puzzle Practice reads; the full message to send stays on Copy claims.
+		String data = newRecord ? voyageRecords.claimData() : null;
+		if (data != null) printStatus(data, false);
 	}
 
 	/** A small window listing every record Gizmo has from Puzzle Practice, one voyage at a time. */
@@ -2170,6 +2168,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		if (voyageRecords == null || !voyageRecords.folder().equals(folder)) {
 			runRecordAlerts.clear();
 			checkedRecordEntries.clear();
+			printedRecordAlerts.clear();
 			voyageRecords = new VoyageRecords(folder);
 			updateRecordPanels();
 			refreshRecords(false);

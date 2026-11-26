@@ -27,6 +27,42 @@ class RunRecordAlertsTest {
 	}
 
 	@Test
+	void recordOutputStaysBriefAndSuppressesRepeatsWhileKeepingClaimsAndImprovements() throws Exception {
+		benchmarks("woodhallow", 1);
+		try (GuiTestFixture fixture = new GuiTestFixture(folder)) {
+			fixture.prefs.putBoolean("autocopy", false);
+			fixture.prefs.putBoolean("autoscan", false);
+			SwingUtilities.invokeAndWait(() -> {
+				DRGizmoGUI gui = fixture.open();
+				field(gui, "comboBoxScanOcean", JComboBox.class).setSelectedItem("Emerald");
+				VoyageRecords records = field(gui, "voyageRecords", VoyageRecords.class);
+				JTextArea output = field(gui, "textAreaOutput", JTextArea.class);
+				output.setText("");
+				List<String> pirates = List.of("Alice", "Bob");
+				String first = records.compare("woodhallow", "emerald", 2, "chests", 4,
+						"2026-11-25T12:00", pirates, new int[]{4, 0, 0});
+				String score = records.compare("woodhallow", "emerald", 2, "score", 12,
+						"2026-11-25T12:00", pirates, new int[]{4, 0, 0});
+				invoke(gui, "printRecordLines", List.class, List.of(first, score, ""));
+				String data = records.claimData();
+				assertTrue(data.startsWith("[{") && data.endsWith("}]"), data);
+				assertEquals(List.of(first, score, data), output.getText().lines().filter(line -> !line.isBlank()).toList(),
+						"only the array Puzzle Practice reads goes in the main window");
+				assertTrue(records.claimMessage().contains("Data for the records:"), "full submission remains available to Copy claims");
+				String before = output.getText();
+				invoke(gui, "printRecordLines", List.class, List.of(first, score));
+				assertEquals(before, output.getText(), "rechecking a saved or exported result must stay quiet");
+				String better = records.compare("woodhallow", "emerald", 2, "chests", 5,
+						"2026-11-25T12:10", pirates, new int[]{5, 0, 0});
+				invoke(gui, "printRecordLines", List.class, List.of(better));
+				assertEquals(List.of(first, score, data, better, records.claimData()),
+						output.getText().lines().filter(line -> !line.isBlank()).toList());
+				assertTrue(records.claimMessage().contains("\"value\":5"));
+			});
+		}
+	}
+
+	@Test
 	void keepsBestSnapshotsAndContributionsWithoutPublishingIntermediateClaims() throws Exception {
 		benchmarks("woodhallow", 0);
 		VoyageRecords records = new VoyageRecords(folder);
@@ -154,6 +190,55 @@ class RunRecordAlertsTest {
 		assertTrue(alerts.ready(6000));
 		assertEquals(1, alerts.finish().size());
 		assertTrue(alerts.finish().isEmpty());
+	}
+
+	@Test
+	void aDenIsOverWhenTheLairIsPlunderedAndItsLastReportPublishesAtOnce() throws Exception {
+		benchmarks("woodhallow", 0);
+		try (GuiTestFixture fixture = new GuiTestFixture(folder)) {
+			fixture.prefs.putBoolean("autocopy", false);
+			fixture.prefs.putBoolean("autoscan", false);
+			fixture.prefs.putBoolean("brokenrecordalert", true);
+			SwingUtilities.invokeAndWait(() -> {
+				DRGizmoGUI gui = fixture.open();
+				field(gui, "profileSelector", main.java.prefobj.RadioButtonProfileSelector.class).selectForActivity("Den");
+				field(gui, "comboBoxScanOcean", JComboBox.class).setSelectedItem("Emerald");
+				StationClock clock = field(gui, "stationClock", StationClock.class);
+				JTextArea output = field(gui, "textAreaOutput", JTextArea.class);
+				long now = System.currentTimeMillis(), arrival = now - 300_000;
+				clock.message(StationClock.ARRIVAL, arrival);
+				clock.message("2 o' 2 still standin'! To yer stations!", arrival + 2000);
+				invoke(gui, "processDutyReport", DRGroupData.class, report("Den", new int[]{1, 0, 2}));
+				clock.message("2 o' 2 still standin'! Plunder the lair!", now - 10_000);
+				clock.message("The lair be plundered! The night be yers!", now - 1000);
+				invoke(gui, "finishRunRecords", long.class, now);
+				assertEquals(0, lootAlerts(output.getText()), "the lair's report hasn't been read yet");
+				invoke(gui, "processDutyReport", DRGroupData.class, report("Den", new int[]{0, 0, 3}));
+				assertTrue(output.getText().contains("3 beats 0"), "no wait for the chests to reach the ship: " + output.getText());
+			});
+		}
+	}
+
+	@Test
+	void cursedIslesIsOverOnALostFrayOrARetreatNotOnEachForagesChests() {
+		ChatLog.Run won = new ChatLog.Run();
+		won.voyage = "cursedIsles";
+		won.observe("Game over.  Winners: Rudis, Jice, McCoy Brutish, Jice's Thrall,", 1000);
+		won.observe("Ye have taken aboard 4 cursed chests!", 1000);
+		assertFalse(won.over(), "chests loaded after a won fray are one forage's");
+		won.observe("The islanders reclaimed 8 cursed chests!", 90_000);
+		assertTrue(won.over(), "a lost fray ends it");
+		assertFalse(won.finished(), "the rest of the chests are still to load");
+		won.observe("Ye have taken aboard 7 cursed chests!", 113_000);
+		assertTrue(won.finished());
+		assertEquals(11, won.tiers[0]);
+
+		ChatLog.Run retreat = new ChatLog.Run();
+		retreat.voyage = "cursedIsles";
+		retreat.observe("Game over.  Winners: Alice, Bob.", 1000);
+		retreat.observe("Ye have taken aboard 4 cursed chests!", 1000);
+		retreat.observe("Ye have taken aboard 3 cursed chests!", 400_000);
+		assertTrue(retreat.over() && retreat.finished(), "chests loaded with no fray won just before: a retreat");
 	}
 
 	@Test

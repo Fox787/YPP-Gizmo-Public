@@ -319,7 +319,7 @@ public final class StationClock {
 			return;
 		}
 		ChatLog.Run entry = recordEntries.get(arrivalAt);
-		if (entry != null) entry.observe(msg);
+		if (entry != null) entry.observe(msg, now);
 		Matcher sv = SURVIVORS.matcher(msg);
 		if (!inDen && !sv.matches()) return;
 		Matcher hw = HALF.matcher(msg);

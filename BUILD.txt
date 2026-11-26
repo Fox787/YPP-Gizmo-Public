@@ -53,6 +53,8 @@ Every scanned CI, Den and Lair DR checks records automatically. Existing nonzero
 benchmarks alert live for screenshots. Missing/zero benchmarks keep only the best qualifying
 results until returning to the ship, with five seconds for the final report to settle. Rescans
 do not repeat those alerts. Automatic output contains record alerts, not an entry summary.
+Identical record alerts print once per session. Full submission text and JSON stay available
+under Options > Voyage records > Copy claims rather than being printed after each alert.
 Entry records are checked on return without needing Score All or a booty export; Lair entry
 checks still require all frays and matching three-tier haul evidence. Dnav and carpentry stay live.
 
