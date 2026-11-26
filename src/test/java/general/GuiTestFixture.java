@@ -30,10 +30,31 @@ final class GuiTestFixture implements AutoCloseable {
                 if (gui != null) {
                     gui.dispatchEvent(new WindowEvent(gui, WindowEvent.WINDOW_CLOSING));
                     field(gui, "activityTracker", ActivityTracker.class).stop();
+                    // Finish any cache write, then prevent queued download completions from
+                    // recreating this fixture's temporary folder after JUnit removes it.
+                    VoyageRecords records = field(gui, "voyageRecords", VoyageRecords.class);
+                    if (records != null) synchronized (records) {
+                        try {
+                            var owner = DRGizmoGUI.class.getDeclaredField("voyageRecords");
+                            owner.setAccessible(true);
+                            owner.set(gui, null);
+                        } catch (ReflectiveOperationException error) {
+                            throw new AssertionError(error);
+                        }
+                    }
                     gui.dispose();
                 }
                 if (game != null) game.dispose();
             });
+            // A download/apply thread may already have been dispatched before the EDT
+            // cleared its owner. Let it exit before JUnit deletes the data directory.
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+            for (Thread worker : Thread.getAllStackTraces().keySet()) {
+                if (!worker.getName().equals("Gizmo record update")) continue;
+                long remaining = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+                if (remaining <= 0) break;
+                worker.join(remaining);
+            }
         } finally {
             DRGizmoMain.prefs = previous;
             GameLog.setDataFolder(null);

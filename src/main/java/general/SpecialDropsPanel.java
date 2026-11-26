@@ -34,7 +34,7 @@ final class SpecialDropsPanel extends JPanel {
 		alertColumn.setPreferredWidth(alertWidth);
 		alertColumn.setCellEditor(new DefaultCellEditor(scopes));
 		table.putClientProperty("terminateEditOnFocusLost", true);
-		table.setToolTipText("Click an Alert cell to choose whose wins Gizmo calls out on scan.");
+		HoverText.set(table, "Click an Alert cell to choose whose wins Gizmo calls out on scan.");
 
 		JScrollPane scroll = new JScrollPane(table);
 		scroll.setPreferredSize(new Dimension(210, 125));
@@ -43,6 +43,7 @@ final class SpecialDropsPanel extends JPanel {
 		add(scroll);
 
 		JButton add = new JButton("Add…");
+		HoverText.set(add, "Match all or part of an item name, ignoring case. If rules overlap, the longest matching name wins.");
 		add.addActionListener(event -> addRule());
 		JButton remove = new JButton("Remove");
 		remove.setEnabled(false);

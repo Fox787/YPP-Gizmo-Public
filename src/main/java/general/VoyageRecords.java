@@ -55,7 +55,8 @@ public final class VoyageRecords {
 	}
 
 	VoyageRecords(Path folder) {
-		this.folder = folder;
+		this.folder = GameLog.safeOutputFolder(folder);
+		folder = this.folder;
 		List<Record> cached = new ArrayList<>();
 		long loadedAt = 0;
 		String[] names = Files.exists(folder.resolve(RECORDS)) ? new String[]{RECORDS} : new String[]{KNOWN, SHEET};
@@ -153,6 +154,7 @@ public final class VoyageRecords {
 					&& (policy == RefreshPolicy.REPLACE_MANUAL || policy == RefreshPolicy.KEEP_HIGHER && replacement.incomingIsHigher());
 			if (!replace) retained.add(r);
 		}
+		GameLog.requireOutputPath(folder);
 		Files.createDirectories(folder);
 		writeCache(folder.resolve(RECORDS), download.contents());
 		if (retained.size() != manual.size()) writeManualRecords(retained);
@@ -224,11 +226,13 @@ public final class VoyageRecords {
 			json.append(']').append(scoresField(r.pirateScores)).append('}');
 		}
 		json.append(']');
+		GameLog.requireOutputPath(folder);
 		Files.createDirectories(folder);
 		writeCache(folder.resolve(MANUAL), json.toString().getBytes(StandardCharsets.UTF_8));
 	}
 
 	private static void writeCache(Path path, byte[] contents) throws IOException {
+		GameLog.requireOutputPath(path);
 		Path temp = Files.createTempFile(path.getParent(), path.getFileName().toString(), ".tmp");
 		try {
 			Files.write(temp, contents);
@@ -265,6 +269,7 @@ public final class VoyageRecords {
 			{"cursedIsles", "Most cursed chests in one entry, one pirate", "chests", "1"},
 			{"cursedIsles", "Best score in one entry, one pirate", "score", "1"},
 			{"vampireLairs", "Most Immortal Chests in one DR, one pirate", "drChests", "1"},
+			{"vampireLairs", "Most 🎁 in one entry, one pirate", "drScore", "1"},
 			{"vampireLairs", "Best carpentry score", "carpScore", "1"},
 			{"vampireLairs", "Most carpentry holes", "carpHoles", "1"},
 			{"vampireLairs", "Most vampire proof", "vampireProof", "1"}};
@@ -349,7 +354,13 @@ public final class VoyageRecords {
 
 	static String recordLabel(Record record) {
 		String category = record.category != null ? record.category : describe(record.voyage, record.kind, record.crewSize);
+		category = displayCategory(record.voyage, category);
 		return category + (record.notes == null || record.notes.isBlank() ? "" : " — " + record.notes);
+	}
+
+	private static String displayCategory(String voyage, String category) {
+		return "vampireLairs".equals(voyage) && "Most 🎁 in one entry, one pirate".equals(category)
+				? "Most chests in one DR, one pirate" : category;
 	}
 
 	static String recordScope(Record record) {
@@ -389,6 +400,7 @@ public final class VoyageRecords {
 	static String describe(String voyage, String kind, int crewSize) {
 		if (crewSize > 0) return describe(voyage, kind);
 		String c = categoryFor(voyage, kind, 0);
+		if (c != null) c = displayCategory(voyage, c);
 		return c != null ? c.substring(0, 1).toLowerCase() + c.substring(1) : describe(voyage, kind) + ", one pirate";
 	}
 
@@ -512,6 +524,7 @@ public final class VoyageRecords {
 				value, q(date), q(time), p, loot[0], loot[1], loot[2], scoresField(scores));
 		try {
 			Path f = claimsFile();
+			GameLog.requireOutputPath(f);
 			if (Files.exists(f) && new String(Files.readAllBytes(f), StandardCharsets.UTF_8).contains(line)) return;   // already kept
 			Files.createDirectories(f.getParent());
 			Files.write(f, (line + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
@@ -675,7 +688,7 @@ public final class VoyageRecords {
 					r.pirateScores = parsed;
 				}
 			}
-			if (r.kind == null && r.category != null)
+			if ((r.kind == null || "other".equals(r.kind)) && r.category != null)
 				for (String[] k : SHEET_KINDS)
 					if (k[0].equals(r.voyage) && k[1].equals(r.category)) { r.kind = k[2]; if (!k[3].isEmpty()) r.crewSize = 0; }
 			// Sheet categories Gizmo doesn't check are kept as "other", for the records window.

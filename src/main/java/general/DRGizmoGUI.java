@@ -104,7 +104,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private static final Map<String, Integer> STATION_WEIGHT_DEFAULTS = Map.of(
 			"navsingle", 1, "navdouble", 2, "navtriple", 3,
 			"carpslipshod", -1, "carpcreaky", 1, "carpproof", 2);
-	private JPanel dnavScoring, carpScoring;
+	private JPanel tokenScoring, forageScoring, lairHaulScoring, dnavScoring, carpScoring;
 
 	private RadioButtonProfileSelector profileSelector;
 	private Preferences currentPrefs;
@@ -654,6 +654,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		row.setAlignmentX(LEFT_ALIGNMENT);
 		JLabel label = new JLabel(name);
 		label.setLabelFor(field);
+		label.setToolTipText(field.getToolTipText());
 		row.add(label, BorderLayout.NORTH);
 		JPanel input = new JPanel(new BorderLayout(5, 0));
 		field.addActionListener(ev -> saveLogSettings());
@@ -668,13 +669,12 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	private OptionsPanel createOptions(JTabbedPane tabs, NumberFormatter integerFormatter) {
 		buttonSavePrefs = new JButton("Save settings");
-		buttonSavePrefs.setToolTipText("Save the active profile, folders and window size");
 		buttonSavePrefs.addActionListener(this);
 		OptionsPanel options = new OptionsPanel(globalPrefs, buttonSavePrefs);
 
-		JPanel profiles = options.section("Profiles", "profiles", false);
+		JPanel profiles = options.section("Profiles", "profiles", false,
+				"Profiles store Scan format, Score All format and Scoring values. Other options are shared.");
 		profileSelector = new RadioButtonProfileSelector(globalPrefs);
-		profileSelector.setToolTipText("Profiles store Scan format, Score All format and Scoring values. Changes are saved when switching.");
 		profileSelector.setAlignmentX(LEFT_ALIGNMENT);
 		profileSelector.setProfileChangeListener(new RadioButtonProfileSelector.ProfileChangeListener() {
 			@Override
@@ -693,24 +693,25 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 		JPanel scanning = options.section("Scan & output", "scanning", true);
 		checkBoxAutoScan = liveOption("Auto-scan", AUTOSCAN);
-		checkBoxAutoScan.setToolTipText("Scan the duty report automatically after a Den, Cursed Isles or Vampire Lair round.");
+		HoverText.set(checkBoxAutoScan, "Scan the duty report automatically after a Den, Cursed Isles or Vampire Lair round.");
 		checkBoxAutoCopy = new JCheckBox("Auto-copy");
+		HoverText.set(checkBoxAutoCopy, "Copy generated scan and Score All results to the clipboard, ready to paste.");
 		checkBoxAutoCopy.addItemListener(ev -> {
 			if (!checkBoxAutoCopy.isSelected()) { reportClipboard.replace(List.of()); updateScanCopyHotkey(); }
+			updateOutputPreviews();
 		});
 		checkBoxCopyScanToVessel = new JCheckBox("Copy as /ve");
-		checkBoxCopyScanToVessel.setToolTipText("With Auto-copy on, a scan is copied as vessel chat messages (/ve, up to 240 characters each).");
-		checkBoxCopyScanToVessel.addItemListener(ev -> { reportClipboard.replace(List.of()); updateScanCopyHotkey(); });
+		checkBoxCopyScanToVessel.addItemListener(ev -> { reportClipboard.replace(List.of()); updateScanCopyHotkey(); updateOutputPreviews(); });
 		checkBoxCopyScoreToVessel = new JCheckBox("Copy as /ve");
-		checkBoxCopyScoreToVessel.setToolTipText("With Auto-copy on, Score All is copied as vessel chat messages (/ve, up to 240 characters each).");
-		checkBoxCopyScoreToVessel.addItemListener(ev -> { reportClipboard.replace(List.of()); updateScanCopyHotkey(); });
+		checkBoxCopyScoreToVessel.addItemListener(ev -> { reportClipboard.replace(List.of()); updateScanCopyHotkey(); updateOutputPreviews(); });
 		checkBoxIgnoreAI = new JCheckBox("Hide NPCs");
+		HoverText.set(checkBoxIgnoreAI, "Omit swabbies, mercenaries and thralls from scan and Score All output.");
 		checkBoxIgnoreAI.addActionListener(ev -> updateOutputPreviews());
 		checkBoxShowExtraButtons = liveOption("Extra buttons", SHOWEXTRABUTTONS);
-		checkBoxShowExtraButtons.setToolTipText("Box, Jar, Chest, Averages, Avg/CC's and Carp Avg on the Output tab");
+		HoverText.set(checkBoxShowExtraButtons, "Box, Jar, Chest, Averages, Avg/CC's and Carp Avg on the Output tab");
 		checkBoxShowExtraButtons.addActionListener(ev -> applyExtraButtons());
 		checkBoxDebug = new JCheckBox("Debug");
-		checkBoxDebug.setToolTipText("Show debug messages in the Output tab");
+		HoverText.set(checkBoxDebug, "Show debug messages in the Output tab");
 		scanning.add(checkBoxAutoScan);
 		scanning.add(checkBoxAutoCopy);
 		scanning.add(checkBoxIgnoreAI);
@@ -718,7 +719,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		scanning.add(checkBoxDebug);
 		// Debug: find out whether the station countdown (Den 5:00, Lair 2:00) is readable text.
 		JButton dumpClocks = new JButton("Dump visible m:ss text");
-		dumpClocks.setToolTipText("Lists showing labels in the game window whose text looks like a countdown. Click during a station.");
+		HoverText.set(dumpClocks, "List visible countdown text in the game window to help diagnose timers. Use during a station.");
 		dumpClocks.addActionListener(ev -> {
 			java.util.List<String> clocks = VisibleTextDump.clocks(window);
 			printStatus(clocks.isEmpty() ? "No showing m:ss text in the game window" : String.join("\n", clocks), false);
@@ -736,6 +737,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				options.section("Rumble", "rumble", false),
 				options.section("Timers & sounds", "timersSounds", false));
 		woodhallowTools.setStatus(text -> printStatus(text, false));
+		woodhallowTools.onScorePerMinuteChanged(this::updateOutputPreviews);
 		createFileOptions(options);
 
 		return options;
@@ -753,9 +755,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		comboBoxScanOcean = new JComboBox<>(OCEANS);
 		checkBoxScanWriteDate = new JCheckBox("Date");
 		checkBoxScanUseTabs = new JCheckBox("Tabs");
-		checkBoxScanUseTabs.setToolTipText("Separate fields with tabs");
 		checkBoxScanStationHeaders = new JCheckBox("Headers");
-		checkBoxScanStationHeaders.setToolTipText("Show a heading for each station");
 		checkBoxScan2Station = new JCheckBox("Station");
 		checkBoxScan2Pirate = new JCheckBox("Pirate");
 		checkBoxScan2Rating = new JCheckBox("Rating");
@@ -763,7 +763,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		checkBoxScan2TokenArray = new JCheckBox("Counts");
 		checkBoxScan2SheetCombo = new JCheckBox("Score/counts cell");
 		checkBoxScan2ScorePerMinute = new JCheckBox("Score/min");
-		checkBoxScan2ScorePerMinute.setToolTipText("Include score per minute on each pirate's line");
 		addOutputFormat(scan, comboBoxScanOcean, new JCheckBox[]{checkBoxScanWriteDate, checkBoxScanUseTabs,
 				checkBoxScan2Station, checkBoxScan2Pirate, checkBoxScan2Rating, checkBoxScan2TokenScore,
 				checkBoxScanStationHeaders, checkBoxScan2TokenArray}, checkBoxScan2SheetCombo, checkBoxScan2ScorePerMinute,
@@ -774,9 +773,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		comboBoxScoreOcean = new JComboBox<>(OCEANS);
 		checkBoxScoreWriteDate = new JCheckBox("Date");
 		checkBoxScoreUseTabs = new JCheckBox("Tabs");
-		checkBoxScoreUseTabs.setToolTipText("Separate fields with tabs");
 		checkBoxScoreStationHeaders = new JCheckBox("Headers");
-		checkBoxScoreStationHeaders.setToolTipText("Show a heading for each station");
 		checkBoxScore2Station = new JCheckBox("Station");
 		checkBoxScore2Pirate = new JCheckBox("Pirate");
 		checkBoxScore2Rating = new JCheckBox("Rating");
@@ -797,7 +794,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		preview.setMargin(new Insets(4, 5, 4, 5));
 		preview.setLineWrap(true);
 		preview.setWrapStyleWord(true);
-		preview.setToolTipText("Sample duty report with the current format");
 
 		JLabel label = new JLabel("Example");
 		label.setLabelFor(preview);
@@ -885,16 +881,37 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		calculateReportScore(first);
 		calculateReportScore(second);
 
-		// Example times of two minutes and one minute for the two pirates.
-		Map<String, Map<String, Double>> rates = Map.of(station, Map.of(
-				pirate, first.get(station, pirate).getTokenScore() / 2.0,
-				npc, (double) first.get(station, npc).getTokenScore()));
-		updatePreview(scanPreview, formatScanOutput(first, rates));
+		ActivityTracker.Period sample = samplePeriod(first);
+		Map<String, Map<String, Double>> rates = sample == null ? null : ActivityTracker.rates(sample);
+		String scanText = formatScanOutput(first, rates);
+		if (checkBoxAutoCopy.isSelected() && checkBoxCopyScanToVessel.isSelected())
+			scanText = String.join("\n", ActivityTracker.chatMessages(first, sample, checkBoxIgnoreAI.isSelected()));
+		updatePreview(scanPreview, scanText);
 
 		DRPersistantData reports = new DRPersistantData();
 		reports.add(first);
 		reports.add(second);
-		updatePreview(scorePreview, formatScoreOutput(reports));
+		String scoreText = formatScoreOutput(reports);
+		if (checkBoxAutoCopy.isSelected() && checkBoxCopyScoreToVessel.isSelected())
+			scoreText = String.join("\n", vesselPieces(scoreText));
+		updatePreview(scorePreview, scoreText);
+	}
+
+	private ActivityTracker.Period samplePeriod(DRGroupData report) {
+		if (!RecordChecker.DEN.equals(profileSelector.getCurrentActivity())
+				|| woodhallowTools == null || !woodhallowTools.scorePerMinute()) return null;
+		ActivityTracker.Period period = new ActivityTracker.Period();
+		report.data.forEach((station, pirates) -> pirates.values().forEach(pirate -> {
+			ActivityTracker.Row row = new ActivityTracker.Row();
+			row.station = station;
+			row.pirate = pirate.getName();
+			row.score = pirate.getTokenScore();
+			row.tokens = pirate.getTokens();
+			row.woodhallowNav = "Navigating".equals(station);
+			row.ms = pirate.getName().contains(" ") ? 60_000 : 120_000;
+			period.rows.add(row);
+		}));
+		return period;
 	}
 
 	private static void updatePreview(JTextArea preview, String text) {
@@ -906,17 +923,21 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 	private void createScoringOptions(OptionsPanel options, NumberFormatter formatter) {
 		JPanel section = options.section("Scoring values", "scoringValues", false);
-		JPanel grid = scoringGrid(OptionsPanel.subsection(section, "Tokens"));
+		tokenScoring = OptionsPanel.subsection(section, "Tokens");
+		JPanel grid = scoringGrid(tokenScoring);
 		formattedTextFieldTokenCircle = addScoringValue(grid, "Circle", formatter);
 		formattedTextFieldTokenDiamond = addScoringValue(grid, "Diamond", formatter);
 		formattedTextFieldTokenPlus = addScoringValue(grid, "Plus", formatter);
 		formattedTextFieldTokenCross = addScoringValue(grid, "Cross", formatter);
 		formattedTextFieldTokenThrall = addScoringValue(grid, "Thrall", formatter);
-		formattedTextFieldCannonball = addScoringValue(grid, "Cannonball", formatter);
-		grid = scoringGrid(OptionsPanel.subsection(section, "Forage"));
-		formattedTextFieldSmallChest = addScoringValue(grid, "Small chest", formatter);
-		formattedTextFieldMediumChest = addScoringValue(grid, "Medium chest", formatter);
-		formattedTextFieldLargeChest = addScoringValue(grid, "Large chest", formatter);
+		formattedTextFieldCannonball = addScoringValue(grid, "Cannon", formatter);
+		forageScoring = OptionsPanel.subsection(section, "Forage chests");
+		grid = scoringGrid(forageScoring);
+		formattedTextFieldSmallChest = addScoringValue(grid, "Small", formatter);
+		formattedTextFieldMediumChest = addScoringValue(grid, "Medium", formatter);
+		formattedTextFieldLargeChest = addScoringValue(grid, "Large", formatter);
+		lairHaulScoring = OptionsPanel.subsection(section, "Treasure Haul");
+		lairHaulScoring.add(new JLabel("1 point per chest"));
 		dnavScoring = OptionsPanel.subsection(section, "Dnav");
 		grid = scoringGrid(dnavScoring);
 		addStationScoringValue(grid, "Single", "navsingle", formatter);
@@ -930,8 +951,8 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		signed.setMaximum(Integer.MAX_VALUE);
 		signed.setAllowsInvalid(true);
 		addStationScoringValue(grid, "Slipshod", "carpslipshod", signed);
-		addStationScoringValue(grid, "Creaky coffin", "carpcreaky", signed);
-		addStationScoringValue(grid, "Vampirate proof", "carpproof", signed);
+		addStationScoringValue(grid, "Creaky", "carpcreaky", signed);
+		addStationScoringValue(grid, "VPs", "carpproof", signed);
 		DocumentListener weights = new DocumentListener() {
 			@Override public void insertUpdate(DocumentEvent e) { updateOutputPreviews(); }
 			@Override public void removeUpdate(DocumentEvent e) { updateOutputPreviews(); }
@@ -943,60 +964,76 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	}
 
 	private static JPanel scoringGrid(JPanel parent) {
-		JPanel grid = new JPanel(new GridLayout(0, 2, 8, 4));
+		JPanel grid = new JPanel(new GridLayout(0, 3, 6, 8));
 		grid.setAlignmentX(LEFT_ALIGNMENT);
+		grid.setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 0));
 		parent.add(grid);
 		return grid;
 	}
 
 	private void addStationScoringValue(JPanel grid, String name, String key, NumberFormatter formatter) {
 		JFormattedTextField field = addScoringValue(grid, name, formatter);
-		field.setToolTipText("Default: " + STATION_WEIGHT_DEFAULTS.get(key) + ". Saved with this profile.");
+		HoverText.set(field, "Points per " + name.toLowerCase(java.util.Locale.ROOT) + ". Default: " + STATION_WEIGHT_DEFAULTS.get(key) + ".");
 		stationWeightFields.put(key, field);
 	}
 
 	private static JFormattedTextField addScoringValue(JPanel grid, String name, NumberFormatter formatter) {
-		JFormattedTextField field = new JFormattedTextField(formatter);
-		field.setHorizontalAlignment(JTextField.RIGHT);
-		JLabel label = new JLabel(name);
+		JFormattedTextField field = new ScoringValueField(formatter);
+		field.setHorizontalAlignment(JTextField.CENTER);
+		HoverText.set(field, "Points per " + name.toLowerCase(java.util.Locale.ROOT) + ".");
+		JLabel label = new JLabel(name, SwingConstants.CENTER);
 		label.setLabelFor(field);
-		grid.add(label);
-		grid.add(field);
+		RecordSettingsLayout.sizeEditor(field);
+		JPanel cell = new JPanel(new BorderLayout(0, 3));
+		cell.add(label, BorderLayout.NORTH);
+		JPanel value = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		value.add(field);
+		cell.add(value, BorderLayout.CENTER);
+		grid.add(cell);
+		grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, grid.getPreferredSize().height));
 		return field;
+	}
+
+	/** Use the game's ordinary text-field skin while retaining numeric formatting and validation. */
+	private static final class ScoringValueField extends JFormattedTextField {
+		ScoringValueField(NumberFormatter formatter) { super(formatter); }
+		@Override public String getUIClassID() { return "TextFieldUI"; }
 	}
 
 	private void createFileOptions(OptionsPanel options) {
 		JPanel files = options.section("Booty & files", "export", false);
 		checkBoxBootyExport = new JCheckBox("Export on scan");
-		checkBoxBootyExport.setToolTipText("Export the booty division to the data folder and write a text copy if configured");
+		HoverText.set(checkBoxBootyExport, "When Scan reads an open booty division, save it to the Data folder and the Text copies folder if set.");
 		checkBoxBootyExport.addActionListener(ev -> saveLogSettings());
 		files.add(checkBoxBootyExport);
 		checkBoxPromptMissingRun = new JCheckBox("Missing run prompt");
-		checkBoxPromptMissingRun.setToolTipText("Ask to link an unobserved run when many opened chests are missing from the chat log");
+		HoverText.set(checkBoxPromptMissingRun, "Ask to link an unobserved run when many opened chests are missing from the chat log");
 		checkBoxPromptMissingRun.addItemListener(ev ->
 				globalPrefs.putBoolean(PROMPT_MISSING_RUN, checkBoxPromptMissingRun.isSelected()));
 		files.add(checkBoxPromptMissingRun);
 		checkBoxRatingsExport = liveOption("Export DR ratings", "drratingsexport");
-		checkBoxRatingsExport.setToolTipText("Append ratings from every scanned duty report to dr_ratings.jsonl. Includes timings when available.");
+		HoverText.set(checkBoxRatingsExport, "Append ratings from every scanned duty report to dr_ratings.jsonl. Includes timings when available.");
 		files.add(checkBoxRatingsExport);
 		files.add(Box.createVerticalStrut(5));
-		options.section(files, SpecialDrops.TITLE, "options.specialDrops.expanded", false)
+		options.section(files, SpecialDrops.TITLE, "options.specialDrops.expanded", false,
+				"Announce selected item wins when scanning a booty division.")
 				.add(new SpecialDropsPanel(globalPrefs));
 		JPanel folders = OptionsPanel.subsection(files, "Folders");
 
 		textFieldChatLogFolder = new JTextField();
+		HoverText.set(textFieldChatLogFolder, "Choose the folder used by the game's chat logging setting.\nGizmo reads it for station timings, voyage records and booty details.");
 		buttonChatLogBrowse = new JButton("Browse…");
 		folders.add(folderRow("Chat logs", textFieldChatLogFolder, buttonChatLogBrowse));
 		folders.add(Box.createVerticalStrut(6));
 		textFieldBootyTextFolder = new JTextField();
-		textFieldBootyTextFolder.setToolTipText("Leave empty to only write the .jsonl");
+		HoverText.set(textFieldBootyTextFolder, "Save a readable text copy of each exported booty division here. Leave blank to skip text copies.");
 		buttonBootyTextBrowse = new JButton("Browse…");
 		JComponent textCopies = folderRow("Text copies", textFieldBootyTextFolder, buttonBootyTextBrowse);
 		folders.add(textCopies);
 		OptionsPanel.showWhenSelected(checkBoxBootyExport, checkBoxPromptMissingRun, textCopies);
 		folders.add(Box.createVerticalStrut(6));
 		textFieldDataFolder = new JTextField();
-		textFieldDataFolder.setToolTipText("Where Gizmo keeps booty divisions, run files, records and ratings");
+		HoverText.set(textFieldDataFolder, "Stores booty divisions, runs, voyage records and DR ratings. Leave blank to use Chat logs/Gizmo, or your home folder's Gizmo folder.");
 		buttonDataBrowse = new JButton("Browse…");
 		folders.add(folderRow("Data folder", textFieldDataFolder, buttonDataBrowse));
 	}
@@ -1005,6 +1042,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 	private void createRecordOptions(OptionsPanel options) {
 		JPanel records = options.section("Voyage records", "records", false);
 		checkBoxBrokenRecordAlert = new JCheckBox("Record alerts");
+		HoverText.set(checkBoxBrokenRecordAlert, "Check scanned DRs and completed entries against voyage records, including ties.\nEstablished DR records alert immediately; first records may wait until the run ends.");
 		// Saved as soon as it changes, like the other live options.
 		checkBoxBrokenRecordAlert.addActionListener(ev -> {
 			globalPrefs.putBoolean(BROKENRECORDALERT, checkBoxBrokenRecordAlert.isSelected());
@@ -1013,12 +1051,12 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		records.add(Box.createVerticalStrut(3));
 
 		buttonGetRecords = new JButton("Refresh");
-		buttonGetRecords.setToolTipText("Download the latest records from Puzzle Practice");
+		HoverText.set(buttonGetRecords, "Download the latest Puzzle Practice records. Review any replacements for your manual values before applying them.");
 		buttonGetRecords.addActionListener(ev -> refreshRecords());
 		JButton show = new JButton("All records");
 		show.addActionListener(ev -> showRecordsWindow());
 		JButton copy = new JButton("Copy claims");
-		copy.setToolTipText("Copy record claims in Puzzle Practice's format");
+		HoverText.set(copy, "Copy new and beaten records found this session, ready to submit to Puzzle Practice.");
 		copy.addActionListener(ev -> {
 			String message = voyageRecords.claimMessage();
 			if (message == null) {
@@ -1072,7 +1110,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		int saved = voyageRecords.size();
 		int manual = voyageRecords.manualRecords().size();
 		labelRecordStatus.setText(saved == 0 ? "No records saved" : saved + " records saved" + (manual == 0 ? "" : " (" + manual + " manual)"));
-		labelRecordStatus.setToolTipText(saved == 0 ? null
+		HoverText.set(labelRecordStatus, saved == 0 ? null
 				: String.format("Downloaded %tF %<tR", voyageRecords.loadedAt()));
 	}
 
@@ -1155,10 +1193,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			boolean manual = owner.isManual(record);
 			setFont(getFont().deriveFont(manual ? Font.BOLD : Font.PLAIN));
 			RecordSettingsLayout.sizeEditor(this);
-			String detail = value == null ? "" : String.join(", ", value.pirates)
-					+ (value.date == null ? "" : " · " + value.date);
-			setToolTipText(VoyageRecords.recordLabel(record) + ". " + (manual ? "Entered manually. " : "") + (detail.isBlank() ? "" : detail + ". ")
-					+ "Edit this record. Press Enter or Save settings to save; clear it to use the downloaded record.");
+			HoverText.set(this, VoyageRecords.recordLabel(record));
 		}
 	}
 
@@ -1202,7 +1237,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		VoyageRecords records = voyageRecords;
 		buttonGetRecords.setEnabled(false);
 		labelRecordStatus.setText("Refreshing…");
-		labelRecordStatus.setToolTipText(null);
+		HoverText.set(labelRecordStatus, null);
 		recordTask(records, VoyageRecords::fetchDownload,
 				download -> finishRecordDownload(records, download, askBeforeReplacingManual));
 	}
@@ -1245,7 +1280,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 					if (voyageRecords != records) return;
 					buttonGetRecords.setEnabled(true);
 					labelRecordStatus.setText("Refresh failed");
-					labelRecordStatus.setToolTipText(error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+					HoverText.set(labelRecordStatus, error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
 				});
 			}
 		}, "Gizmo record update");
@@ -1387,6 +1422,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelOutputButtonGeneral.add(horizontalOutput1);
 
 			buttonOutputBox = new JButton("Box");
+			HoverText.set(buttonOutputBox, "Rank pirates by small chest totals from Foraging and Treasure Haul reports in the DR Tree.");
 			buttonOutputBox.addActionListener(this);
 			buttonOutputBox.setPreferredSize(new Dimension(80, 17));
 			buttonOutputBox.setMinimumSize(new Dimension(80, 17));
@@ -1394,6 +1430,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			horizontalOutput1.add(buttonOutputBox);
 
 			buttonOutputJar = new JButton("Jar");
+			HoverText.set(buttonOutputJar, "Rank pirates by medium chest totals from Foraging and Treasure Haul reports in the DR Tree.");
 			buttonOutputJar.addActionListener(this);
 			buttonOutputJar.setPreferredSize(new Dimension(80, 17));
 			buttonOutputJar.setMinimumSize(new Dimension(80, 17));
@@ -1401,6 +1438,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			horizontalOutput1.add(buttonOutputJar);
 
 			buttonOutputChest = new JButton("Chest");
+			HoverText.set(buttonOutputChest, "Rank pirates by top-tier chest totals from Foraging and Treasure Haul reports in the DR Tree.");
 			buttonOutputChest.addActionListener(this);
 			buttonOutputChest.setPreferredSize(new Dimension(80, 17));
 			buttonOutputChest.setMinimumSize(new Dimension(80, 17));
@@ -1413,6 +1451,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelOutputButtonGeneral.add(horizontalOutput2);
 
 			buttonOutputAvg = new JButton("Averages");
+			HoverText.set(buttonOutputAvg, "Rank pirates by average Foraging or Treasure Haul score across their reports in the DR Tree.");
 			buttonOutputAvg.addActionListener(this);
 			buttonOutputAvg.setPreferredSize(new Dimension(80, 17));
 			buttonOutputAvg.setMinimumSize(new Dimension(80, 17));
@@ -1421,6 +1460,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 			buttonOutputCombined = new JButton("Avg/CC's");
+			HoverText.set(buttonOutputCombined, "Show average Foraging or Treasure Haul score with each pirate's total cursed or immortal chests.");
 			buttonOutputCombined.addActionListener(this);
 			buttonOutputCombined.setPreferredSize(new Dimension(80, 17));
 			buttonOutputCombined.setMinimumSize(new Dimension(80, 17));
@@ -1429,6 +1469,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 			buttonOutputCarpAvg = new JButton( "Carp Avg");
+			HoverText.set(buttonOutputCarpAvg, "Rank pirates by average Carpentry score across their reports in the DR Tree.");
 			buttonOutputCarpAvg.addActionListener(this);
 			buttonOutputCarpAvg.setPreferredSize(new Dimension(80, 17));
 			buttonOutputCarpAvg.setMinimumSize(new Dimension(80, 17));
@@ -1502,11 +1543,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			panelDRTreeButtonPanel.add(hGlue_2);
 
 			buttonDRTreeRemove = new JButton("Remove");
+			HoverText.set(buttonDRTreeRemove, "Remove the selected reports, stations or pirate rows from the saved DR Tree used by Score All.");
 			buttonDRTreeRemove.addActionListener(this);
 			buttonDRTreeRemove.setPreferredSize(new Dimension(80, 23));
 			panelDRTreeButtonPanel.add(buttonDRTreeRemove);
 
 			buttonDRTreeClear = new JButton("Clear");
+			HoverText.set(buttonDRTreeClear, "Remove every saved report from the DR Tree used by Score All.");
 			buttonDRTreeClear.addActionListener(this);
 			buttonDRTreeClear.setPreferredSize(new Dimension(80, 23));
 			panelDRTreeButtonPanel.add(buttonDRTreeClear);
@@ -1549,7 +1592,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				panelTestsButtonsPanel.add(buttonTestsWho);
 
 				buttonTestsDumpTree = new JButton("Dump UI tree");
-				buttonTestsDumpTree.setToolTipText("Debug: print every component in the game window, with its path, class and visible text (needs Debug on)");
+				HoverText.set(buttonTestsDumpTree, "Debug: print every component in the game window, with its path, class and visible text (needs Debug on)");
 				buttonTestsDumpTree.addActionListener(this);
 				panelTestsButtonsPanel.add(buttonTestsDumpTree);
 
@@ -1571,6 +1614,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		panelScan.setLayout(new BoxLayout(panelScan, BoxLayout.X_AXIS));
 
 			buttonScan = new JButton("Scan");
+			HoverText.set(buttonScan, "Read the open duty report into Output and the DR Tree, or read an open booty division.");
 			buttonScan.addActionListener(this);
 			buttonScan.setMaximumSize(new Dimension(80, 23));
 			buttonScan.setPreferredSize(new Dimension(80, 23));
@@ -1605,11 +1649,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		panelScore.setLayout(new BoxLayout(panelScore, BoxLayout.X_AXIS));
 
 			buttonScore = new JButton("Score All");
+			HoverText.set(buttonScore, "Print each pirate's results across every report in the DR Tree, using the current profile's format and scoring values.");
 			buttonScore.addActionListener(this);
 			buttonScore.setPreferredSize(new Dimension(80, 23));
 			panelScore.add(buttonScore);
 
 			buttonOutputClear = new JButton("Clear");
+			HoverText.set(buttonOutputClear, "Clear the Output text. Saved reports stay in the DR Tree.");
 			buttonOutputClear.addActionListener(this);
 			buttonOutputClear.setPreferredSize(new Dimension(80, 17));
 			panelScore.add(buttonOutputClear);
@@ -2163,8 +2209,21 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		String data = textFieldDataFolder.getText().trim();
 		String chat = textFieldChatLogFolder.getText().trim();
 		chatLogFolderSetting = chat;
-		GameLog.setDataFolder(!data.isEmpty() ? Paths.get(data) : chat.isEmpty() ? null : Paths.get(chat, "Gizmo"));
+		Path requested = !data.isEmpty() ? Paths.get(data) : chat.isEmpty() ? null : Paths.get(chat, "Gizmo");
+		GameLog.setDataFolder(requested);
 		Path folder = GameLog.dataFolder().toAbsolutePath().normalize();
+		if (requested != null && GameLog.isGamePath(requested)) {
+			textFieldDataFolder.setText(folder.toString());
+			globalPrefs.put(DATAFOLDER, folder.toString());
+			printStatus("Data folder changed to " + folder + "; Gizmo data stays outside Puzzle Pirates.", false);
+		}
+		String text = textFieldBootyTextFolder.getText().trim();
+		if (!text.isEmpty() && GameLog.isGamePath(Paths.get(text))) {
+			Path copies = folder.resolve("booty_division");
+			textFieldBootyTextFolder.setText(copies.toString());
+			globalPrefs.put(BOOTYTEXTFOLDER, copies.toString());
+			printStatus("Text copies folder changed to " + copies + ".", false);
+		}
 		if (voyageRecords == null || !voyageRecords.folder().equals(folder)) {
 			runRecordAlerts.clear();
 			checkedRecordEntries.clear();
@@ -2269,8 +2328,13 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		stationWeightFields.forEach((key, field) -> field.setValue(currentPrefs.getInt(key, STATION_WEIGHT_DEFAULTS.get(key))));
 		String activity = profileSelector.getCurrentActivity();
 		woodhallowTools.setActivity(activity);
-		dnavScoring.setVisible(RecordChecker.DEN.equals(activity));
-		carpScoring.setVisible(RecordChecker.LAIR.equals(activity));
+		boolean allScoring = profileSelector.showsAllScoringValues();
+		boolean den = RecordChecker.DEN.equals(activity), lair = RecordChecker.LAIR.equals(activity);
+		tokenScoring.setVisible(allScoring || !den && !lair);
+		forageScoring.setVisible(allScoring || !lair);
+		lairHaulScoring.setVisible(allScoring || lair);
+		dnavScoring.setVisible(allScoring || den);
+		carpScoring.setVisible(allScoring || lair);
 		dnavScoring.getParent().revalidate();
 		dnavScoring.getParent().repaint();
 

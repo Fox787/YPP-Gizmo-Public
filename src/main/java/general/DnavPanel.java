@@ -74,16 +74,16 @@ public final class DnavPanel extends JPanel {
 
 		tip("Werewolves to turn back in the next Dnav", wolvesL, wolves);
 		tip("The fray these stations prepare", frayL, fray);
-		tip("Dnav score needed to turn them all back (1.6 per werewolf)", scoreL, score);
+		tip("Required Dnav score, rounded up from the wave's unrounded size. One score point represents 125 Dnav points.", scoreL, score);
 		tip("Score per minute the navigators need to finish with 0:30 to spare", needL, need);
-		tip("<html>Current navigators' score per minute (last duty report) minus Need.<br>0 or more: they finish with the 0:30 safety net. Negative: add this much score/min.</html>", nowL, now);
+		tip("Current navigators' score per minute from the last DR, minus Need.\nZero or more leaves at least 30 seconds to spare. A negative value is the extra score/min needed.", nowL, now);
 		tip("Length of the stations (shorter for each pirate who dies this fray)", timeL, time);
-		tip("<html>Time left on the stations when the current navigators would finish<br>(- means they'd run out of time)</html>", leftL, left);
+		tip("Predicted station time remaining when the current navigators finish.\nNegative/red means too late; green means at least 30 seconds to spare.", leftL, left);
 	}
 
 	private static JLabel value() { return new JLabel("-"); }
 	private static JLabel name(String s) { JLabel l = new JLabel(s); l.setForeground(LABEL); return l; }
-	private static void tip(String t, JLabel... ls) { for (JLabel l : ls) l.setToolTipText(t); }
+	private static void tip(String t, JLabel... ls) { for (JLabel l : ls) HoverText.set(l, t); }
 
 	/** Shows the forecast and up to two solo lines (line -> its time), fastest first. */
 	public void show(DnavForecast f, Map<String, String> strategies) {
@@ -97,7 +97,7 @@ public final class DnavPanel extends JPanel {
 		StringBuilder odds = new StringBuilder();
 		for (Map.Entry<Integer, Double> e : f.odds.entrySet())
 			odds.append(odds.length() > 0 ? ", " : "").append(String.format("%d (%.0f%%)", e.getKey(), e.getValue() * 100));
-		wolves.setToolTipText(String.format("<html>Werewolves the next Dnav will show: %s<br>Its real size is %.2f werewolves"
+		HoverText.set(wolves, String.format("<html>Possible next Dnav counts: %s<br>The unrounded wave is %.2f werewolves"
 				+ " (pack of %.2f x %.0f%%):<br>%.0f points to clear, whatever count it shows</html>",
 				odds, f.realWerewolves, f.rawPack, (0.4 + 0.1 * f.nextFray) * 100, f.neededPoints));
 		fray.setText(String.valueOf(f.nextFray));
@@ -121,9 +121,9 @@ public final class DnavPanel extends JPanel {
 			if (i > 1 || !extended) break;
 			strat[i].setText(e.getKey());
 			stratPct[i].setText(e.getValue());
-			strat[i].setToolTipText(i == 0 ? "Fastest solo line for this crew and fray (Options: Dnav move times)"
+			HoverText.set(strat[i], i == 0 ? "Fastest solo plan for this crew and fray. Adjust move times under Options > Woodhallow > Dnav strategies."
 					: "Another fast solo line using the enabled moves");
-			stratPct[i].setToolTipText("How long the line takes");
+			HoverText.set(stratPct[i], "Estimated duration of the whole solo plan, using your configured move times.");
 			strat[i].setVisible(true); stratPct[i].setVisible(true);
 			i++;
 		}

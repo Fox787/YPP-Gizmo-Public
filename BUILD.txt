@@ -47,7 +47,7 @@ Refresh lists and counts the manual records Puzzle Practice would replace. Choos
 higher values, Replace all listed, or Cancel. Manual records absent from the download stay
 saved. Automatic startup refreshes keep manual values without replacing them.
 Each voyage's Individual group includes its Puzzle Practice individual categories,
-including Dnav, carpentry, frays, gifts and the separate CI points records for each forage.
+including Dnav, carpentry, frays, Treasure Haul chests per DR and the separate CI points records for each forage.
 Compact tables show Entry and DR once; expand Points by forage to edit the numbered values.
 Every scanned CI, Den and Lair DR checks records automatically. Existing nonzero DR chest/score
 benchmarks alert live for screenshots. Missing/zero benchmarks keep only the best qualifying
@@ -85,7 +85,9 @@ with booty export. Hiding these controls preserves their saved values.
 Scoring values uses compact Tokens, Forage, Dnav and Lair carpentry subsections. Dnav and
 Lair carpentry weights are editable profile settings, defaulting to 1/2/3 for Dnav and
 -1/1/2 for carpentry. Their groups appear only in the matching selected profile, including
-automatic activity switches. Folders and countdown
+automatic activity switches. The built-in Den profile shows Forage and Dnav; the Lair profile
+shows fixed Treasure Haul points and Carpentry. Tokens appear in Cursed Isles. New and custom
+profiles expose every scoring group, even when copied from a Den or Lair profile. Folders and countdown
 sounds use the same compact subsection headings without extra foldouts.
 - Measured station visits shorter than two seconds are excluded from scoring and copied scans.
   Exactly two seconds qualifies. Unmeasured visits remain eligible; raw run logs retain the data.
@@ -118,4 +120,6 @@ Under the configured Data folder, in <ocean>\:
     runs\run_<start>_<pirate>.jsonl     one line per duty report, with station timings
 and a readable N.txt per booty division in the "Text copies" folder set in Options.
 The Data folder defaults to a Gizmo folder inside your chat log folder. Until a chat log
-folder is known, Gizmo uses exported_data in the game's app folder.
+folder is known, Gizmo uses a Gizmo folder in your user home directory. Data and text-copy
+destinations inside the Puzzle Pirates installation are redirected outside it. Temporary
+sound and hotkey files also stay outside the game folder.

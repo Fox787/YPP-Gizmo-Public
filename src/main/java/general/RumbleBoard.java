@@ -83,7 +83,7 @@ public final class RumbleBoard extends JComponent {
 
 	public RumbleBoard() {
 		setPreferredSize(new Dimension(150, 20 * ROW_H + 4));
-		setToolTipText("Groups charged (left), drop-off (inside). Dotted line: max damage (10 rows blocked) at Woodhallow. Yellow/orange: recommended window (75% of it once no elite werewolves are left).");
+		HoverText.set(this, "Groups charged (left), drop-off (inside). Dotted line: max damage (10 rows blocked) at Woodhallow. Yellow/orange: recommended window (75% of it once no elite werewolves are left).");
 		setAlignmentX(Component.LEFT_ALIGNMENT);
 		Font f = UIManager.getFont("Label.font");
 		setFont(f != null ? f : new Font(Font.DIALOG, Font.PLAIN, 11));

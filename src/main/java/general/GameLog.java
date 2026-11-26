@@ -40,12 +40,68 @@ public final class GameLog {
 
 	private GameLog() { }
 
-	private static Path outputFolder;
+	private static volatile Path outputFolder;
 
 	static void setDataFolder(Path folder) { outputFolder = folder; }
 
 	static Path dataFolder() {
-		return outputFolder == null ? clientFolder().resolve("exported_data") : outputFolder;
+		return safeOutputFolder(outputFolder);
+	}
+
+	static Path defaultDataFolder() {
+		return Paths.get(System.getProperty("user.home"), "Gizmo").toAbsolutePath().normalize();
+	}
+
+	/** All generated data stays outside the game installation, including saved legacy folder choices. */
+	static Path safeOutputFolder(Path folder) {
+		Path candidate = folder == null ? defaultDataFolder() : folder.toAbsolutePath().normalize();
+		if (isGamePath(candidate)) candidate = defaultDataFolder();
+		if (isGamePath(candidate)) throw new IllegalStateException("Choose a Gizmo data folder outside Puzzle Pirates.");
+		return candidate;
+	}
+
+	static void requireOutputPath(Path path) throws IOException {
+		if (isGamePath(path)) throw new IOException("Gizmo cannot write inside the Puzzle Pirates folder.");
+	}
+
+	static Path temporaryFolder(String name) throws IOException {
+		Path folder = Paths.get(System.getProperty("java.io.tmpdir"), name);
+		if (isGamePath(folder)) folder = defaultDataFolder().resolve("temp").resolve(name);
+		requireOutputPath(folder);
+		return folder;
+	}
+
+	static boolean isGamePath(Path path) {
+		Path requested = path.toAbsolutePath().normalize();
+		Path target = resolvedPath(path);
+		Path client = clientFolder();
+		Path root = client;
+		for (Path parent = client; parent != null; parent = parent.getParent()) {
+			if (parent.getFileName() != null && parent.getFileName().toString().toLowerCase(java.util.Locale.ROOT).startsWith("puzzle pirates")) {
+				root = parent;
+				break;
+			}
+		}
+		if (root.equals(client) && client.getFileName() != null && client.getFileName().toString().equalsIgnoreCase("app")
+				&& client.getParent() != null) root = client.getParent();
+		if (requested.startsWith(root.normalize()) || target.startsWith(resolvedPath(root))) return true;
+		// Also reject another installed client's folder, even if this process runs elsewhere.
+		for (Path part : target)
+			if (part.toString().toLowerCase(java.util.Locale.ROOT).startsWith("puzzle pirates")) return true;
+		for (Path part : requested)
+			if (part.toString().toLowerCase(java.util.Locale.ROOT).startsWith("puzzle pirates")) return true;
+		return false;
+	}
+
+	/** Resolve existing ancestors too, so a junction cannot hide an output inside the game folder. */
+	private static Path resolvedPath(Path path) {
+		Path absolute = path.toAbsolutePath().normalize();
+		for (Path existing = absolute; existing != null; existing = existing.getParent()) {
+			try { return existing.toRealPath().resolve(existing.relativize(absolute)).normalize(); }
+			catch (java.nio.file.NoSuchFileException ignored) { }
+			catch (IOException e) { throw new IllegalStateException("Cannot check output folder: " + path, e); }
+		}
+		return absolute;
 	}
 
 	/** The folder the client runs from: Gizmo is loaded with -javaagent:Gizmo.jar, so it's the working directory. */

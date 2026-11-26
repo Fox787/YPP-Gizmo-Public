@@ -1,5 +1,6 @@
 package main.java.prefobj;
 
+import main.java.general.HoverText;
 import javax.swing.*;
 import java.awt.*;
 import java.util.Set;
@@ -17,6 +18,7 @@ public class RadioButtonProfileSelector extends JPanel {
     private final String PROFILE_ROOT = "profiles";
     private final String CURRENT_PROFILE_KEY = "currentProfile";
     private static final String DEN_PROFILE_ADDED = "denProfileAdded";
+    private static final String ALL_SCORING_VALUES = "allScoringValues";
     private static final Set<String> PROFILE_SETTING_KEYS = Set.of(
             "copyscantovessel", "copyscoretovessel",
             "scanwritedate", "scanusetabs", "scanocean", "scanstationheaders", "scanstation",
@@ -24,7 +26,7 @@ public class RadioButtonProfileSelector extends JPanel {
             "scorewritedate", "scoreusetabs", "scoreocean", "scorestationheaders", "scorestation",
             "scorepirate", "scorerating", "scoretokenscore", "scoretokenarray", "scoresheetcombo",
             "tokencircle", "tokendiamond", "tokenplus", "tokencross", "tokenthrall", "tokencannonball",
-            "chestsmall", "chestmedium", "chestlarge", "activityMode",
+            "chestsmall", "chestmedium", "chestlarge", "activityMode", ALL_SCORING_VALUES,
             "navsingle", "navdouble", "navtriple", "carpslipshod", "carpcreaky", "carpproof");
     private String selectedProfile = null;
     private ProfileChangeListener changeListener;
@@ -63,6 +65,7 @@ public class RadioButtonProfileSelector extends JPanel {
         profileGroup = new ButtonGroup();
 
         btnNew = new JButton("New");
+        HoverText.set(btnNew, "Create an independent copy of the current profile's output formats and scoring values.");
         btnRename = new JButton("Rename");
         btnDelete = new JButton("Delete");
 
@@ -205,6 +208,13 @@ public class RadioButtonProfileSelector extends JPanel {
     public String getCurrentActivity() {
         Preferences profile = getCurrentProfilePrefs();
         return profile == null ? "" : profile.get("activityMode", activityForName(selectedProfile));
+    }
+
+    public boolean showsAllScoringValues() {
+        boolean custom = !"Cursed Isles".equals(selectedProfile) && !"Werewolf Den".equals(selectedProfile)
+                && !"Vampire Lair".equals(selectedProfile);
+        Preferences profile = getCurrentProfilePrefs();
+        return profile == null ? custom : profile.getBoolean(ALL_SCORING_VALUES, custom);
     }
 
     private static String activityForName(String name) {
@@ -464,6 +474,7 @@ public class RadioButtonProfileSelector extends JPanel {
             for (String key : oldProfile.keys()) {
                 if (PROFILE_SETTING_KEYS.contains(key)) newProfile.put(key, oldProfile.get(key, null));
             }
+            newProfile.putBoolean(ALL_SCORING_VALUES, true);
             newProfile.flush();
 
             // Switch to new profile
