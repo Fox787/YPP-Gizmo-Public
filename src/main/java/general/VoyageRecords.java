@@ -412,18 +412,38 @@ public final class VoyageRecords {
 		return compare(voyage, ocean, crewSize, kind, value, time, pirates, loot, Map.of());
 	}
 
+	/** Each alert line compare returned, as a short line to paste to the crew (see shipLine). */
+	private final Map<String, String> shipLines = new java.util.HashMap<>();
+
+	/** The short version of an alert line from compare, e.g. "We beat the record for ...: 156 (beats 150)". */
+	synchronized String shipLine(String line) { return shipLines.getOrDefault(line, line); }
+
 	synchronized String compare(String voyage, String ocean, int crewSize, String kind, int value,
 	                            String time, List<String> pirates, int[] loot, Map<String, int[]> pirateLoot) {
 		if (voyage == null || ocean == null || !supportedCrewSize(voyage, crewSize) || value <= 0 || size() == 0) return "";
 		String what = voyageName(voyage) + ", " + (crewSize > 0 ? crewSize + " pirates, " + describe(voyage, kind)
 				: (pirates != null && pirates.size() == 1 ? pirates.get(0) + ", " : "") + describe(voyage, kind, 0));
 		Record r = get(voyage, ocean, crewSize, kind);
+		// The short line to paste to the crew: they know the voyage and who's aboard.
+		String who = crewSize == 0 && pirates != null && pirates.size() == 1 ? pirates.get(0) : "We";
+		String record = (crewSize > 0 ? crewSize + "-pirate " : "") + "record for "
+				+ (crewSize > 0 ? describe(voyage, kind) : describe(voyage, kind, 0).replaceFirst(",? one pirate$", "")) + ": " + value;
 		String line;
-		if (r == null) line = String.format("New record? %s: %d (there is no %s record yet, so this would be the first)", what, value,
-				crewSize > 0 ? crewSize + "-pirate" : "one-pirate");
+		if (r == null) {
+			line = String.format("New record? %s: %d (there is no %s record yet, so this would be the first)", what, value,
+					crewSize > 0 ? crewSize + "-pirate" : "one-pirate");
+			shipLines.put(line, who + " set the first " + record);
+		}
 		else if (r.value <= 0 && r.valueText != null && !r.valueText.trim().matches("\\d+")) return "";
-		else if (value > r.value) line = String.format("New record! %s: %d beats %d (%s, %s)", what, value, r.value, r.date, String.join(", ", r.pirates));
-		else if (value == r.value) return String.format("Record tied: %s: %d (%s, %s)", what, value, r.date, String.join(", ", r.pirates));
+		else if (value > r.value) {
+			line = String.format("New record! %s: %d beats %d (%s, %s)", what, value, r.value, r.date, String.join(", ", r.pirates));
+			shipLines.put(line, who + " beat the " + record + " (beats " + r.value + ")");
+		}
+		else if (value == r.value) {
+			line = String.format("Record tied: %s: %d (%s, %s)", what, value, r.date, String.join(", ", r.pirates));
+			shipLines.put(line, who + " tied the " + record);
+			return line;
+		}
 		else return "";
 		if (crewSize <= maxSentCrew(voyage)) {
 			List<Integer> scores = contributions(voyage, crewSize, kind, value, pirates, pirateLoot);

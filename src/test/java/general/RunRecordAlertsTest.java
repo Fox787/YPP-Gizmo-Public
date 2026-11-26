@@ -46,8 +46,10 @@ class RunRecordAlertsTest {
 				invoke(gui, "printRecordLines", List.class, List.of(first, score, ""));
 				String data = records.claimData();
 				assertTrue(data.startsWith("[{") && data.endsWith("}]"), data);
-				assertEquals(List.of(first, score, data), output.getText().lines().filter(line -> !line.isBlank()).toList(),
-						"only the array Puzzle Practice reads goes in the main window");
+				assertEquals("We beat the 2-pirate record for most dire chests: 4 (beats 1)", records.shipLine(first));
+				assertEquals(List.of(records.shipLine(first), records.shipLine(score), data),
+						output.getText().lines().filter(line -> !line.isBlank()).toList(),
+						"a short line for the crew, then only the array Puzzle Practice reads");
 				assertTrue(records.claimMessage().contains("Data for the records:"), "full submission remains available to Copy claims");
 				String before = output.getText();
 				invoke(gui, "printRecordLines", List.class, List.of(first, score));
@@ -55,7 +57,7 @@ class RunRecordAlertsTest {
 				String better = records.compare("woodhallow", "emerald", 2, "chests", 5,
 						"2026-11-25T12:10", pirates, new int[]{5, 0, 0});
 				invoke(gui, "printRecordLines", List.class, List.of(better));
-				assertEquals(List.of(first, score, data, better, records.claimData()),
+				assertEquals(List.of(records.shipLine(first), records.shipLine(score), data, records.shipLine(better), records.claimData()),
 						output.getText().lines().filter(line -> !line.isBlank()).toList());
 				assertTrue(records.claimMessage().contains("\"value\":5"));
 			});
@@ -124,8 +126,8 @@ class RunRecordAlertsTest {
 				invoke(gui, "finishRunRecords", long.class, now + 6000);
 				long alerts = lootAlerts(output.getText());
 				assertTrue(alerts > 0, output.getText());
-				assertTrue(output.getText().contains("4 beats " + drBenchmark));
-				assertTrue(output.getText().contains("6 beats 1"), "entry totals are checked without Score All or booty export");
+				assertTrue(output.getText().contains("4 (beats " + drBenchmark + ")"));
+				assertTrue(output.getText().contains("6 (beats 1)"), "entry totals are checked without Score All or booty export");
 				assertFalse(output.getText().contains("Vampire Lair entry "), "automatic checks print record alerts, not a run summary");
 				invoke(gui, "processDutyReport", DRGroupData.class, report(activity, new int[]{0, 0, 4}));
 				invoke(gui, "finishRunRecords", long.class, now + 7000);
@@ -214,7 +216,7 @@ class RunRecordAlertsTest {
 				invoke(gui, "finishRunRecords", long.class, now);
 				assertEquals(0, lootAlerts(output.getText()), "the lair's report hasn't been read yet");
 				invoke(gui, "processDutyReport", DRGroupData.class, report("Den", new int[]{0, 0, 3}));
-				assertTrue(output.getText().contains("3 beats 0"), "no wait for the chests to reach the ship: " + output.getText());
+				assertTrue(output.getText().contains("3 (beats 0)"), "no wait for the chests to reach the ship: " + output.getText());
 			});
 		}
 	}
@@ -263,7 +265,7 @@ class RunRecordAlertsTest {
 	}
 
 	private static long lootAlerts(String output) {
-		return output.lines().filter(line -> line.startsWith("New record") && !line.contains("dnav")
+		return output.lines().filter(line -> (line.contains(" beat the ") || line.contains(" set the first ")) && !line.contains("dnav")
 				&& (line.contains("in one DR") || line.contains("in one fray") || line.contains("in one forage"))).count();
 	}
 

@@ -573,7 +573,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			// Live checks, rescans and booty exports can find the same record again.
 			if (isRecordAlert(line) && !printedRecordAlerts.add(
 					String.valueOf(recordsOcean()).toLowerCase(java.util.Locale.ROOT) + "|" + line)) continue;
-			printStatus(line, false);
+			printStatus(voyageRecords.shipLine(line), false);
 			newRecord |= line.startsWith("New record");
 		}
 		// Just the data Puzzle Practice reads; the full message to send stays on Copy claims.
