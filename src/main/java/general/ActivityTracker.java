@@ -528,7 +528,7 @@ public final class ActivityTracker {
 	static double rate(Row r) {
 		if (!r.hasRate()) return -1;
 		double score = r.woodhallowNav
-				? DnavForecast.flooredNavPoints(r.tokens, r.navFloor) / DnavForecast.POINTS_PER_SCORE : r.score;
+				? Math.max(DnavForecast.navPoints(r.tokens), r.navFloor) / DnavForecast.POINTS_PER_SCORE : r.score;
 		return score / (r.ms / 60_000.0);
 	}
 

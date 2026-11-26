@@ -38,15 +38,6 @@ class DnavForecastTest {
 	}
 
 	@Test
-	void aFloorRoundsUpToTheSmallestScoreTheMoonsCanMake() {
-		// One triple moon: 375 triple, 500 bingo, 625 Booch-donkey or 750 Booch-Vegas.
-		assertEquals(625.0, DnavForecast.flooredNavPoints(new int[]{0, 0, 1}, 524));
-		assertEquals(375.0, DnavForecast.flooredNavPoints(new int[]{0, 0, 1}, 300), "no floor above the moons' own points");
-		assertEquals(900.0, DnavForecast.flooredNavPoints(new int[]{0, 0, 1}, 900), "past anything they can make: the floor itself");
-		assertEquals(0.0, DnavForecast.flooredNavPoints(new int[]{0, 0, 0}, 0));
-	}
-
-	@Test
 	void theChatsWerewolfCountGivesALoneNavigatorAFloor() {
 		// Crew 4, fray 2: 200 x 4 x 1.3 x 0.6 = 624 points in the wave.
 		assertEquals(524.0, DnavForecast.waveFloor(4, 2, 0), 1e-9);

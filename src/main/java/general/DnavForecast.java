@@ -103,55 +103,6 @@ public final class DnavForecast {
 	}
 
 	/**
-	 * A lone navigator's points given the chat's floor (see waveFloor): navPoints, or if the floor is
-	 * higher, the smallest score these moons can really make that reaches it (a triple moon can also be
-	 * a bingo x4, Booch-donkey x5 or Booch-Vegas x6), e.g. one triple moon on a 524 wave = a donkey, 625.
-	 * Matches the Dnav/Forage stats page.
-	 */
-	public static double flooredNavPoints(int[] moons, double floor) {
-		double points = navPoints(moons);
-		if (moons == null || floor <= points) return points;
-		int singles = Math.max(0, moons.length > 0 ? moons[0] : 0);
-		int doubles = Math.max(0, moons.length > 1 ? moons[1] : 0);
-		int triples = Math.max(0, moons.length > 2 ? moons[2] : 0);
-		double best = Double.MAX_VALUE;
-		for (int p : achievable(singles, doubles, triples)) if (p >= floor - 1e-6) best = Math.min(best, p);
-		return best == Double.MAX_VALUE ? floor : best;
-	}
-
-	/** Every score these moons can make; a lone single or double still comes at the end. */
-	static java.util.Set<Integer> achievable(int singles, int doubles, int triples) {
-		java.util.Map<String, java.util.Set<Integer>> memo = new java.util.HashMap<>();
-		if (singles + doubles == 1 && triples > 0) {
-			int last = (singles == 1 ? 1 : 2) * (int) TRIPLE_STRATEGY_POINTS_PER_SCORE;
-			java.util.Set<Integer> out = new java.util.HashSet<>();
-			for (int p : achievable(0, 0, triples, (int) POINTS_PER_SCORE, memo)) out.add(p + last);
-			return out;
-		}
-		return achievable(singles, doubles, triples, (int) POINTS_PER_SCORE, memo);
-	}
-
-	private static java.util.Set<Integer> achievable(int s, int d, int t, int board,
-	                                                  java.util.Map<String, java.util.Set<Integer>> memo) {
-		if (s + d + t == 0) return java.util.Set.of(0);
-		String key = s + "," + d + "," + t + "," + board;
-		java.util.Set<Integer> known = memo.get(key);
-		if (known != null) return known;
-		int booch = (int) POINTS_PER_SCORE, triple = (int) TRIPLE_STRATEGY_POINTS_PER_SCORE;
-		java.util.Set<Integer> out = new java.util.HashSet<>();
-		if (t > 0) {
-			java.util.Set<Integer> rest = achievable(s, d, t - 1, triple, memo);
-			// Triple x3 or bingo x4 on the board, Booch-donkey x5 or Booch-Vegas x6 on a fresh 125 board.
-			for (int gain : new int[]{3 * board, 4 * board, 5 * booch, 6 * booch})
-				for (int p : rest) out.add(gain + p);
-		}
-		if (d > 0) for (int p : achievable(s, d - 1, t, booch, memo)) out.add(2 * board + p);
-		if (s > 0) for (int p : achievable(s - 1, d, t, booch, memo)) out.add(board + p);
-		memo.put(key, out);
-		return out;
-	}
-
-	/**
 	 * Least points a lone navigator charted when the chat said {@code shown} werewolves were left for
 	 * fray {@code fray}'s wave (0 after "turned back the last werewolf"). The wave is 200 x the pack x
 	 * its share; the count shown is what's left / 200 rounded, and the last one goes under 100 left.
