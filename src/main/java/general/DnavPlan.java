@@ -28,6 +28,8 @@ final class DnavPlan {
 	static final int START_BOARD = 71, BOOCH_BOARD = 125, TRIPLE_BOARD = 173;
 	static final int BOOCH_SECONDS = 9;
 	static final int DONKEY_POINTS = 5 * BOOCH_BOARD;
+	/** Lines shown for each Dnav: the fastest few that differ in their moves. */
+	static final int LINES = 3;
 
 	private DnavPlan() { }
 
@@ -117,52 +119,18 @@ final class DnavPlan {
 		return new Line(opening, donkeys, triples, doubles, 0, 0, single, t, points, List.copyOf(steps));
 	}
 
-	/** The fastest line, then the fastest with the other Booch choice (no Booch-donkeys). */
+	/** The three fastest lines (see the full version below), with only triples and a finishing single. */
 	static List<Line> options(double needed, int tripleSeconds, int singleSeconds) {
 		return options(needed, tripleSeconds, singleSeconds, -1);
 	}
 
-	/**
-	 * Up to three lines, fastest first: the fastest without a Booch-donkey, the fastest that makes the
-	 * other Booch choice, and (when {@code donkeySeconds} > 0) the fastest with at least one Booch-donkey.
-	 */
 	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds) {
 		return options(needed, tripleSeconds, singleSeconds, donkeySeconds, -1);
 	}
 
 	/** As above; a move whose time is -1 (left blank in Options) is never used. */
 	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds, int doubleSeconds) {
-		List<Line> plain = new ArrayList<>(), donkey = new ArrayList<>();
-		int maxTriples = tripleSeconds > 0 ? 40 : 0, maxDoubles = doubleSeconds > 0 ? 40 : 0;
-		boolean[] singles = singleSeconds > 0 ? new boolean[]{false, true} : new boolean[]{false};
-		for (int d = 0; d <= (donkeySeconds > 0 ? 12 : 0); d++)
-			for (boolean booch : new boolean[]{false, true}) {
-				if (d > 0 && booch) continue;   // a Booch-donkey already starts with its Booch
-				for (int n = 0; n <= maxTriples; n++) {
-					boolean cleared = false;
-					for (int m = 0; m <= maxDoubles && !cleared; m++)   // once a count of doubles clears, more only add time
-						for (boolean single : singles) {
-							if (d == 0 && n == 0 && m == 0 && !single) continue;
-							Line l = line(booch, d, n, m, single, Math.max(tripleSeconds, 0), Math.max(singleSeconds, 0),
-									Math.max(donkeySeconds, 0), Math.max(doubleSeconds, 0));
-							if (l.points() >= needed) { (d > 0 ? donkey : plain).add(l); cleared = true; }
-						}
-					if (cleared && maxDoubles == 0 && n > 0) break;   // more triples only add time too
-				}
-			}
-		java.util.Comparator<Line> fastest = (a, b) -> a.seconds() != b.seconds() ? Integer.compare(a.seconds(), b.seconds())
-				: Integer.compare(b.points(), a.points());
-		plain.sort(fastest);
-		donkey.sort(fastest);
-		List<Line> out = new ArrayList<>();
-		if (!plain.isEmpty()) {
-			Line best = plain.get(0);
-			out.add(best);
-			for (Line l : plain) if (l.booch() != best.booch()) { out.add(l); break; }
-		}
-		if (!donkey.isEmpty()) out.add(donkey.get(0));
-		out.sort(fastest);
-		return out;
+		return options(needed, tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds, -1, -1);
 	}
 
 	/** Bingo works on the current board; Donkey and Vegas each include their own preceding Booch. */
@@ -183,8 +151,6 @@ final class DnavPlan {
 	 */
 	static List<Line> options(double needed, int tripleSeconds, int singleSeconds, int donkeySeconds,
 			int doubleSeconds, int bingoSeconds, int vegasSeconds, int boochSeconds, int cascadeSeconds) {
-		if (bingoSeconds <= 0 && vegasSeconds <= 0 && cascadeSeconds <= 0 && boochSeconds == BOOCH_SECONDS)
-			return options(needed, tripleSeconds, singleSeconds, donkeySeconds, doubleSeconds);
 		if (!Double.isFinite(needed) || needed <= 0) return List.of();
 		// In Move order; BOOCH (index 6) is never a move here.
 		int[] times = {singleSeconds, doubleSeconds, tripleSeconds, bingoSeconds, donkeySeconds, vegasSeconds, 0, cascadeSeconds};
@@ -194,18 +160,16 @@ final class DnavPlan {
 		Search start = new Search(START_BOARD, 0, 0, false, false, null, null);
 		queue.add(start);
 		if (boochSeconds > 0) queue.add(new Search(BOOCH_BOARD, 0, boochSeconds, true, false, start, Move.BOOCH));
-		Search[] best = new Search[3]; // plain, other Booch choice, and a line with Donkey/Vegas
-		while (!queue.isEmpty()) {
+		// The three fastest lines that differ in their moves (a cascade single counts as a single).
+		List<Search> best = new ArrayList<>();
+		java.util.Set<String> mixes = new java.util.HashSet<>();
+		while (!queue.isEmpty() && best.size() < LINES) {
 			Search current = queue.remove();
-			int category = current.special ? 2 : current.booch ? 1 : 0;
-			if (best[category] != null && current.seconds > best[category].seconds) continue;
 			SearchKey key = new SearchKey(current.board, current.points, current.booch, current.special);
 			Integer seen = fastest.get(key);
 			if (seen != null && seen < current.seconds) continue;
 			if (current.points >= needed) {
-				if (best[category] == null || current.seconds < best[category].seconds
-						|| current.seconds == best[category].seconds && current.points > best[category].points)
-					best[category] = current;
+				if (mixes.add(current.mix())) best.add(current);
 				continue;
 			}
 			for (Move move : Move.values()) {
@@ -223,14 +187,14 @@ final class DnavPlan {
 			}
 		}
 		List<Line> lines = new ArrayList<>();
-		for (Search result : best) if (result != null) lines.add(result.line());
+		for (Search result : best) lines.add(result.line());
 		lines.sort(java.util.Comparator.comparingInt(Line::seconds).thenComparing(
 				java.util.Comparator.comparingInt(Line::points).reversed()));
 		return List.copyOf(lines);
 	}
 
 	private enum Move {
-		SINGLE(1, TRIPLE_BOARD, "Single"), DOUBLE(2, BOOCH_BOARD, "Double"),
+		SINGLE(1, BOOCH_BOARD, "Single"), DOUBLE(2, BOOCH_BOARD, "Double"),
 		TRIPLE(3, TRIPLE_BOARD, "Triple"), BINGO(4, TRIPLE_BOARD, "Bingo"),
 		DONKEY(5, TRIPLE_BOARD, "Booch-donkey"), VEGAS(6, TRIPLE_BOARD, "Booch-Vegas"),
 		BOOCH(0, BOOCH_BOARD, "Booch"), CASCADE(1, BOOCH_BOARD, "Cascade single");
@@ -241,6 +205,13 @@ final class DnavPlan {
 
 	private record SearchKey(int board, int points, boolean booch, boolean special) { }
 	private record Search(int board, int points, int seconds, boolean booch, boolean special, Search previous, Move move) {
+		/** How many of each move, Booches aside, with a cascade single counted as a single. */
+		String mix() {
+			int[] counts = new int[Move.values().length];
+			for (Search node = this; node.previous != null; node = node.previous)
+				if (node.move != Move.BOOCH) counts[(node.move == Move.CASCADE ? Move.SINGLE : node.move).ordinal()]++;
+			return java.util.Arrays.toString(counts);
+		}
 		Line line() {
 			List<Search> path = new ArrayList<>();
 			for (Search node = this; node.previous != null; node = node.previous) path.add(node);
