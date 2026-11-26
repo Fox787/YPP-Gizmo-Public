@@ -9,11 +9,11 @@ class DnavForecastTest {
 	void takesTheWorstOrderOfTheMoonsAfterABooch() {
 		assertEquals(375.0, DnavForecast.navPoints(new int[]{0, 0, 1}));
 		assertEquals(894.0, DnavForecast.navPoints(new int[]{0, 0, 2}));
-		// A single right after each triple drops the board back to 125.
-		assertEquals(923.0, DnavForecast.navPoints(new int[]{1, 0, 2}));
-		assertEquals(1961.0, DnavForecast.navPoints(new int[]{1, 0, 4}));
+		// Two or more other moves: the worst order, each right after a triple.
+		assertEquals(1067.0, DnavForecast.navPoints(new int[]{1, 0, 2}), "a lone single comes last");
+		assertEquals(2105.0, DnavForecast.navPoints(new int[]{1, 0, 4}));
 		assertEquals(1990.0, DnavForecast.navPoints(new int[]{2, 0, 4}), "triple, single, triple, single, triple, triple");
-		assertEquals(1096.0, DnavForecast.navPoints(new int[]{0, 1, 2}));
+		assertEquals(1240.0, DnavForecast.navPoints(new int[]{0, 1, 2}));
 	}
 
 	@Test

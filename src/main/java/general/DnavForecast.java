@@ -71,8 +71,9 @@ public final class DnavForecast {
 	}
 
 	/**
-	 * The fewest werewolf points one navigator's moons [singles, doubles, triples] can be worth: the worst
-	 * order, still starting with a Booch (a 125 board). A triple scores 3 x the board and leaves 173; a
+	 * Werewolf points from one navigator's moons [singles, doubles, triples]. A lone single or double
+	 * comes after the triples; otherwise the fewest they can be worth: the worst order, still starting
+	 * with a Booch (a 125 board). A triple scores 3 x the board and leaves 173; a
 	 * double or single scores 2 x / 1 x and leaves 125. So 2 singles + 4 triples is worth at least
 	 * triple, single, triple, single, triple, triple = 1990.
 	 */
@@ -81,6 +82,9 @@ public final class DnavForecast {
 		int singles = Math.max(0, moons.length > 0 ? moons[0] : 0);
 		int doubles = Math.max(0, moons.length > 1 ? moons[1] : 0);
 		int triples = Math.max(0, moons.length > 2 ? moons[2] : 0);
+		// A lone single or double comes at the end: Booch, the triples, then it on the 173 board.
+		if (triples > 0 && singles + doubles == 1)
+			return 3 * POINTS_PER_SCORE + (3 * (triples - 1) + (singles == 1 ? 1 : 2)) * TRIPLE_STRATEGY_POINTS_PER_SCORE;
 		// worst[s][d][t][b]: least points from s singles, d doubles and t triples on board b (0 = 125, 1 = 173).
 		double[][][][] worst = new double[singles + 1][doubles + 1][triples + 1][2];
 		double[] board = {POINTS_PER_SCORE, TRIPLE_STRATEGY_POINTS_PER_SCORE};
