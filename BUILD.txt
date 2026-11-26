@@ -53,8 +53,12 @@ Every scanned CI, Den and Lair DR checks records automatically. Existing nonzero
 benchmarks alert live for screenshots. Missing/zero benchmarks keep only the best qualifying
 results until returning to the ship, with five seconds for the final report to settle. Rescans
 do not repeat those alerts. Automatic output contains record alerts, not an entry summary.
-Identical record alerts print once per session. Full submission text and JSON stay available
-under Options > Voyage records > Copy claims rather than being printed after each alert.
+Identical record alerts print once per session. A new record prints only the JSON list Puzzle
+Practice reads; the full message stays on Options > Voyage records > Copy claims. Held-back records
+show once the run is over: a Den when the lair is plundered or the crew is overrun, Cursed Isles on a
+lost fray or a retreat, a Lair when its chests are loaded.
+Dnav score/min counts the worst order of the moons after a Booch (125 board; a triple leaves 173,
+anything else 125), and a lone navigator gets at least the werewolves the chat says were turned back.
 Entry records are checked on return without needing Score All or a booty export; Lair entry
 checks still require all frays and matching three-tier haul evidence. Dnav and carpentry stay live.
 

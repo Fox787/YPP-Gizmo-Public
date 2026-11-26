@@ -65,30 +65,47 @@ public final class DnavForecast {
 	/** Each werewolf takes 200 points to turn back; a Dnav score point is worth 125, so 1.6 per werewolf. */
 	static final double POINTS_PER_WEREWOLF = 200, POINTS_PER_SCORE = DnavPlan.BOOCH_BOARD;
 	private static final double TRIPLE_STRATEGY_POINTS_PER_SCORE = DnavPlan.TRIPLE_BOARD;
-	private static final double STARTING_BOARD_POINTS_PER_SCORE = DnavPlan.START_BOARD;
 
 	public static int dnavNeeded(int werewolves) {
 		return (int) Math.ceil(werewolves * POINTS_PER_WEREWOLF / POINTS_PER_SCORE - 1e-9);
 	}
 
 	/**
-	 * Werewolf points from one navigator's moons [singles, doubles, triples] (score 1, 2, 3 each).
-	 * With at least one triple and at most one other combo, the first triple uses 125 points per
-	 * score and every other combo uses 173. Otherwise, one highest combo uses the starting
-	 * board's rate of 71 points per score and the rest use 125.
+	 * The fewest werewolf points one navigator's moons [singles, doubles, triples] can be worth: the worst
+	 * order, still starting with a Booch (a 125 board). A triple scores 3 x the board and leaves 173; a
+	 * double or single scores 2 x / 1 x and leaves 125. So 2 singles + 4 triples is worth at least
+	 * triple, single, triple, single, triple, triple = 1990.
 	 */
 	public static double navPoints(int[] moons) {
 		if (moons == null) return 0;
-		int singles = moons.length > 0 ? moons[0] : 0;
-		int doubles = moons.length > 1 ? moons[1] : 0;
-		int triples = moons.length > 2 ? moons[2] : 0;
-		double score = singles + 2.0 * doubles + 3.0 * triples;
-		if (triples > 0 && (long) singles + doubles <= 1) {
-			return 3 * POINTS_PER_SCORE + (score - 3) * TRIPLE_STRATEGY_POINTS_PER_SCORE;
-		}
+		int singles = Math.max(0, moons.length > 0 ? moons[0] : 0);
+		int doubles = Math.max(0, moons.length > 1 ? moons[1] : 0);
+		int triples = Math.max(0, moons.length > 2 ? moons[2] : 0);
+		// worst[s][d][t][b]: least points from s singles, d doubles and t triples on board b (0 = 125, 1 = 173).
+		double[][][][] worst = new double[singles + 1][doubles + 1][triples + 1][2];
+		double[] board = {POINTS_PER_SCORE, TRIPLE_STRATEGY_POINTS_PER_SCORE};
+		for (int s = 0; s <= singles; s++)
+			for (int d = 0; d <= doubles; d++)
+				for (int t = 0; t <= triples; t++)
+					for (int b = 0; b < 2; b++) {
+						if (s + d + t == 0) continue;
+						double best = Double.MAX_VALUE;
+						if (t > 0) best = Math.min(best, 3 * board[b] + worst[s][d][t - 1][1]);
+						if (d > 0) best = Math.min(best, 2 * board[b] + worst[s][d - 1][t][0]);
+						if (s > 0) best = Math.min(best, board[b] + worst[s - 1][d][t][0]);
+						worst[s][d][t][b] = best;
+					}
+		return worst[singles][doubles][triples][0];
+	}
 
-		int highestCombo = triples > 0 ? 3 : doubles > 0 ? 2 : singles > 0 ? 1 : 0;
-		return (score - highestCombo) * POINTS_PER_SCORE + highestCombo * STARTING_BOARD_POINTS_PER_SCORE;
+	/**
+	 * Least points a lone navigator charted when the chat said {@code shown} werewolves were left for
+	 * fray {@code fray}'s wave (0 after "turned back the last werewolf"). The wave is 200 x the pack x
+	 * its share; the count shown is what's left / 200 rounded, and the last one goes under 100 left.
+	 */
+	public static double waveFloor(int crew, int fray, int shown) {
+		double total = POINTS_PER_WEREWOLF * packRaw(crew, fray) * (0.4 + 0.1 * fray);
+		return Math.max(0, shown == 0 ? total - 100 : total - POINTS_PER_WEREWOLF * (shown + 0.5));
 	}
 
 	public static long stationsMs(int people, int deaths, int fray) {

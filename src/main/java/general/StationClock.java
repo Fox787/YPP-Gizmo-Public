@@ -232,6 +232,16 @@ public final class StationClock {
 		WolfProgress(int remaining, int atHalf, long changedAt) { this(remaining, atHalf, changedAt, -1); }
 	}
 
+	/**
+	 * Least Dnav points charted in this station period, from the werewolves the chat says were left for
+	 * the next wave; 0 if unknown, not the latest period, or the lair (no next wave).
+	 */
+	synchronized double navFloor(Period period) {
+		if (period == null || period.lair || wolvesLeft < 0 || periods.isEmpty()
+				|| periods.get(periods.size() - 1).start != period.start) return 0;
+		return DnavForecast.waveFloor(Math.max(crew, period.crew), frayNumber(), wolvesLeft);
+	}
+
 	synchronized WolfProgress wolfProgress(Period period) {
 		if (period == null || periods.isEmpty() || periods.get(periods.size() - 1).start != period.start) return null;
 		return new WolfProgress(wolvesLeft, wolvesAtHalf, wolvesChangedAt, wolvesAtStart);
