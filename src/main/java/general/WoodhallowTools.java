@@ -64,6 +64,7 @@ final class WoodhallowTools {
 	/** Master switch for all score-per-minute work (timing, rates in run files, dr_ratings.jsonl, /ve rates). */
 	private final JCheckBox checkBoxScorePerMinute;
 	boolean scorePerMinute() { return checkBoxScorePerMinute.isSelected(); }
+	void onScorePerMinuteChanged(Runnable update) { checkBoxScorePerMinute.addItemListener(event -> update.run()); }
 	private JPanel panelDnav, panelRumble, ahoyRow, ahoyButtons;
 	private JLabel labelWolvesLeft, labelRumble, labelRumbleShorthand;
 	private JTextArea labelStrategy;
@@ -100,11 +101,11 @@ final class WoodhallowTools {
 		activityTracker = tracker;
 
 		checkBoxScorePerMinute = option(woodhallow, prefs, "Score/min", "scoreperminute", true);
-		checkBoxScorePerMinute.setToolTipText("Time Woodhallow duty reports from the chat log and your own game log."
-				+ " Select Score/min in Scan format to add rates to each pirate's row.");
+		HoverText.set(checkBoxScorePerMinute, "Calculate Woodhallow scores per minute.");
 		checkBoxClearSound = option(woodhallow, prefs, "Last wolf sound", "clearsound", true);
+		HoverText.set(checkBoxClearSound, "Play a sound when the last wolf is cleared");
 		checkBoxExtendedDnav = option(woodhallow, prefs, "Dnav strategies", "extendeddnav", false);
-		checkBoxExtendedDnav.setToolTipText("Show the fastest solo lines under Next Dnav using the move times below. Blank times leave a move out.");
+		HoverText.set(checkBoxExtendedDnav, "Show the fastest ways for a solo navigator to clear the wave");
 		JPanel times = new JPanel();
 		times.setLayout(new BoxLayout(times, BoxLayout.Y_AXIS));
 		times.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -114,6 +115,9 @@ final class WoodhallowTools {
 				"<html>Time to Booch before a strategy or a Donkey/Vegas. Default 9 s. Leave blank to exclude Booches.</html>");
 		addSeconds(times, prefs, "Single time (s)", "dnavsinglesec", "12", v -> singleSeconds = v,
 				"<html>How long a single takes at the very end of a solo line. Leave blank to plan without it.</html>");
+		addSeconds(times, prefs, "Cascade single time (s)", "dnavcascadesec", "", v -> cascadeSeconds = v,
+				"<html>How long a single takes when you set the board up to keep playing (1 x the board, leaves 125).<br>"
+				+ "Unlike the finishing single it can go anywhere in a line. Leave blank to plan without it.</html>");
 		addSeconds(times, prefs, "Double time (s)", "dnavdoublesec", "", v -> doubleSeconds = v,
 				"<html>How long you take to build a double (2 x the board). Leave blank to plan without doubles.</html>");
 		addSeconds(times, prefs, "Triple time (s)", "dnavtriplesec", "40", v -> tripleSeconds = v,
@@ -129,14 +133,16 @@ final class WoodhallowTools {
 		OptionsPanel.showWhenSelected(checkBoxExtendedDnav, times);
 
 		checkBoxRumbleBoard = option(rumble, prefs, "Rumble board", "rumbleboard", true);
+		HoverText.set(checkBoxRumbleBoard, "Open the Rumble tab automatically during fights to show punch sizes and recommended charge groups.");
 		checkBoxRumbleShorthand = option(rumble, prefs, "Rumble shorthand", "rumbleshorthand", true);
+		HoverText.set(checkBoxRumbleShorthand, "Show the recommended charge-group range beside the rumble timer.\nAt Woodhallow, the white number is the groups needed to insta a white-name werewolf.");
 		checkBoxRumbleSound = option(rumble, prefs, "55s warning", "rumblesound", true);
-		checkBoxRumbleSound.setToolTipText("Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
+		HoverText.set(checkBoxRumbleSound, "Any rumble: a warning sound 5 seconds before each minute, in case you want to save your punch");
 
 		comboTimerPlace = timerPlace(sounds, prefs);
 		addWarningMatrix(sounds, prefs);
 		checkBoxPlankSound = option(sounds, prefs, "CI: Plank reminder", "planksound", true);
-		checkBoxPlankSound.setToolTipText("\"Plank swabbie\" every few seconds after the forage while more pirates and mercs are aboard than the next fray takes");
+		HoverText.set(checkBoxPlankSound, "Repeat the spoken \"Plank swabbie\" reminder after forage while surplus mercs remain aboard.");
 		// Chat log: mercs and pirates leaving the vessel, for the plank check.
 		clock.setOnLiveMessage(message -> {
 			rumbleClock.plank().chat(message);
@@ -174,18 +180,22 @@ final class WoodhallowTools {
 	 */
 	private void updateScanRow(long now, long elapsed, long forageLeft, int toPlank, boolean plankAlert) {
 		String left = " ", right = " ";
+		String leftTip = null, rightTip = null;
 		Color leftColor = labelWolvesLeftColor, rightColor = labelWolvesLeftColor;
 		long lairLeft = stationClock.lairTimerEnd() - now;
 		if (!timersBottom()) {
 			// Nothing.
 		} else if (plankAlert) {
 			left = plankText(toPlank);
+			leftTip = "Surplus mercs still aboard for the next CI fray.";
 			leftColor = WARNING_RED;
 		} else if (elapsed >= 0) {
+			leftTip = labelRumble.getToolTipText();
 			long s = elapsed / 1000;
 			left = clock(s);
 			if (s % 60 >= 55) leftColor = WARNING_RED;
 			if (checkBoxRumbleShorthand.isSelected()) {
+				rightTip = labelRumbleShorthand.getToolTipText();
 				int minute = (int) (elapsed / 60_000);
 				boolean maxDamage = stationClock.inDen() && stationClock.elitesLeft() == 0;
 				// Woodhallow: the groups for an insta on a white name, then the range; elsewhere the range.
@@ -193,15 +203,21 @@ final class WoodhallowTools {
 						: "(" + RumbleBoard.shorthand(minute, maxDamage) + ")";
 			}
 		} else if (forageLeft >= 0) {
+			leftTip = rightTip = stationClock.inDen()
+					? "Time left on Woodhallow stations; red in the last 30 seconds."
+					: "Time left to forage; red in the last 30 seconds.";
 			// Its own option: the forage timer option is the bar above the tabs.
 			left = clock((forageLeft + 999) / 1000);
 			if (forageLeft <= FORAGE_WARNING_MS) leftColor = WARNING_RED;
 			right = FORAGE_LABEL;
 		} else if (lairRoundOn(lairLeft)) {
+			leftTip = rightTip = "Time left in the Carpentry/Treasure Haul round; red in the last 15 seconds.";
 			left = clock((lairLeft + 999) / 1000);
 			if (lairLeft <= LAIR_WARNING_MS) leftColor = WARNING_RED;
 			right = LAIR_ROUND_LABEL;
 		} else if (dnavEnds > now) {
+			leftTip = "Time left on Woodhallow stations.";
+			rightTip = labelWolvesLeft.getToolTipText();
 			left = clock((dnavEnds - now + 999) / 1000);
 			right = labelWolvesLeft.getText();
 			rightColor = labelWolvesLeft.getForeground();
@@ -210,6 +226,8 @@ final class WoodhallowTools {
 		scanTimer.setForeground(leftColor);
 		if (!right.equals(scanShorthand.getText())) scanShorthand.setText(right);
 		scanShorthand.setForeground(rightColor);
+		HoverText.set(scanTimer, leftTip);
+		HoverText.set(scanShorthand, rightTip);
 	}
 
 	static final String FORAGE_LABEL = "Forage", LAIR_ROUND_LABEL = "Haul";
@@ -232,7 +250,7 @@ final class WoodhallowTools {
 		String saved = prefs.get("timerplace", TIMERS_TOP);
 		place.setSelectedItem(List.of(TIMERS_TOP, TIMERS_BOTTOM, TIMERS_BOTH).contains(saved) ? saved : TIMERS_TOP);
 		place.addActionListener(ev -> prefs.put("timerplace", (String) place.getSelectedItem()));
-		place.setToolTipText("<html>Rumble, forage, Woodhallow station and vampire lair carpentry/treasure haul timers:<br>"
+		HoverText.set(place, "<html>Rumble, forage, Woodhallow station and vampire lair carpentry/treasure haul timers:<br>"
 				+ "top is a bar above the tabs, bottom is beside the Scan button</html>");
 		place.setMaximumSize(place.getPreferredSize());
 		JPanel row = new JPanel();
@@ -256,7 +274,7 @@ final class WoodhallowTools {
 
 	/** Seconds for each move in the solo line (DnavPlan); -1 = left blank, so that move isn't used. */
 	private volatile int boochSeconds = 9, tripleSeconds = 40, doubleSeconds = -1, singleSeconds = 12, donkeySeconds = 51,
-			bingoSeconds = -1, vegasSeconds = -1;
+			bingoSeconds = -1, vegasSeconds = -1, cascadeSeconds = -1;
 
 	/**
 	 * Time-left warnings: a 30 s and a 15 s box per activity, each its own setting. Ticking both warns
@@ -275,9 +293,9 @@ final class WoodhallowTools {
 		c.gridx = 2;
 		grid.add(new JLabel("15 s"), c);
 		String[] when = {
-				"Woodhallow: %s s before stations end (from the chat's \"30 seconds!\" line)",
-				"Cursed Isles: %s s left to forage",
-				"Vampire Lair: %s s left of the round" };
+				"Sound with %s seconds left on Woodhallow stations, using the game countdown or chat timing.",
+				"Sound with %s seconds left to forage in Cursed Isles.",
+				"Sound with %s seconds left in the Vampire Lair Carpentry/Treasure Haul round." };
 		for (TimeLeftWarnings.Activity activity : TimeLeftWarnings.Activity.values()) {
 			int row = activity.ordinal();
 			c.gridy = row + 1;
@@ -287,7 +305,9 @@ final class WoodhallowTools {
 				String key = col == 0 ? activity.key30 : activity.key15;
 				boolean on = prefs.getBoolean(key, col == 0 ? activity.default30 : activity.default15);
 				JCheckBox box = new JCheckBox((String) null, on);
-				box.setToolTipText(String.format(when[row], col == 0 ? "30" : "15"));
+				HoverText.set(box, String.format(when[row], col == 0 ? "30" : "15")
+						+ " Select both times to hear two warnings.");
+				box.getAccessibleContext().setAccessibleName(activity.label + ", " + (col == 0 ? "30" : "15") + " second warning");
 				box.addActionListener(ev -> prefs.putBoolean(key, box.isSelected()));
 				c.gridx = col + 1;
 				grid.add(box, c);
@@ -303,7 +323,7 @@ final class WoodhallowTools {
 								   java.util.function.IntConsumer apply, String tip) {
 		JTextField field = new JTextField(prefs.get(key, defaultValue).trim(), 4);
 		field.setHorizontalAlignment(JTextField.RIGHT);
-		field.setToolTipText(tip);
+		HoverText.set(field, tip);
 		Runnable read = () -> {
 			String text = field.getText().trim();
 			int v = -1;
@@ -319,7 +339,7 @@ final class WoodhallowTools {
 		});
 		JLabel name = new JLabel(label);
 		name.setLabelFor(field);
-		name.setToolTipText(tip);
+		HoverText.set(name, tip);
 		JPanel row = new JPanel(new BorderLayout(6, 0));
 		row.setAlignmentX(Component.LEFT_ALIGNMENT);
 		row.add(name, BorderLayout.CENTER);
@@ -329,7 +349,7 @@ final class WoodhallowTools {
 	}
 
 	/** The solo lines for the Dnav before {@code fray}, fastest first (moves with a blank time left out). */
-	private record PlanSettings(int crew, int fray, int booch, int single, int doubles, int triple, int bingo, int donkey, int vegas) { }
+	private record PlanSettings(int crew, int fray, int booch, int single, int doubles, int triple, int bingo, int donkey, int vegas, int cascade) { }
 	private PlanSettings lastPlanSettings;
 	private List<DnavPlan.Line> lastPlan = List.of();
 
@@ -337,10 +357,10 @@ final class WoodhallowTools {
 		int crew = stationClock.crew();
 		if (crew <= 0 || fray < 2 || fray > 6) return List.of();
 		PlanSettings settings = new PlanSettings(crew, fray, boochSeconds, singleSeconds, doubleSeconds, tripleSeconds,
-				bingoSeconds, donkeySeconds, vegasSeconds);
+				bingoSeconds, donkeySeconds, vegasSeconds, cascadeSeconds);
 		if (!settings.equals(lastPlanSettings)) {
 			lastPlan = DnavPlan.options(DnavPlan.needed(crew, fray), tripleSeconds, singleSeconds, donkeySeconds,
-					doubleSeconds, bingoSeconds, vegasSeconds, boochSeconds);
+					doubleSeconds, bingoSeconds, vegasSeconds, boochSeconds, cascadeSeconds);
 			lastPlanSettings = settings;
 		}
 		return lastPlan;
@@ -351,7 +371,7 @@ final class WoodhallowTools {
 		JLabel label = new JLabel("Volume " + Sounds.volume() + "%");
 		JSlider slider = new JSlider(0, 100, Sounds.volume());
 		label.setLabelFor(slider);
-		slider.setToolTipText("Gizmo sound volume. Plays a sample after adjustment.");
+		HoverText.set(slider, "Gizmo sound volume. Plays a sample after adjustment.");
 		slider.addChangeListener(ev -> {
 			Sounds.setVolume(slider.getValue());
 			label.setText("Volume " + slider.getValue() + "%");
@@ -407,6 +427,9 @@ final class WoodhallowTools {
 		return rumbleClock.scene().activity(now, stationClock.lastArrival("vampireLairs"));
 	}
 
+	long recordArrival(String activity) { return rumbleClock.scene().enteredAt(activity); }
+	long recordRunEnd(String activity, long arrival) { return rumbleClock.scene().leftAt(activity, arrival); }
+
 	/** When the client last showed a duty report no new game followed (game log), 0 if none. For auto scan. */
 	long lastFinalReport() { return rumbleClock.lastFinalReport(); }
 
@@ -426,7 +449,7 @@ final class WoodhallowTools {
 				BorderFactory.createEmptyBorder(0, 3, 2, 3)));
 		panelDnav.setVisible(false);
 		labelWolvesLeft = new JLabel(" ");
-		labelWolvesLeft.setToolTipText("Choose the wolf count source under Options > Woodhallow & Rumble");
+		HoverText.set(labelWolvesLeft, "Wolves still to turn back. The signed time estimates how much station time will remain when they clear.\nRed means the current pace is too slow; ~ marks an unconfirmed starting count.\nCounts use the island scene, visible Ahoy text and chat.");
 		Font dnavFont = labelWolvesLeft.getFont();
 		// Sized from the window's font, like the Rumble tab (about 20 and 15 pt at the usual 12-13 pt).
 		labelWolvesLeft.setFont(dnavFont.deriveFont(Font.BOLD, dnavFont.getSize2D() * 1.6f));
@@ -441,6 +464,7 @@ final class WoodhallowTools {
 			}
 		};
 		labelStrategy.setEditable(false);
+		HoverText.set(labelStrategy, "Solo plans for this wave using the move times under Options > Woodhallow. Each time is the estimated duration of the whole plan.");
 		labelStrategy.setFocusable(false);
 		labelStrategy.setLineWrap(true);
 		labelStrategy.setWrapStyleWord(true);
@@ -468,7 +492,7 @@ final class WoodhallowTools {
 		ahoyRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel ahoyLabel = new JLabel("Starting wolves: ");
 		ahoyLabel.setForeground(Color.WHITE);
-		ahoyLabel.setToolTipText("Click the starting werewolf count the Ahoy tab shows, for the pace estimate");
+		HoverText.set(ahoyLabel, "Click the starting werewolf count the Ahoy tab shows, for the pace estimate");
 		ahoyRow.add(ahoyLabel);
 		ahoyButtons = new JPanel();
 		ahoyButtons.setLayout(new BoxLayout(ahoyButtons, BoxLayout.X_AXIS));
@@ -543,7 +567,7 @@ final class WoodhallowTools {
 		for (int count : choices) {
 			JToggleButton button = new JToggleButton(String.valueOf(count), count == manualStartingWolves);
 			button.setMargin(new Insets(1, 8, 1, 8));
-			button.setToolTipText("Confirm the starting count for the pace estimate");
+			HoverText.set(button, "Choose this if Ahoy showed " + count + " werewolves when stations opened. This confirms the starting count for the pace estimate.");
 			button.addActionListener(ev -> manualStartingWolves = count);
 			group.add(button);
 			ahoyButtons.add(button);
@@ -585,10 +609,10 @@ final class WoodhallowTools {
 		Font timerFont = baseFont.deriveFont(Font.BOLD, baseFont.getSize2D() * 2.2f);
 		// Timer on the left and the shorthand (recommended groups) on the right, both big, one line.
 		labelRumble.setFont(timerFont);
-		labelRumble.setToolTipText("Time into the rumble; red in the last 5 seconds before the punch sizes change");
+		HoverText.set(labelRumble, "Time into the rumble; red in the last 5 seconds before the punch sizes change");
 		labelRumbleShorthand = new JLabel(" ");
 		labelRumbleShorthand.setFont(bigFont);
-		labelRumbleShorthand.setToolTipText("<html>Groups to charge this minute: the recommended range,<br>at Woodhallow after the groups for an insta on a white name (in white)</html>");
+		HoverText.set(labelRumbleShorthand, "<html>Groups to charge this minute: the recommended range,<br>at Woodhallow after the groups for an insta on a white name (in white)</html>");
 		shorthandColor = labelRumbleShorthand.getForeground();
 		// The Rumble tab is the board; the timer and shorthand go in the timer bar above the tabs.
 		rumbleBoard = new RumbleBoard();
@@ -726,7 +750,7 @@ final class WoodhallowTools {
 			forageBar.removeAll();
 			forageBar.add(rumble ? labelRumble : labelForage, BorderLayout.WEST);
 			forageBar.add(rumble ? labelRumbleShorthand : labelForageDetail, BorderLayout.EAST);
-			forageBar.setToolTipText(null);
+			HoverText.set(forageBar, null);
 			forageBar.revalidate();
 			forageBar.repaint();
 		}
@@ -755,13 +779,15 @@ final class WoodhallowTools {
 			time = clock((forageLeft + 999) / 1000);
 			detail = lairRound ? LAIR_ROUND_LABEL : FORAGE_LABEL;
 			tip = lairRound ? "Time left in the carpentry/treasure haul round; red in the last 15 seconds"
+					: stationClock.inDen() ? "Time left on Woodhallow stations; red in the last 30 seconds"
 					: "Time left to forage; red in the last 30 seconds";
 			red = forageLeft <= (lairRound ? LAIR_WARNING_MS : FORAGE_WARNING_MS);
 		}
 		if (!time.equals(labelForage.getText())) labelForage.setText(time);
 		if (!detail.equals(labelForageDetail.getText())) labelForageDetail.setText(detail);
-		forageBar.setToolTipText(tip);
-		labelForage.setToolTipText(tip);
+		HoverText.set(forageBar, tip);
+		HoverText.set(labelForage, tip);
+		HoverText.set(labelForageDetail, tip);
 		labelForage.setForeground(red ? FORAGE_RED : labelWolvesLeftColor);
 		labelForageDetail.setForeground(plankAlert ? FORAGE_RED : shorthandColor);
 	}

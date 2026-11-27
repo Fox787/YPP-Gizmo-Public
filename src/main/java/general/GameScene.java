@@ -33,6 +33,8 @@ final class GameScene {
 	private volatile String sceneClass;        // simple class name of the scene the client is in, or null
 	private volatile String leftActivity;      // the last activity scene left
 	private volatile long leftAt, changedAt;   // game log times (ms), 0 if none seen
+	private volatile long enteredAt;
+	private volatile String enteredActivity;
 
 	/** RecordChecker.DEN / CI / LAIR for a scene class's simple name; null for any other scene. */
 	static String activityOf(String sceneClass) {
@@ -51,6 +53,7 @@ final class GameScene {
 		if (enter.find()) {
 			sceneClass = enter.group(1);
 			activity = activityOf(sceneClass);
+			if (activity != null) { enteredAt = at; enteredActivity = activity; }
 			changedAt = at;
 			return;
 		}
@@ -82,6 +85,15 @@ final class GameScene {
 
 	/** When the game log last showed a scene change (ms), 0 if none since Gizmo started reading it. */
 	long changedAt() { return changedAt; }
+
+	long enteredAt(String wanted) { return wanted.equals(enteredActivity) ? enteredAt : 0; }
+
+	/** Unlike activity(), this does not keep the departed activity alive during the report grace period. */
+	long leftAt(String wanted, long arrival) {
+		if (wanted.equals(leftActivity) && leftAt >= arrival) return leftAt;
+		return RecordChecker.LAIR.equals(wanted) && arrival > 0 && changedAt > arrival + ARRIVAL_SLACK_MS
+				&& !wanted.equals(activity) ? changedAt : 0;
+	}
 
 	/**
 	 * The activity to tag a report with: the game log's scene first, then a Lair arrival from chat that

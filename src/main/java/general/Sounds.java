@@ -117,7 +117,7 @@ public final class Sounds {
 	/** The bundled sound at the current volume as a WAV file in the temp folder (cached), or null. */
 	private static Path scaledFile(String name) {
 		try {
-			Path dir = Path.of(System.getProperty("java.io.tmpdir"), "Gizmo-sounds");
+			Path dir = GameLog.temporaryFolder("Gizmo-sounds");
 			Files.createDirectories(dir);
 			int vol = volume;
 			Path wav = dir.resolve(name.replace(".wav", "-" + vol + ".wav"));
@@ -183,7 +183,7 @@ public final class Sounds {
 			playerPid = 0;
 			try {
 				long owner = ProcessHandle.current().pid();
-				Path dir = Path.of(System.getProperty("java.io.tmpdir"), "Gizmo-sounds", "player-" + owner);
+				Path dir = GameLog.temporaryFolder("Gizmo-sounds").resolve("player-" + owner);
 				Files.createDirectories(dir);
 				try (var old = Files.list(dir)) {
 					for (Path f : (Iterable<Path>) old::iterator) Files.deleteIfExists(f);

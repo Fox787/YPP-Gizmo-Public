@@ -40,7 +40,7 @@ final class HomunculusCounter extends JPanel {
 			button.setMaximumSize(size);
 			actions.add(button);
 		}
-		copy.setToolTipText("Copy drop-colour totals as /ve text");
+		HoverText.set(copy, "Copy drop-colour totals as /ve text");
 		copy.addActionListener(event -> copy(null));
 		reset.addActionListener(event -> reset());
 		actions.setMaximumSize(actions.getPreferredSize());
@@ -55,7 +55,7 @@ final class HomunculusCounter extends JPanel {
 			button.setForeground(TEXT);
 			button.setOpaque(true);
 			button.setContentAreaFilled(true);
-			button.setToolTipText(SWORDS[i] + " sword → " + DROPS[i].toLowerCase() + " drops. Click +1; right-click −1; middle-click copies target.");
+			HoverText.set(button, SWORDS[i] + " sword → " + DROPS[i].toLowerCase() + " drops. Click +1; right-click −1; middle-click copies target.");
 			button.addActionListener(event -> adjust(index, 1));
 			button.addMouseListener(new MouseAdapter() {
 				@Override public void mousePressed(MouseEvent event) {
@@ -70,7 +70,6 @@ final class HomunculusCounter extends JPanel {
 		totals.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (String colour : new String[]{"Blue", "Green", "Red", "Yellow"}) {
 			JLabel label = new JLabel("", SwingConstants.CENTER);
-			label.setToolTipText(colour + " drop-colour total");
 			drops.put(colour, label);
 			totals.add(label);
 		}

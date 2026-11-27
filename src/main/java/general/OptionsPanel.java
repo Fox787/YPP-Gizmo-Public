@@ -35,6 +35,10 @@ final class OptionsPanel extends JPanel {
 		return section(sections, title, "options." + key + ".expanded", initiallyOpen);
 	}
 
+	JPanel section(String title, String key, boolean initiallyOpen, String help) {
+		return section(sections, title, "options." + key + ".expanded", initiallyOpen, help);
+	}
+
 	/** Hide dependent controls without changing their saved values; also follows settings loaded in code. */
 	static void showWhenSelected(AbstractButton toggle, JComponent... controls) {
 		Runnable update = () -> {
@@ -63,12 +67,17 @@ final class OptionsPanel extends JPanel {
 	}
 
 	JPanel section(JPanel parent, String title, String preference, boolean initiallyOpen) {
+		return section(parent, title, preference, initiallyOpen, null);
+	}
+
+	JPanel section(JPanel parent, String title, String preference, boolean initiallyOpen, String help) {
 		JPanel card = new JPanel(new BorderLayout());
 		card.setAlignmentX(LEFT_ALIGNMENT);
 		card.setBorder(BorderFactory.createLineBorder(outlineColor));
 
 		boolean open = prefs.getBoolean(preference, initiallyOpen);
 		JToggleButton header = new JToggleButton(title, new DisclosureIcon(false), open);
+		HoverText.set(header, help);
 		header.setSelectedIcon(new DisclosureIcon(true));
 		header.setHorizontalAlignment(SwingConstants.LEADING);
 		header.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));

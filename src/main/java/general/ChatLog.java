@@ -69,10 +69,65 @@ public final class ChatLog {
 		int crewSize;
 		final TreeSet<String> pirates = new TreeSet<>();
 		private boolean returned;
+		/** The activity is over (no more duty reports), and its chests are all aboard. See observe. */
+		private boolean over, finished, lost;
+		/** When the crew last won a fray (ms): Cursed Isles loads each forage's chests right after one. */
+		private long wonAt = Long.MIN_VALUE / 2;
 
 		/** A booty recipient need not have entered this run. Require the run's own crew evidence. */
 		List<String> recordCrew() {
 			return crewSize > 0 && pirates.size() == crewSize ? List.copyOf(pirates) : List.of();
+		}
+
+		boolean returned() { return returned; }
+		boolean over() { return over; }
+		boolean finished() { return finished; }
+
+		Run copy() {
+			Run copy = new Run();
+			copy.voyage = voyage;
+			copy.arrivedAt = arrivedAt;
+			copy.crewSize = crewSize;
+			copy.pirates.addAll(pirates);
+			System.arraycopy(tiers, 0, copy.tiers, 0, tiers.length);
+			copy.returned = returned;
+			copy.over = over;
+			copy.finished = finished;
+			copy.lost = lost;
+			copy.wonAt = wonAt;
+			return copy;
+		}
+
+		/**
+		 * Live equivalent of the booty parser: keep crew evidence until the chests reach the ship. Also
+		 * notes when the activity is over: a Den when the lair is plundered or the pack overruns the crew,
+		 * Cursed Isles when a fray is lost or the crew retreats (chests loaded with no fray won just before),
+		 * a Vampire Lair when its chests are loaded.
+		 */
+		void observe(String message, long now) {
+			observeCrew(message);
+			// The chat log wraps a long winners list onto lines Gizmo doesn't read, so don't need the full stop.
+			if (message.startsWith("Game over.  Winners: ")) {
+				for (String name : message.substring(21).split(","))
+					if (PIRATE_NAME.matcher(name.trim().replaceAll("\\.$", "")).matches()) { wonAt = now; break; }
+				return;
+			}
+			if (RECLAIMED.matcher(message).matches() || message.startsWith("The defeat cost ye ")) {
+				lost = over = true;
+				return;
+			}
+			if (message.startsWith("The lair be plundered!") || message.startsWith("The pack has overrun the crew!")) {
+				over = true;
+				return;
+			}
+			Matcher taken = TAKEN_ABOARD.matcher(message);
+			if (!taken.matches()) return;
+			Cargo cargo = namedCargo(taken.group(2));
+			if (cargo != null && cargo.voyage().equals(voyage)) {
+				tiers[cargo.tier()] += parseInt(taken.group(1));
+				returned = true;
+				if (!"cursedIsles".equals(voyage) || lost || now - wonAt > 5_000) over = finished = true;
+			}
 		}
 
 		private void observeCrew(String message) {

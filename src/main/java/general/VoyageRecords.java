@@ -55,7 +55,8 @@ public final class VoyageRecords {
 	}
 
 	VoyageRecords(Path folder) {
-		this.folder = folder;
+		this.folder = GameLog.safeOutputFolder(folder);
+		folder = this.folder;
 		List<Record> cached = new ArrayList<>();
 		long loadedAt = 0;
 		String[] names = Files.exists(folder.resolve(RECORDS)) ? new String[]{RECORDS} : new String[]{KNOWN, SHEET};
@@ -153,6 +154,7 @@ public final class VoyageRecords {
 					&& (policy == RefreshPolicy.REPLACE_MANUAL || policy == RefreshPolicy.KEEP_HIGHER && replacement.incomingIsHigher());
 			if (!replace) retained.add(r);
 		}
+		GameLog.requireOutputPath(folder);
 		Files.createDirectories(folder);
 		writeCache(folder.resolve(RECORDS), download.contents());
 		if (retained.size() != manual.size()) writeManualRecords(retained);
@@ -224,11 +226,13 @@ public final class VoyageRecords {
 			json.append(']').append(scoresField(r.pirateScores)).append('}');
 		}
 		json.append(']');
+		GameLog.requireOutputPath(folder);
 		Files.createDirectories(folder);
 		writeCache(folder.resolve(MANUAL), json.toString().getBytes(StandardCharsets.UTF_8));
 	}
 
 	private static void writeCache(Path path, byte[] contents) throws IOException {
+		GameLog.requireOutputPath(path);
 		Path temp = Files.createTempFile(path.getParent(), path.getFileName().toString(), ".tmp");
 		try {
 			Files.write(temp, contents);
@@ -265,6 +269,7 @@ public final class VoyageRecords {
 			{"cursedIsles", "Most cursed chests in one entry, one pirate", "chests", "1"},
 			{"cursedIsles", "Best score in one entry, one pirate", "score", "1"},
 			{"vampireLairs", "Most Immortal Chests in one DR, one pirate", "drChests", "1"},
+			{"vampireLairs", "Most 🎁 in one entry, one pirate", "drScore", "1"},
 			{"vampireLairs", "Best carpentry score", "carpScore", "1"},
 			{"vampireLairs", "Most carpentry holes", "carpHoles", "1"},
 			{"vampireLairs", "Most vampire proof", "vampireProof", "1"}};
@@ -349,7 +354,13 @@ public final class VoyageRecords {
 
 	static String recordLabel(Record record) {
 		String category = record.category != null ? record.category : describe(record.voyage, record.kind, record.crewSize);
+		category = displayCategory(record.voyage, category);
 		return category + (record.notes == null || record.notes.isBlank() ? "" : " — " + record.notes);
+	}
+
+	private static String displayCategory(String voyage, String category) {
+		return "vampireLairs".equals(voyage) && "Most 🎁 in one entry, one pirate".equals(category)
+				? "Most chests in one DR, one pirate" : category;
 	}
 
 	static String recordScope(Record record) {
@@ -389,6 +400,7 @@ public final class VoyageRecords {
 	static String describe(String voyage, String kind, int crewSize) {
 		if (crewSize > 0) return describe(voyage, kind);
 		String c = categoryFor(voyage, kind, 0);
+		if (c != null) c = displayCategory(voyage, c);
 		return c != null ? c.substring(0, 1).toLowerCase() + c.substring(1) : describe(voyage, kind) + ", one pirate";
 	}
 
@@ -412,18 +424,38 @@ public final class VoyageRecords {
 		return compare(voyage, ocean, crewSize, kind, value, time, pirates, loot, Map.of());
 	}
 
+	/** Each alert line compare returned, as a short line to paste to the crew (see shipLine). */
+	private final Map<String, String> shipLines = new java.util.HashMap<>();
+
+	/** The short version of an alert line from compare, e.g. "We beat the record for ...: 156 (beats 150)". */
+	synchronized String shipLine(String line) { return shipLines.getOrDefault(line, line); }
+
 	synchronized String compare(String voyage, String ocean, int crewSize, String kind, int value,
 	                            String time, List<String> pirates, int[] loot, Map<String, int[]> pirateLoot) {
 		if (voyage == null || ocean == null || !supportedCrewSize(voyage, crewSize) || value <= 0 || size() == 0) return "";
 		String what = voyageName(voyage) + ", " + (crewSize > 0 ? crewSize + " pirates, " + describe(voyage, kind)
 				: (pirates != null && pirates.size() == 1 ? pirates.get(0) + ", " : "") + describe(voyage, kind, 0));
 		Record r = get(voyage, ocean, crewSize, kind);
+		// The short line to paste to the crew: they know the voyage and who's aboard.
+		String who = crewSize == 0 && pirates != null && pirates.size() == 1 ? pirates.get(0) : "We";
+		String record = (crewSize > 0 ? crewSize + "-pirate " : "") + "record for "
+				+ (crewSize > 0 ? describe(voyage, kind) : describe(voyage, kind, 0).replaceFirst(",? one pirate$", "")) + ": " + value;
 		String line;
-		if (r == null) line = String.format("New record? %s: %d (there is no %s record yet, so this would be the first)", what, value,
-				crewSize > 0 ? crewSize + "-pirate" : "one-pirate");
-		else if (r.value <= 0 && r.valueText != null) return "";
-		else if (value > r.value) line = String.format("New record! %s: %d beats %d (%s, %s)", what, value, r.value, r.date, String.join(", ", r.pirates));
-		else if (value == r.value) return String.format("Record tied: %s: %d (%s, %s)", what, value, r.date, String.join(", ", r.pirates));
+		if (r == null) {
+			line = String.format("New record? %s: %d (there is no %s record yet, so this would be the first)", what, value,
+					crewSize > 0 ? crewSize + "-pirate" : "one-pirate");
+			shipLines.put(line, who + " set the first " + record);
+		}
+		else if (r.value <= 0 && r.valueText != null && !r.valueText.trim().matches("\\d+")) return "";
+		else if (value > r.value) {
+			line = String.format("New record! %s: %d beats %d (%s, %s)", what, value, r.value, r.date, String.join(", ", r.pirates));
+			shipLines.put(line, who + " beat the " + record + " (beats " + r.value + ")");
+		}
+		else if (value == r.value) {
+			line = String.format("Record tied: %s: %d (%s, %s)", what, value, r.date, String.join(", ", r.pirates));
+			shipLines.put(line, who + " tied the " + record);
+			return line;
+		}
 		else return "";
 		if (crewSize <= maxSentCrew(voyage)) {
 			List<Integer> scores = contributions(voyage, crewSize, kind, value, pirates, pirateLoot);
@@ -492,6 +524,7 @@ public final class VoyageRecords {
 				value, q(date), q(time), p, loot[0], loot[1], loot[2], scoresField(scores));
 		try {
 			Path f = claimsFile();
+			GameLog.requireOutputPath(f);
 			if (Files.exists(f) && new String(Files.readAllBytes(f), StandardCharsets.UTF_8).contains(line)) return;   // already kept
 			Files.createDirectories(f.getParent());
 			Files.write(f, (line + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
@@ -523,6 +556,24 @@ public final class VoyageRecords {
 	 * pirateScores biggest first, loot). Null if none. Only the best claim for each record is sent.
 	 */
 	public synchronized String claimMessage() {
+		Claims claims = claims();
+		if (claims == null) return null;
+		int i = claims.count();
+		return (i == 1 ? "Hi Jice, I've beaten a voyage record on Puzzle Practice:" : "Hi Jice, I've beaten " + i + " voyage records on Puzzle Practice:")
+				+ "\n" + claims.text() + "\n"
+				+ "I'll send a picture, image or video of " + (i == 1 ? "it" : "each one") + ", numbered as above.\n\n"
+				+ "Data for the records:\n" + claims.data();
+	}
+
+	/** Just the JSON list from claimMessage, which is all Puzzle Practice needs. Null if there are no claims. */
+	public synchronized String claimData() {
+		Claims claims = claims();
+		return claims == null ? null : claims.data();
+	}
+
+	private record Claims(int count, String text, String data) { }
+
+	private Claims claims() {
 		record Claim(Record record, String json, Record known) {}
 		Map<String, Claim> best = new java.util.LinkedHashMap<>();
 		try {
@@ -586,10 +637,7 @@ public final class VoyageRecords {
 					anyLoot ? ",\"loot\":[" + loot[0] + "," + loot[1] + "," + loot[2] + "]" : ""));
 		}
 		data.append("]");
-		return (i == 1 ? "Hi Jice, I've beaten a voyage record on Puzzle Practice:" : "Hi Jice, I've beaten " + i + " voyage records on Puzzle Practice:")
-				+ "\n" + text + "\n"
-				+ "I'll send a picture, image or video of " + (i == 1 ? "it" : "each one") + ", numbered as above.\n\n"
-				+ "Data for the records:\n" + data;
+		return new Claims(i, text.toString(), data.toString());
 	}
 
 	// The file is a flat list of objects with string, number and string-array fields.
@@ -640,7 +688,7 @@ public final class VoyageRecords {
 					r.pirateScores = parsed;
 				}
 			}
-			if (r.kind == null && r.category != null)
+			if ((r.kind == null || "other".equals(r.kind)) && r.category != null)
 				for (String[] k : SHEET_KINDS)
 					if (k[0].equals(r.voyage) && k[1].equals(r.category)) { r.kind = k[2]; if (!k[3].isEmpty()) r.crewSize = 0; }
 			// Sheet categories Gizmo doesn't check are kept as "other", for the records window.

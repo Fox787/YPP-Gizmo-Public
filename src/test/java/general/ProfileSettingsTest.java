@@ -75,12 +75,20 @@ class ProfileSettingsTest {
     @Test
     void activitySwitchesShowEditableWeightsAndPreserveEachProfilesValues() throws Exception {
         prefs.node("profiles/Vampire Lair");
+        prefs.node("profiles/Z Custom Den").put("activityMode", RecordChecker.DEN);
+        prefs.node("profiles/Z Custom Lair").put("activityMode", RecordChecker.LAIR);
         SwingUtilities.invokeAndWait(() -> {
             open();
+            assertTrue(field(gui, "tokenScoring", JPanel.class).isVisible());
+            assertTrue(field(gui, "forageScoring", JPanel.class).isVisible());
+            assertFalse(field(gui, "lairHaulScoring", JPanel.class).isVisible());
             assertFalse(field(gui, "dnavScoring", JPanel.class).isVisible());
             assertFalse(field(gui, "carpScoring", JPanel.class).isVisible());
             assertTrue(selector().selectForActivity(RecordChecker.DEN));
             assertEquals("Werewolf Den", selector().getSelectedProfile());
+            assertFalse(field(gui, "tokenScoring", JPanel.class).isVisible());
+            assertTrue(field(gui, "forageScoring", JPanel.class).isVisible());
+            assertFalse(field(gui, "lairHaulScoring", JPanel.class).isVisible());
             assertTrue(field(gui, "dnavScoring", JPanel.class).isVisible());
             assertFalse(field(gui, "carpScoring", JPanel.class).isVisible());
             assertEquals(2, ((Number) stationField("navdouble").getValue()).intValue());
@@ -88,6 +96,9 @@ class ProfileSettingsTest {
             stationField("navdouble").setText("8");
             stationField("navtriple").setText("9");
             assertTrue(selector().selectForActivity(RecordChecker.LAIR));
+            assertFalse(field(gui, "tokenScoring", JPanel.class).isVisible());
+            assertFalse(field(gui, "forageScoring", JPanel.class).isVisible());
+            assertTrue(field(gui, "lairHaulScoring", JPanel.class).isVisible());
             assertTrue(field(gui, "carpScoring", JPanel.class).isVisible());
             assertFalse(field(gui, "dnavScoring", JPanel.class).isVisible());
             assertEquals(-1, ((Number) stationField("carpslipshod").getValue()).intValue());
@@ -105,6 +116,12 @@ class ProfileSettingsTest {
             assertEquals(74, nav.get("Navigating", "Alice").getTokenScore());
             assertEquals(-4, prefs.node("profiles/Vampire Lair").getInt("carpslipshod", 0));
             assertEquals(7, prefs.node("profiles/Werewolf Den").getInt("navsingle", 0));
+            for (String custom : List.of("Z Custom Den", "Z Custom Lair")) {
+                select(custom);
+                assertTrue(selector().showsAllScoringValues());
+                for (String group : List.of("tokenScoring", "forageScoring", "lairHaulScoring", "dnavScoring", "carpScoring"))
+                    assertTrue(field(gui, group, JPanel.class).isVisible(), custom + ": " + group);
+            }
         });
     }
 

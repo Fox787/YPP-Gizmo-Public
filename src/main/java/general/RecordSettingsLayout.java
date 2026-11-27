@@ -44,7 +44,8 @@ final class RecordSettingsLayout {
             int row = 1;
             for (var metric : metrics.entrySet()) {
                 List<JComponent> cells = new ArrayList<>();
-                cells.add(new JLabel(metric.getKey()));
+                VoyageRecords.Record[] pair = metric.getValue();
+                cells.add(label(metric.getKey(), pair[0] != null ? pair[0] : pair[1]));
                 if (entry) cells.add(value(metric.getValue()[0], editor));
                 if (dr) cells.add(value(metric.getValue()[1], editor));
                 addRow(table, row++, cells.toArray(new JComponent[0]));
@@ -56,7 +57,7 @@ final class RecordSettingsLayout {
             JPanel table = table();
             int row = 0;
             for (VoyageRecords.Record record : carpentry) {
-                String label = record.kind.equals("carpScore") ? "Score" : record.kind.equals("carpHoles") ? "Holes" : "Proof";
+                String label = record.kind.equals("carpScore") ? "Score" : record.kind.equals("carpHoles") ? "Holes" : "VPs";
                 addRow(table, row++, label(label, record), editor.apply(record));
             }
             finishTable(parent, table);
@@ -88,7 +89,6 @@ final class RecordSettingsLayout {
             toggle.setMargin(new Insets(3, 3, 3, 3));
             toggle.setAlignmentX(Component.LEFT_ALIGNMENT);
             toggle.setMaximumSize(new Dimension(Integer.MAX_VALUE, toggle.getPreferredSize().height));
-            toggle.setToolTipText(group.getKey());
             toggle.addActionListener(event -> {
                 table.setVisible(toggle.isSelected());
                 parent.revalidate();
@@ -104,7 +104,8 @@ final class RecordSettingsLayout {
         switch (record.kind) {
             case VoyageRecords.CHESTS: case VoyageRecords.DR_CHESTS:
                 return record.voyage.equals("vampireLairs") ? "Immortals" : "Chests";
-            case VoyageRecords.SCORE: case VoyageRecords.DR_SCORE: return "Score";
+            case VoyageRecords.SCORE: case VoyageRecords.DR_SCORE:
+                return record.voyage.equals("vampireLairs") ? "Chests" : "Score";
             case VoyageRecords.DR_NAV: return "Dnav";
             default: return null;
         }
@@ -112,14 +113,23 @@ final class RecordSettingsLayout {
 
     private static String shortLabel(VoyageRecords.Record record) {
         return VoyageRecords.recordLabel(record).replaceFirst("^(Most|Best) ", "")
-                .replace(", one pirate", "").replace("🎁", "Gifts").replace("frays", "Frays")
+                .replace(", one pirate", "").replace("frays", "Frays")
                 .replace("in one entry", "/ entry").replace("in one duty report", "/ DR")
                 .replace("in one DR", "/ DR").replace("in one forage", "/ forage");
     }
 
     private static JLabel label(String text, VoyageRecords.Record record) {
         JLabel label = new JLabel(text);
-        label.setToolTipText(VoyageRecords.recordLabel(record));
+        String help = switch (record.kind) {
+            case "carpScore" -> "Best Lair Carpentry score in one DR.";
+            case "carpHoles" -> "Most holes filled in one Lair Carpentry DR.";
+            case "vampireProof" -> "Most VPs in one Lair Carpentry DR.";
+            case VoyageRecords.DR_SCORE, VoyageRecords.SCORE -> "vampireLairs".equals(record.voyage)
+                    ? "Most Treasure Haul chests across all three tiers." : VoyageRecords.recordLabel(record);
+            case VoyageRecords.DR_NAV -> "Best Dnav score in one DR.";
+            default -> VoyageRecords.recordLabel(record);
+        };
+        HoverText.set(label, help);
         return label;
     }
 

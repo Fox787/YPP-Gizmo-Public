@@ -262,6 +262,8 @@ public final class ActivityTracker {
 		public int score;
 		boolean woodhallowNav;
 		public boolean exact;
+		/** Dnav points the chat shows this pirate charted, when they were the only navigator; 0 if unknown. */
+		double navFloor;
 		/** Time on the station; 0 if unknown. */
 		public long ms;
 
@@ -365,6 +367,11 @@ public final class ActivityTracker {
 				row.exact = row.hasRate() && (singleStation || local);
 				period.rows.add(row);
 			}
+		}
+		// A lone navigator charted every werewolf the chat says was turned back, so that's a floor.
+		if (woodhallow && sp != null && dr.data.containsKey("Navigating") && dr.data.get("Navigating").size() == 1) {
+			double floor = clock.navFloor(sp);
+			for (Row row : period.rows) if (row.woodhallowNav) row.navFloor = floor;
 		}
 		lastEnd = period.end;
 		lastReportKey = key;
@@ -510,7 +517,8 @@ public final class ActivityTracker {
 
 	static double rate(Row r) {
 		if (!r.hasRate()) return -1;
-		double score = r.woodhallowNav ? DnavForecast.navPoints(r.tokens) / DnavForecast.POINTS_PER_SCORE : r.score;
+		double score = r.woodhallowNav
+				? Math.max(DnavForecast.navPoints(r.tokens), r.navFloor) / DnavForecast.POINTS_PER_SCORE : r.score;
 		return score / (r.ms / 60_000.0);
 	}
 
