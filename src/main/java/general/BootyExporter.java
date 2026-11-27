@@ -82,8 +82,10 @@ public final class BootyExporter {
 		String ocean = division.ocean() == null ? "unknown" : division.ocean().toLowerCase(Locale.ROOT);
 		String pirate = division.pirate() == null ? "unknown" : division.pirate();
 		Path folder = GameLog.dataFolder().resolve(ocean).toAbsolutePath().normalize();
+		GameLog.requireOutputPath(folder);
 		Files.createDirectories(folder);
 		result.jsonl = folder.resolve("booty_divisions_" + pirate + ".jsonl");
+		GameLog.requireOutputPath(result.jsonl);
 		Path lock = result.jsonl.resolveSibling(result.jsonl.getFileName() + ".lock");
 		try (var channel = FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 			 var ignored = channel.lock()) {
@@ -165,6 +167,7 @@ public final class BootyExporter {
 	}
 
 	private static Path reserveTextFile(Path folder) throws IOException {
+		GameLog.requireOutputPath(folder);
 		Files.createDirectories(folder);
 		for (int number = nextNumber(folder); ; number++) {
 			try {
@@ -175,6 +178,7 @@ public final class BootyExporter {
 
 	private static void writeTextCopy(BootyDivision division, Result result) {
 		try {
+			GameLog.requireOutputPath(division.textFile);
 			Files.createDirectories(division.textFile.getParent());
 			writeAtomically(division.textFile, division.toText());
 			result.text = division.textFile;
@@ -184,6 +188,7 @@ public final class BootyExporter {
 	}
 
 	private static void writeAtomically(Path path, String text) throws IOException {
+		GameLog.requireOutputPath(path);
 		Path staged = Files.createTempFile(path.getParent(), ".gizmo-", ".tmp");
 		try {
 			Files.writeString(staged, text, StandardCharsets.UTF_8);

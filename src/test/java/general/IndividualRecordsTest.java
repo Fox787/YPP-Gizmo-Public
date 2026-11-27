@@ -42,6 +42,35 @@ class IndividualRecordsTest {
     }
 
     @Test
+    void lairChestRecordUsesOneTreasureHaulDrIncludingLegacyManualValues(@TempDir Path folder) throws Exception {
+        Files.writeString(folder.resolve(VoyageRecords.RECORDS), fixture());
+        VoyageRecords records = new VoyageRecords(folder);
+        VoyageRecords.Record chests = records.get("vampireLairs", "emerald", 0, VoyageRecords.DR_SCORE);
+        assertNotNull(chests);
+        assertEquals(14, chests.value);
+        assertEquals("Most chests in one DR, one pirate", VoyageRecords.recordLabel(chests));
+        assertNull(records.get("vampireLairs", "emerald", 0, VoyageRecords.SCORE));
+
+        DRGroupData report = new DRGroupData();
+        report.put("Treasure Haul", "Hauler", "Swift", new int[]{5, 5, 5}, 15);
+        report.put("Carpentry", "Carpenter", "Swift", new int[]{0, 0, 20}, 40);
+        List<String> lines = LairRecordChecks.fray(records, report, "emerald", "2026-11-26T12:00");
+        assertTrue(lines.stream().anyMatch(line -> line.contains("Hauler, most chests in one DR")
+                && line.contains("15 beats 14")));
+        assertFalse(lines.stream().anyMatch(line -> line.contains("Carpenter, most chests")));
+
+        Files.writeString(folder.resolve(VoyageRecords.MANUAL), """
+                [{"voyage":"vampireLairs","ocean":"emerald","kind":"other","crewSize":0,
+                  "category":"Most 🎁 in one entry, one pirate","value":16}]
+                """);
+        VoyageRecords restored = new VoyageRecords(folder);
+        VoyageRecords.Record manual = restored.get("vampireLairs", "emerald", 0, VoyageRecords.DR_SCORE);
+        assertEquals(16, manual.value);
+        assertTrue(restored.isManual(manual));
+        assertEquals(5, restored.individualRecords("vampireLairs").size());
+    }
+
+    @Test
     void dnavAndCarpentryRecordsCanBeEnteredBeforeAFirstDownload(@TempDir Path folder) {
         VoyageRecords records = new VoyageRecords(folder);
         assertTrue(records.individualRecords("woodhallow").stream().anyMatch(r -> r.kind.equals(VoyageRecords.DR_NAV)));

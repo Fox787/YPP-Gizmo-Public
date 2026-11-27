@@ -176,7 +176,7 @@ public class BootyDivision {
 			j.close();
 		}
 		j.closeArray();
-		// Links to the run files; paths relative to this .jsonl's folder (exported_data/<ocean>).
+		// Links to run files, relative to this .jsonl's folder inside the data folder's ocean directory.
 		j.key("run_files").openArray();
 		for (Path file : runFiles) {
 			Path absolute = file.toAbsolutePath().normalize();

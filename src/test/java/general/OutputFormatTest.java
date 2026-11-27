@@ -12,6 +12,32 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class OutputFormatTest {
     @Test
+    void examplesFollowVesselCopyChoicesAndAutoCopy(@TempDir Path folder) throws Exception {
+        try (GuiTestFixture fixture = new GuiTestFixture(folder)) {
+            SwingUtilities.invokeAndWait(() -> {
+                DRGizmoGUI gui = fixture.open();
+                JCheckBox autoCopy = field(gui, "checkBoxAutoCopy", JCheckBox.class);
+                JCheckBox scanCopy = field(gui, "checkBoxCopyScanToVessel", JCheckBox.class);
+                JCheckBox scoreCopy = field(gui, "checkBoxCopyScoreToVessel", JCheckBox.class);
+                JTextArea scan = field(gui, "scanPreview", JTextArea.class);
+                JTextArea score = field(gui, "scorePreview", JTextArea.class);
+                autoCopy.setSelected(true);
+                scanCopy.setSelected(true);
+                scoreCopy.setSelected(true);
+                assertTrue(scan.getText().startsWith("/ve "));
+                assertTrue(score.getText().startsWith("/ve "));
+                scanCopy.setSelected(false);
+                assertFalse(scan.getText().startsWith("/ve "));
+                assertTrue(score.getText().startsWith("/ve "));
+                scanCopy.setSelected(true);
+                autoCopy.setSelected(false);
+                assertFalse(scan.getText().startsWith("/ve "));
+                assertFalse(score.getText().startsWith("/ve "));
+            });
+        }
+    }
+
+    @Test
     void everyScanFormatCombinationKeepsFieldsOnThePlayersExistingRow() {
         DRGroupData report = report();
         Map<String, Map<String, Double>> rates = Map.of("Foraging", Map.of("Alice", 2.8, "Bob", 1.2));

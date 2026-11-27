@@ -101,7 +101,7 @@ class VoyageRecordEditingTest {
                 den.postActionEvent();
                 assertEquals(22, records.get("woodhallow", "emerald", 2, VoyageRecords.CHESTS).value);
                 assertTrue(den.getFont().isBold(), "manual entries are visibly marked in the current settings");
-                assertTrue(den.getToolTipText().contains("Entered manually"));
+                assertEquals("most dire chests", den.getToolTipText());
 
                 JTextField ci = recordField(gui, "Cursed Isles, 3 crew, most cursed chests");
                 ci.setText("9");

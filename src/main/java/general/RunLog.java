@@ -99,6 +99,7 @@ public final class RunLog {
 		j.field("division_opened_at", division.chat.openedAt.toString());
 		j.close();
 
+		GameLog.requireOutputPath(folder);
 		Files.createDirectories(folder);
 		Path staged = Files.createTempFile(folder, name, ".tmp");
 		try {
@@ -151,8 +152,10 @@ public final class RunLog {
 				|| (arrival > 0 && prefs.getLong(ARRIVAL, 0) != arrival);
 		if (!newRun && untimedKey != null && untimedKey.equals(prefs.get(LAST_UNTIMED, ""))) return null;
 
+		GameLog.requireOutputPath(directory);
 		Files.createDirectories(directory);
 		if (newRun) file = createRun(directory, pirate, arrival > 0 ? arrival : period.end);
+		GameLog.requireOutputPath(file);
 		try {
 			Files.writeString(file, toJson(period, pirate, ocean, file, voyage) + "\n", StandardCharsets.UTF_8,
 					StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -270,6 +273,7 @@ public final class RunLog {
 
 	void recordRatings(ActivityTracker.Period period) throws IOException {
 		Path output = GameLog.dataFolder().resolve("dr_ratings.jsonl");
+		GameLog.requireOutputPath(output);
 		Files.createDirectories(output.getParent());
 		Files.writeString(output, ratingsJsonl(period), StandardCharsets.UTF_8,
 				StandardOpenOption.CREATE, StandardOpenOption.APPEND);

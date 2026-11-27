@@ -48,6 +48,16 @@ public final class CopyHotkeyHelper implements NativeKeyListener {
 		// Do not even load the X11 native library in a Wayland session.
 		if ("wayland".equalsIgnoreCase(System.getenv("XDG_SESSION_TYPE"))
 				|| System.getenv("WAYLAND_DISPLAY") != null) return;
+		// The native library unpacks to the working folder by default (the game's own folder); keep it out.
+		try {
+			String configured = System.getProperty("jnativehook.lib.path");
+			java.nio.file.Path dir = configured == null ? GameLog.temporaryFolder("Gizmo-native")
+					: java.nio.file.Path.of(configured);
+			if (GameLog.isGamePath(dir)) dir = GameLog.temporaryFolder("Gizmo-native");
+			GameLog.requireOutputPath(dir);
+			java.nio.file.Files.createDirectories(dir);
+			System.setProperty("jnativehook.lib.path", dir.toString());
+		} catch (java.io.IOException | RuntimeException ignored) { return; }
 		Logger logger = Logger.getLogger(GlobalScreen.class.getPackageName());
 		logger.setLevel(Level.OFF);
 		logger.setUseParentHandlers(false);

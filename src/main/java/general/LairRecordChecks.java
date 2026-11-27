@@ -16,8 +16,14 @@ final class LairRecordChecks {
 	private static final int[] NO_LOOT = new int[3];
 
 	private LairRecordChecks() { }
+	interface Check { String compare(int crew, String kind, int value, String time, List<String> pirates, int[] loot); }
 
 	static List<String> fray(VoyageRecords records, DRGroupData report, String ocean, String time) {
+		return fray(records, report, ocean, time,
+				(crew, kind, value, at, pirates, loot) -> records.compare(VOYAGE, ocean, crew, kind, value, at, pirates, loot));
+	}
+
+	static List<String> fray(VoyageRecords records, DRGroupData report, String ocean, String time, Check check) {
 		List<String> lines = new ArrayList<>();
 		DRIndividualData best = null;
 		int bestTotal = 0;
@@ -25,10 +31,10 @@ final class LairRecordChecks {
 		for (DRIndividualData pirate : station(report, HAUL).values()) {
 			int[] tiers = tiers(pirate);
 			if (tiers == null) continue;
-			lines.add(records.compare(VOYAGE, ocean, 0, VoyageRecords.DR_CHESTS, tiers[0], time,
+			lines.add(check.compare(0, VoyageRecords.DR_CHESTS, tiers[0], time,
 					List.of(pirate.getName()), tiers));
 			int total = VoyageRecords.lootScore(VOYAGE, tiers);
-			if (hasTotalRecord) lines.add(records.compare(VOYAGE, ocean, 0, VoyageRecords.DR_SCORE, total, time,
+			if (hasTotalRecord) lines.add(check.compare(0, VoyageRecords.DR_SCORE, total, time,
 					List.of(pirate.getName()), tiers));
 			if (total > bestTotal) { best = pirate; bestTotal = total; }
 		}
@@ -39,9 +45,9 @@ final class LairRecordChecks {
 			int[] t = pirate.getTokens();
 			if (t == null || t.length != 3) continue;
 			List<String> name = List.of(pirate.getName());
-			lines.add(records.compare(VOYAGE, ocean, 0, "carpScore", RecordChecker.carpScore(pirate), time, name, NO_LOOT));
-			lines.add(records.compare(VOYAGE, ocean, 0, "carpHoles", RecordChecker.carpHoles(pirate), time, name, NO_LOOT));
-			lines.add(records.compare(VOYAGE, ocean, 0, "vampireProof", RecordChecker.vampireProof(pirate), time, name, NO_LOOT));
+			lines.add(check.compare(0, "carpScore", RecordChecker.carpScore(pirate), time, name, NO_LOOT));
+			lines.add(check.compare(0, "carpHoles", RecordChecker.carpHoles(pirate), time, name, NO_LOOT));
+			lines.add(check.compare(0, "vampireProof", RecordChecker.vampireProof(pirate), time, name, NO_LOOT));
 		}
 		return lines;
 	}
