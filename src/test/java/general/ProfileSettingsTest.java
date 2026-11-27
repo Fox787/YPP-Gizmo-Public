@@ -152,6 +152,21 @@ class ProfileSettingsTest {
     }
 
     @Test
+    void activitySwitchesGoToTheNamedProfileNeverACopyOfIt() throws Exception {
+        // "Custom" was made from Werewolf Den, so it carries Den's activityMode and sorts before it.
+        prefs.node("profiles/Custom").put("activityMode", RecordChecker.DEN);
+        prefs.put("currentProfile", "Custom");
+        SwingUtilities.invokeAndWait(() -> {
+            open();
+            assertEquals("Custom", selector().getSelectedProfile());
+            assertTrue(selector().selectForActivity(RecordChecker.DEN));
+            assertEquals("Werewolf Den", selector().getSelectedProfile(), "a copy of the Den profile isn't the Den profile");
+            assertFalse(selector().selectForActivity(RecordChecker.LAIR), "no Vampire Lair profile, so no switch");
+            assertEquals("Werewolf Den", selector().getSelectedProfile());
+        });
+    }
+
+    @Test
     void invalidNewWeightsBlockAutomaticSwitchesWithoutPartialWrites() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             open();

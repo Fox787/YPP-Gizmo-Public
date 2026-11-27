@@ -8,12 +8,12 @@ class CiSwordfightTest {
 	private static final String SWORD = "Reporting ready data.SwordObject:12(Alice, Malevolent Cultist, Roused Homunculus):0.";
 
 	@Test
-	void npcCuesPrepareTheCounterAndTheTeamConfirmsHomunculi() {
+	void theCounterShowsOnlyOnceTheTeamHasAHomunculus() {
 		var ci = new CiSwordfight();
 		ci.chat("Jice says, \"Malevolent Cultist shouts, something\"");
 		assertFalse(ci.showColours());
 		ci.chat("Malevolent Cultist shouts, \"Oh sweet moon-LEAPER!\"");
-		assertTrue(ci.showColours());
+		assertFalse(ci.showColours(), "a cultist's cue alone doesn't show the counter");
 		long round = ci.round();
 		ci.chat("Chanting Cultist shouts, \"G'laroth shun-maruth!\"");
 		ci.feed(SWORD);

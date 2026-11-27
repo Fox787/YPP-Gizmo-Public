@@ -46,6 +46,7 @@ final class CiSwordfight {
 
 	private void clear() { preview = active = homunculi = false; swordId = null; }
 	synchronized void reset() { clear(); }
-	synchronized boolean showColours() { return preview || active && homunculi; }
+	/** Only once the swordfight's team has a homunculus in it; a cultist's cue alone doesn't show the counter. */
+	synchronized boolean showColours() { return active && homunculi; }
 	synchronized long round() { return round; }
 }

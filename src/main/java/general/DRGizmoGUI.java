@@ -336,6 +336,10 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		// its original token weights for rescoring), the output and the copies. Run files keep them.
 		data = ActivityTracker.scoredReport(scanned, timed);
 		addDRToTree(data);
+		DRGroupNode added = (DRGroupNode) drTreeRootNode.getLastChild();
+		DRGroupNode first = added.sameAs();
+		if (first != null)
+			printStatus("DR " + added.getUserObject() + " is the same duty report as DR " + first.getUserObject(), false);
 		try {
 			PrefObj.putObject(prefs, TREEDATA, drTreeToPersistantData());
 			printStatus("Tree Saved", true);
@@ -673,7 +677,6 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 				options.section("Woodhallow", "woodhallow", false),
 				options.section("Rumble", "rumble", false),
 				options.section("Timers & sounds", "timersSounds", false));
-		woodhallowTools.setStatus(text -> printStatus(text, false));
 		createFileOptions(options);
 
 		return options;
@@ -976,7 +979,7 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 		records.add(Box.createVerticalStrut(4));
 		labelRecordStatus = new JLabel();
 		records.add(labelRecordStatus);
-		records.add(new JLabel("Manual entries are bold."));
+		records.add(new JLabel("Manual entries are bold"));
 		records.add(Box.createVerticalStrut(6));
 
 		recordPanels.put("cursedIsles", options.section(records, "Cursed Isles", "recordboxesshown", false));
@@ -1405,6 +1408,16 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 			        final Component ret = super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
 
 			        this.setText(value.toString());
+			        // A DR scanned again (twice by hand, or by hand after auto scan): bold dark red, "(same as N)".
+			        // The text says it even if the game's look and feel ignores the font or colour.
+			        DRGroupNode first = value instanceof DRGroupNode n ? n.sameAs() : null;
+			        if (first != null) {
+			        	this.setText(value + "  (same as " + first.getUserObject() + ")");
+			        	this.setFont(tree.getFont().deriveFont(Font.BOLD));
+			        	if (!sel) this.setForeground(REPEAT_SCAN);
+			        } else {
+			        	this.setFont(tree.getFont());
+			        }
 			        return ret;
 			    }
 	        });
@@ -1919,15 +1932,29 @@ public class DRGizmoGUI extends JFrame implements ActionListener{
 
 
 
+	/** The DR tree's colour for a DR that's already in the tree. */
+	private static final Color REPEAT_SCAN = new Color(0x9b1c1c);
+
 	/** A DR's node in the tree (shown as its number); remembers whether the DR was CI, Lair or Den. */
 	static final class DRGroupNode extends DefaultMutableTreeNode {
 		final String activity;
 		final long lairArrival, lairRoundEnd;
+		/** The DR's stations, pirates, ratings and tokens: equal for the same duty report scanned twice. */
+		final String content;
 
 		DRGroupNode(DRGroupData report) {
 			this.activity = RecordChecker.activityOf(report);
 			this.lairArrival = report.lairArrival();
 			this.lairRoundEnd = report.lairRoundEnd();
+			this.content = report.toString(true, false, true);
+		}
+
+		/**
+		 * The DR just above this one if it has the same content, else null. A repeat scan is the next one in:
+		 * scanned twice by hand, or by hand and by auto scan, within seconds of each other.
+		 */
+		DRGroupNode sameAs() {
+			return getPreviousSibling() instanceof DRGroupNode previous && previous.content.equals(content) ? previous : null;
 		}
 	}
 

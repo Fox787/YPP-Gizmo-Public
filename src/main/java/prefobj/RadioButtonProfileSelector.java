@@ -217,18 +217,21 @@ public class RadioButtonProfileSelector extends JPanel {
         };
     }
 
-    /** Uses the same save/validate/load path as a manual profile change. */
+    /**
+     * Switches to the activity's own profile, by name: "Cursed Isles", "Werewolf Den" or "Vampire Lair". A
+     * user's other profiles are never picked, even one copied from these (it carries their activityMode).
+     * Uses the same save/validate/load path as a manual profile change.
+     */
     public boolean selectForActivity(String activity) {
         if (activity == null || activity.isEmpty()) return false;
-        if (activity.equals(getCurrentActivity())) return true;
+        if (activity.equals(activityForName(selectedProfile))) return true;
         try {
             Preferences root = globalPrefs.node(PROFILE_ROOT);
             for (String name : root.childrenNames()) {
-                Preferences profile = root.node(name);
-                if (!activity.equals(profile.get("activityMode", activityForName(name)))) continue;
+                if (!activity.equals(activityForName(name))) continue;
                 selectProfile(name);
                 loadProfiles();
-                return activity.equals(getCurrentActivity());
+                return activity.equals(activityForName(selectedProfile));
             }
         } catch (BackingStoreException e) {
             return false;

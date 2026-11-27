@@ -78,17 +78,7 @@ public final class ActivityTracker {
 		self = name;
 	}
 
-	/** This client's last puzzle starts from the game log, oldest first (for the Dnav report). */
-	private final java.util.ArrayDeque<String> recentPuzzles = new java.util.ArrayDeque<>();
-
-	synchronized java.util.List<String> recentPuzzles() { return java.util.List.copyOf(recentPuzzles); }
-
 	void ownPuzzle(String object, long now) {
-		synchronized (this) {
-			recentPuzzles.addLast(java.time.LocalTime.ofInstant(java.time.Instant.ofEpochMilli(now), java.time.ZoneId.systemDefault())
-					+ "  " + object);
-			if (recentPuzzles.size() > 100) recentPuzzles.removeFirst();
-		}
 		int code = "NaviObject".equals(object) ? NAV : "ForageObject".equals(object) ? FORAGE : 0;
 		if (code != 0) recordStation(ownStations, code, now);
 	}

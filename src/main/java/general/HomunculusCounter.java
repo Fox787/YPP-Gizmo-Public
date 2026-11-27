@@ -8,7 +8,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.swing.*;
 
-/** Thalassa's sword-colour to drop-colour counter, fitted to Gizmo's timer area. */
+/**
+ * Thalassa's sword-colour to drop-colour counter, in the main window's Next Dnav area. Its Copy and Reset
+ * buttons ({@link #actions()}) go in the Scan button's row and show with it.
+ */
 final class HomunculusCounter extends JPanel {
 	private static final String[] SWORDS = {"White", "Yellow", "Purple", "Orange", "Blue", "Red", "Green", "Black"};
 	private static final String[] DROPS = {"Blue", "Blue", "Green", "Green", "Red", "Red", "Yellow", "Yellow"};
@@ -16,27 +19,40 @@ final class HomunculusCounter extends JPanel {
 	private final int[] counts = new int[SWORDS.length];
 	private final JButton[] swords = new JButton[SWORDS.length];
 	private final Map<String, JLabel> drops = new LinkedHashMap<>();
+	/** The buttons' text colour: the yellow sword's. */
+	static final Color TEXT = new Color(COLOURS[1]);
+	/** The swords in the grid, row by row: four columns, each drop colour's two swords one above the other. */
+	private static final int[] GRID_ORDER = {0, 2, 4, 6, 1, 3, 5, 7};
+	private final JPanel actions = new JPanel(new FlowLayout(FlowLayout.TRAILING, 4, 0));
 
 	HomunculusCounter() {
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBorder(BorderFactory.createEmptyBorder(3, 5, 4, 5));
-		JPanel heading = new JPanel(new BorderLayout(3, 0));
-		heading.add(new JLabel("Homs"), BorderLayout.WEST);
-		JPanel actions = new JPanel(new FlowLayout(FlowLayout.TRAILING, 2, 0));
+		JLabel heading = new JLabel("Homs");
+		heading.setAlignmentX(Component.LEFT_ALIGNMENT);
+		add(heading);
 		JButton copy = new JButton("Copy"), reset = new JButton("Reset");
-		for (JButton button : new JButton[]{copy, reset}) { button.setMargin(new Insets(1, 3, 1, 3)); actions.add(button); }
+		for (JButton button : new JButton[]{copy, reset}) {
+			button.setMargin(new Insets(1, 6, 1, 6));
+			button.setForeground(TEXT);
+			Dimension size = new Dimension(button.getPreferredSize().width, 23);
+			button.setPreferredSize(size);
+			button.setMaximumSize(size);
+			actions.add(button);
+		}
 		copy.setToolTipText("Copy drop-colour totals as /ve text");
 		copy.addActionListener(event -> copy(null));
 		reset.addActionListener(event -> reset());
-		heading.add(actions, BorderLayout.EAST);
-		add(heading);
-		JPanel grid = new JPanel(new GridLayout(0, 2, 3, 2));
-		for (int i = 0; i < SWORDS.length; i++) {
+		actions.setMaximumSize(actions.getPreferredSize());
+		actions.setVisible(false);
+		JPanel grid = new JPanel(new GridLayout(2, 4, 3, 2));
+		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (int i : GRID_ORDER) {
 			final int index = i;
 			JButton button = swords[i] = new JButton();
 			button.setMargin(new Insets(2, 2, 2, 2));
 			button.setBackground(new Color(COLOURS[i]));
-			button.setForeground(i == 0 || i == 1 || i == 3 ? Color.BLACK : Color.WHITE);
+			button.setForeground(TEXT);
 			button.setOpaque(true);
 			button.setContentAreaFilled(true);
 			button.setToolTipText(SWORDS[i] + " sword → " + DROPS[i].toLowerCase() + " drops. Click +1; right-click −1; middle-click copies target.");
@@ -51,6 +67,7 @@ final class HomunculusCounter extends JPanel {
 		}
 		add(grid);
 		JPanel totals = new JPanel(new GridLayout(1, 4, 2, 0));
+		totals.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (String colour : new String[]{"Blue", "Green", "Red", "Yellow"}) {
 			JLabel label = new JLabel("", SwingConstants.CENTER);
 			label.setToolTipText(colour + " drop-colour total");
@@ -60,6 +77,14 @@ final class HomunculusCounter extends JPanel {
 		add(totals);
 		refresh();
 		setVisible(false);
+	}
+
+	/** Copy and Reset, for the Scan button's row; shown and hidden with the counter. */
+	JComponent actions() { return actions; }
+
+	@Override public void setVisible(boolean visible) {
+		super.setVisible(visible);
+		if (actions != null) actions.setVisible(visible);
 	}
 
 	void adjust(int index, int amount) { counts[index] = Math.max(0, counts[index] + amount); refresh(); }

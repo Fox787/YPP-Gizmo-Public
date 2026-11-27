@@ -287,17 +287,7 @@ public final class StationClock {
 	private volatile java.util.function.Consumer<String> onLiveMessage;
 	void setOnLiveMessage(java.util.function.Consumer<String> c) { onLiveMessage = c; }
 
-	/** The last chat messages seen, oldest first (for the "That didn't work" Dnav report). */
-	private final java.util.ArrayDeque<String> recent = new java.util.ArrayDeque<>();
-	private static final int RECENT_MESSAGES = 600;
-	private static final java.time.format.DateTimeFormatter CLOCK = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss");
-
-	synchronized java.util.List<String> recentMessages() { return java.util.List.copyOf(recent); }
-
 	synchronized void message(String msg, long now) {
-		recent.addLast(java.time.LocalTime.ofInstant(java.time.Instant.ofEpochMilli(now), java.time.ZoneId.systemDefault())
-				.format(CLOCK) + "  " + msg);
-		if (recent.size() > RECENT_MESSAGES) recent.removeFirst();
 		java.util.function.Consumer<String> live = onLiveMessage;
 		if (live != null && Math.abs(System.currentTimeMillis() - now) < 120_000) live.accept(msg);
 		trackLair(msg, now);

@@ -91,12 +91,6 @@ final class WoodhallowTools {
 	private List<Integer> ahoyChoices = List.of();
 	private DRGroupData lastReport;
 	private ActivityTracker.Period reportedPeriod;
-	/** What the Next Dnav box last showed, for the Dnav report. */
-	private DnavForecast lastForecast;
-	private Map<String, String> lastForecastLines = Map.of();
-	/** One line per second during stations: what each wolf count source said (for the Dnav report). */
-	private final java.util.ArrayDeque<String> wolfSamples = new java.util.ArrayDeque<>();
-	private String lastDnavShown = "";
 
 	WoodhallowTools(Window game, JTabbedPane tabs, Preferences prefs, StationClock clock, ActivityTracker tracker,
 					JPanel woodhallow, JPanel rumble, JPanel sounds) {
@@ -159,9 +153,13 @@ final class WoodhallowTools {
 		scanShorthand.setFont(font.deriveFont(Font.BOLD, font.getSize2D() * 1.45f));
 	}
 
-	/** Adds the timer and the shorthand beside it ("1:00 (15-16)"), right-aligned in the Scan button's row. */
+	/**
+	 * Adds the timer and the shorthand beside it ("1:00 (15-16)"), right-aligned in the Scan button's row,
+	 * with the homunculus counter's Copy and Reset before them while the counter shows.
+	 */
 	void addToScanRow(JPanel row) {
 		row.add(Box.createHorizontalGlue());
+		row.add(homunculi.actions());
 		row.add(scanTimer);
 		row.add(Box.createHorizontalStrut(5));
 		row.add(scanShorthand);
@@ -214,7 +212,7 @@ final class WoodhallowTools {
 		scanShorthand.setForeground(rightColor);
 	}
 
-	static final String FORAGE_LABEL = "Forage", LAIR_ROUND_LABEL = "Carp/Treasure Haul";
+	static final String FORAGE_LABEL = "Forage", LAIR_ROUND_LABEL = "Haul";
 	/** The lair round turns red in its last 15 seconds (the chat's coffin warning). */
 	private static final long LAIR_WARNING_MS = 15_000;
 
@@ -385,8 +383,6 @@ final class WoodhallowTools {
 				lastDnavTick = now;
 				playWerewolfSounds(now);
 				updateDnav(now);
-				boolean den = stationClock.inDen() || stationClock.current() != null && now - stationClock.current().start < 900_000;
-				if (buttonDnavProblem.isVisible() != den) { buttonDnavProblem.setVisible(den); dnavArea.revalidate(); }
 				// Not while stations are open: the Dnav box has the current wave then.
 				boolean forecast = dnavEnds <= now && updateForecast();
 				if (forecast != rumbleForecast.isVisible()) rumbleForecast.setVisible(forecast);
@@ -520,20 +516,11 @@ final class WoodhallowTools {
 		Map<Integer, Double> odds = half < 0
 				? DnavForecast.werewolfOdds(Math.max(1, stationClock.crew()), stationClock.frayNumber()) : Map.of();
 		List<Integer> choices = half < 0 ? odds.keySet().stream().sorted().toList() : List.of(2 * half, 2 * half + 1);
-		int[] seen = {-2, -2};
 		WolfCount.Reading reading = wolfCount.read(() -> {
-					int fromScene = seen[0] = denWolves.read(game);
-					return fromScene >= 0 ? fromScene : (seen[1] = AhoyWolfCount.read(game));
+					int fromScene = denWolves.read(game);
+					return fromScene >= 0 ? fromScene : AhoyWolfCount.read(game);
 				},
 				chat, period.start, now, choices);
-		wolfSamples.addLast(String.format(java.util.Locale.ROOT,
-				"%s  t+%5.1fs  chat=%d (half %d, changed t+%.1fs)  %s=%s  shown=%d  start=%d%s",
-				timeOfDay(now), (now - period.start) / 1000.0, chat.remaining(), chat.atHalf(),
-				chat.changedAt() > 0 ? (chat.changedAt() - period.start) / 1000.0 : -1.0,
-				"island", seen[0] + (seen[1] == -2 ? "" : " ahoy=" + seen[1]),
-				reading.remaining(), reading.starting(), manualStartingWolves >= 0 ? " (clicked " + manualStartingWolves + ")" : ""));
-		if (wolfSamples.size() > 1200) wolfSamples.removeFirst();
-
 		ahoyRow.setVisible(reading.starting() < 0);
 		if (ahoyRow.isVisible()) updateStartingChoices(choices);
 		int startingWolves = reading.starting() >= 0 ? reading.starting() : manualStartingWolves;
@@ -546,12 +533,6 @@ final class WoodhallowTools {
 			panelDnav.revalidate();
 		}
 		showPace(reading, startingWolves, half, period.start, ends);
-		lastDnavShown = labelWolvesLeft.getText() + " | Solo: " + strategy.replace('\n', ' ');
-	}
-
-	private static String timeOfDay(long ms) {
-		return java.time.LocalTime.ofInstant(java.time.Instant.ofEpochMilli(ms), java.time.ZoneId.systemDefault())
-				.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
 	}
 
 	private void updateStartingChoices(List<Integer> choices) {
@@ -636,7 +617,6 @@ final class WoodhallowTools {
 		if (forageBar.getParent() != timerArea) {
 			timerArea.setLayout(new BoxLayout(timerArea, BoxLayout.Y_AXIS));
 			timerArea.add(forageBar);
-			timerArea.add(homunculi);
 		}
 		return timerArea;
 	}
@@ -652,93 +632,11 @@ final class WoodhallowTools {
 			rumbleForecast.setAlignmentX(Component.LEFT_ALIGNMENT);
 			dnavArea.add(panelDnav);
 			dnavArea.add(rumbleForecast);
-			buttonDnavProblem.setAlignmentX(Component.LEFT_ALIGNMENT);
-			buttonDnavProblem.setMargin(new Insets(1, 6, 1, 6));
-			buttonDnavProblem.setToolTipText("Saves everything Gizmo knows about this Dnav (times to the millisecond, wolf counts,"
-					+ " chat, plan) to the data folder's dnav_reports, to compare with your video");
-			buttonDnavProblem.addActionListener(ev -> reportDnavProblem());
-			buttonDnavProblem.setVisible(false);
-			dnavArea.add(buttonDnavProblem);
+			// CI swordfights with homunculi: the sword-colour counter, where Next Dnav would be.
+			homunculi.setAlignmentX(Component.LEFT_ALIGNMENT);
+			dnavArea.add(homunculi);
 		}
 		return dnavArea;
-	}
-
-	private final JButton buttonDnavProblem = new JButton("That didn't work");
-	private java.util.function.Consumer<String> status = text -> { };
-	void setStatus(java.util.function.Consumer<String> status) { this.status = status; }
-
-	/** Writes a plain-text report of the current or last Dnav, to line up with video of it. */
-	private void reportDnavProblem() {
-		long now = System.currentTimeMillis();
-		StringBuilder r = new StringBuilder();
-		java.util.function.Consumer<String> line = t -> r.append(t).append(System.lineSeparator());
-		line.accept("Gizmo Dnav report, clicked " + java.time.LocalDateTime.now() + " (" + now + " ms)");
-		GameLog.Info who = GameLog.read();
-		if (who != null) line.accept("Pirate " + who.pirate + ", ocean " + who.ocean);
-		int crew = stationClock.crew(), fray = stationClock.frayNumber();
-		line.accept("In den " + stationClock.inDen() + ", crew " + crew + ", frays done " + (fray - 1)
-				+ ", next fray " + fray + ", deaths this fray " + stationClock.frayDeaths());
-		StationClock.Period cur = stationClock.current(), last = stationClock.lastEnded(now);
-		for (StationClock.Period p : new StationClock.Period[]{cur, last}) {
-			if (p == null) continue;
-			line.accept((p == cur ? "Current" : "Last ended") + " stations: opened " + timeOfDay(p.start)
-					+ ", expected end " + timeOfDay(stationClock.expectedEnd(p)) + (p.lair ? " (lair)" : ""));
-		}
-		line.accept("");
-		line.accept("Solo settings (-1 = not used): single " + singleSeconds + " s, double " + doubleSeconds
-				+ " s, triple " + tripleSeconds + " s, bingo " + bingoSeconds + " s, donkey " + donkeySeconds
-				+ " s, Vegas " + vegasSeconds + " s, Booch " + boochSeconds + " s");
-		for (int f : new int[]{fray - 1, fray}) {
-			if (crew <= 0 || f < 2 || f > 6) continue;
-			line.accept(String.format(java.util.Locale.ROOT, "Dnav before fray %d: pack %.3f x share %.1f = %.3f werewolves,"
-					+ " total %.1f points, clear at %.1f", f, DnavPlan.pack(crew, f), DnavPlan.share(f),
-					DnavPlan.werewolves(crew, f), DnavPlan.total(crew, f), DnavPlan.needed(crew, f)));
-			for (DnavPlan.Line l : plan(f)) {
-				StringBuilder steps = new StringBuilder();
-				double total = DnavPlan.total(crew, f);
-				for (DnavPlan.Step st : l.steps())
-					steps.append(String.format(java.util.Locale.ROOT, "  %s @%ds %d pts (bar %.0f%%)", st.what(), st.seconds(),
-							st.points(), 100 * Math.max(0, total - st.points()) / total));
-				line.accept("  " + l.name() + " " + l.time() + " = " + l.points() + " pts:" + steps);
-			}
-		}
-		if (lastForecast != null)
-			line.accept(String.format(java.util.Locale.ROOT, "Next Dnav box: fray %d, wolves %d %s, need %.2f/min, team %.2f/min,"
-					+ " time %s, clear in %s, lines %s", lastForecast.nextFray, lastForecast.werewolves, lastForecast.odds,
-					lastForecast.needRate(), lastForecast.teamRate, DnavForecast.mmss(lastForecast.stationsMs),
-					DnavForecast.mmss(lastForecast.clearMs), lastForecastLines));
-		line.accept("Dnav box last showed: " + lastDnavShown);
-		line.accept("Wolf count source: the island (DenWolves), else Ahoy; chat when newer");
-		line.accept("");
-		line.accept("== Wolf count, once a second during stations (t = since stations opened)");
-		for (String sample : wolfSamples) line.accept(sample);
-		line.accept("");
-		line.accept("== Your puzzles (game log)");
-		for (String p : activityTracker.recentPuzzles()) line.accept(p);
-		line.accept("");
-		line.accept("== Last duty report scanned");
-		if (lastReport != null) line.accept(lastReport.toString());
-		if (reportedPeriod != null)
-			for (ActivityTracker.Row row : reportedPeriod.rows)
-				line.accept(String.format(java.util.Locale.ROOT, "%s %s score %d tokens %s %.1fs%s", row.station, row.pirate,
-						row.score, java.util.Arrays.toString(row.tokens), row.ms / 1000.0, row.exact ? " exact" : ""));
-		line.accept("");
-		line.accept("== Chat (last messages, oldest first)");
-		for (String m : stationClock.recentMessages()) line.accept(m);
-
-		String name = "dnav_report_" + java.time.LocalDateTime.now()
-				.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".txt";
-		try {
-			java.nio.file.Path dir = GameLog.dataFolder().resolve("dnav_reports");
-			java.nio.file.Files.createDirectories(dir);
-			java.nio.file.Path file = dir.resolve(name);
-			java.nio.file.Files.writeString(file, r.toString(), java.nio.charset.StandardCharsets.UTF_8);
-			status.accept("Dnav report saved: " + file);
-			buttonDnavProblem.setText("Saved");
-			new Timer(3000, ev -> buttonDnavProblem.setText("That didn't work")) {{ setRepeats(false); start(); }};
-		} catch (java.io.IOException | RuntimeException e) {
-			status.accept("Dnav report failed: " + e);
-		}
 	}
 
 	private void updateRumble(long now) {
@@ -746,7 +644,13 @@ final class WoodhallowTools {
 		boolean ci = RecordChecker.CI.equals(selectedActivity);
 		if (sword.round() != homunculiRound) { homunculiRound = sword.round(); homunculi.reset(); }
 		boolean colours = ci && sword.showColours();
-		if (homunculi.isVisible() != colours) { homunculi.setVisible(colours); timerArea.revalidate(); timerArea.repaint(); }
+		if (homunculi.isVisible() != colours) {
+			homunculi.setVisible(colours);
+			dnavArea.revalidate();
+			dnavArea.repaint();
+			Container scanRow = homunculi.actions().getParent();
+			if (scanRow != null) { scanRow.revalidate(); scanRow.repaint(); }
+		}
 		long elapsed = rumbleClock.elapsed(now);
 		long forageLeft = rumbleClock.forageLeft(now);
 		playTimerSounds(now, elapsed, forageLeft);
@@ -891,8 +795,6 @@ final class WoodhallowTools {
 		// The work is the wave's exact size (DnavPlan), so the solo lines don't depend on the count shown.
 		Map<String, String> lines = new java.util.LinkedHashMap<>();
 		for (DnavPlan.Line l : plan(f.nextFray)) lines.put(l.name(), l.time());
-		lastForecast = f;
-		lastForecastLines = lines;
 		rumbleForecast.show(f, lines);
 		return true;
 	}
